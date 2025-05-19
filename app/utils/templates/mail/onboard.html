@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to Dristhi Docs | Registration Complete</title>
+    <style>
+      body {
+        background-color: #f4f4f9;
+        font-family: 'Segoe UI', 'Helvetica Neue', Arial, 'Liberation Sans', sans-serif;
+        margin: 0;
+        padding: 0;
+        margin-top: 30px;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(to right bottom, #26d2d2, #006e89, #004b6b);
+        padding: 20px;
+        text-align: center;
+      }
+
+      .logo {
+        max-width: 120px;
+        border-radius: 8px;
+      }
+
+      .message {
+        font-size: 1.8rem;
+        color: #ffffff;
+        font-weight: bold;
+        margin-top: 10px;
+      }
+
+      .body {
+        padding: 20px;
+        text-align: center;
+      }
+
+      .greeting {
+        font-size: 1.5rem;
+        margin-bottom: 15px;
+      }
+
+      .instruction {
+        font-size: 1.2rem;
+        margin-bottom: 20px;
+        color: #555555;
+      }
+
+      .info {
+        font-size: 1rem;
+        margin-bottom: 15px;
+        color: #555555;
+      }
+
+      .cta-button {
+        background-color: #006e89;
+        color: #ffffff;
+        padding: 12px 30px;
+        font-size: 1.2rem;
+        text-decoration: none;
+        border-radius: 5px;
+        display: inline-block;
+        margin-top: 20px;
+      }
+
+      .cta-button:hover {
+        background-color: #00405c;
+      }
+
+      .footer {
+        background-color: #f4f4f9;
+        text-align: center;
+        padding: 15px;
+        color: #888888;
+        font-size: 0.9rem;
+      }
+
+      .footer a {
+        color: #006e89;
+        text-decoration: none;
+      }
+
+      .ii a[href] {
+        color: #ffffff;
+      }
+
+      @media only screen and (max-width: 600px) {
+        .container {
+          width: 100%;
+          padding: 10px;
+        }
+
+        .header {
+          padding: 15px;
+        }
+
+        .body {
+          padding: 15px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <a href="https://dristidocs.vercel.app/">
+          <img
+            class="logo"
+            src="https://res.cloudinary.com/dnkp2gm1d/image/upload/v1738642194/Drishti_Docs/Logo_fznhpk.png"
+            alt="Dristhi Docs Logo"
+          />
+        </a>
+        <div class="message">Welcome to Dristhi Docs!</div>
+      </div>
+
+      <div class="body">
+        <p class="instruction">
+          We are excited to have you join Dristhi Docs. Your registration was
+          successful, and your account is now active.
+        </p>
+        <p class="info">
+          Your account has been created with the following details:
+        </p>
+        <p class="info">Email: ${email}</p>
+        <p class="info">Password: ${password}</p>
+        <p class="info"> You have been added to Dristi Docs as ${role}.</p>
+        <p>
+          If you did not register for Dristhi Docs, please disregard this email.
+        </p>
+        <p>To access your account, click the link below:</p>
+        <a href="https://dristidocs.vercel.app/" class="cta-button"
+          >Go to Dristhi Docs</a
+        >
+        <p class="instruction">
+          For any support, feel free to reach out to us at
+          <a href="mailto:tohid1193407@gmail.com">support@dristhidocs.com</a>.
+        </p>
+      </div>
+
+      <div class="footer">
+        <p>&copy; 2025 Team Dristhi Docs, All Rights Reserved.</p>
+        <p>
+          Visit us at <a href="https://dristidocs.vercel.app/">Dristhi Docs</a>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
