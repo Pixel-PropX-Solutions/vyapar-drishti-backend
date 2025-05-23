@@ -48,7 +48,7 @@ async def create_user(
     password = await generatePassword.createPassword()
 
     mail.send(
-        "Welcome to DristiDocs",
+        "Welcome to Vyapar Drishti",
         user.email,
         template.Onboard(role=user.role.value, email=user.email, password=password),
     )

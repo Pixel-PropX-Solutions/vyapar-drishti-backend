@@ -34,7 +34,6 @@ class ProductRepo(BaseMongoDbCrud[ProductDB]):
             filter_params["$or"] = [
                 {"product_name": {"$regex": search, "$options": "i"}},
                 {"category": {"$regex": search, "$options": "i"}},
-                {"storage_requirement": {"$regex": search, "$options": "i"}},
                 {"description": {"$regex": search, "$options": "i"}},
             ]
         if category not in ["", None]:
@@ -44,10 +43,8 @@ class ProductRepo(BaseMongoDbCrud[ProductDB]):
         sort_options = {
             "name_asc": {"product_name": 1},
             "name_desc": {"product_name": -1},
-            "price_asc": {"price": 1},
-            "price_desc": {"price": -1},
-            "expiry_asc": {"expiry_date": 1},
-            "expiry_desc": {"expiry_date": -1},
+            "price_asc": {"selling_price": 1},
+            "price_desc": {"selling_price": -1},
             "created_at_asc": {"created_at": 1},
             "created_at_desc": {"created_at": -1},
         }
@@ -55,11 +52,7 @@ class ProductRepo(BaseMongoDbCrud[ProductDB]):
         # Construct sorting key
         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
 
-        sort_stage = sort_options.get(sort_key, {"expiry_date": 1})
-        print("sort.sort_field", sort.sort_field)
-        print("sort.sort_order", sort.sort_order)
-        print("sort_stage", sort_stage)
-        print("sort_key", sort_key)
+        sort_stage = sort_options.get(sort_key, {"created_at": 1})
 
         pipeline = [
             {"$match": filter_params},

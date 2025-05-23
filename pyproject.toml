@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "dristi_docs_api"
+name = "vyapar_drishti_api"
 version = "0.1.0"
 description = ""
 authors = ["Tohid Khan"]

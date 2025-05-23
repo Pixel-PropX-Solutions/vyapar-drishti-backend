@@ -66,7 +66,7 @@ class Emailer:
         msg = EmailMessage()
 
         # Email Constructor
-        msg["From"] = "DristiDocs App <{email}>".format(email=self.EMAIL_ADDRESS)
+        msg["From"] = "Vyapar Drishti App <{email}>".format(email=self.EMAIL_ADDRESS)
         msg["To"] = email
         msg["Subject"] = subject
         msg.add_alternative(

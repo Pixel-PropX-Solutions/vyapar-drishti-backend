@@ -28,8 +28,16 @@ async def createProduct(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
+    product_.user_id = current_user.user_id
+    product_.is_deleted = False
     product__ = product_.model_dump()
-    await product_repo.new(product(**product__))
+    
+    response = await product_repo.new(product(**product__))
+
+    if not response:
+        raise http_exception.ResourceAlreadyExistsException(
+            detail="Product Already Exists"
+        )
 
     return {"success": True, "message": "Product Created Successfully"}
 

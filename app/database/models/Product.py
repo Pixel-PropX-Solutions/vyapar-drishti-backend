@@ -12,12 +12,12 @@ class product(BaseModel):
     product_name: str
     selling_price: float
     user_id: str
-    is_deleted: bool = False
+    is_deleted: bool
     
     #optional fields    
     unit: str | None
     hsn_code: str | None
-    puchase_price: float | None
+    purchase_price: float | None
     barcode: str | None
     category: str | None
     image: str | None
@@ -30,10 +30,6 @@ class product(BaseModel):
     low_stock_alert: int | None
     show_active_stock: bool = True
     
-    state: str | None
-    storage_requirement: str | None
-    expiry_date: datetime.datetime | None
-
 
 # Database Schema
 class ProductDB(product):
@@ -50,26 +46,22 @@ class ProductDB(product):
 class ProductCreate(BaseModel):
     # required fields
     product_name: str
-    selling_price: float
+    selling_price: float 
     user_id: str
-    is_deleted: bool = False
+    is_deleted: Optional[bool] = False
     
     # optional fields    
     unit: Optional[str] = None
     hsn_code: Optional[str] = None
-    purchase_price: Union[float, str] = None
+    purchase_price: Optional[float] = None
     barcode: Optional[str] = None
     category: Optional[str] = None
     image: Optional[str] = None
     description: Optional[str] = None
-    opening_quantity: Union[int, str] = None
-    opening_purchase_price: Union[float, str] = None
-    opening_stock_value: Union[int, str] = None
-    
-     # Additonal Optional fields
-    low_stock_alert: Union[int, str] = None
-    show_active_stock: bool = True
-    
-    state: Union[str] = None
-    storage_requirement: Optional[str] = None
-    expiry_date: Union[datetime.datetime, str] = None
+    opening_quantity: Optional[int] = None
+    opening_purchase_price: Optional[float] = None
+    opening_stock_value: Optional[int] = None
+
+    # Additional Optional fields
+    low_stock_alert: Optional[int] = None
+    show_active_stock: Optional[bool] = True
