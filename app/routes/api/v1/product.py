@@ -47,7 +47,8 @@ async def getProduct(
         raise http_exception.CredentialsInvalidException()
 
     product = await product_repo.findOne(
-        {"_id": product_id}, {"created_at": 0, "updated_at": 0}
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False},
+        {"created_at": 0, "updated_at": 0},
     )
     if not product:
         raise http_exception
@@ -67,7 +68,9 @@ async def deleteProduct(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
-    product = await product_repo.findOne({"_id": product_id})
+    product = await product_repo.findOne(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False}
+    )
     if not product:
         raise http_exception.NotFoundException(detail="Product Not Found")
 
@@ -89,13 +92,18 @@ async def updateProduct(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
-    productExists = await product_repo.findOne({"_id": product_id})
+    productExists = await product_repo.findOne(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False},
+    )
     if productExists is None:
         raise http_exception.ResourceNotFoundException()
 
     updated_dict = {k: v for k, v in product.dict().items() if v not in [None, ""]}
 
-    await product_repo.update_one({"_id": product_id}, {"$set": updated_dict})
+    await product_repo.update_one(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False},
+        {"$set": updated_dict},
+    )
 
     return {
         "success": True,
@@ -123,7 +131,11 @@ async def view_all_product(
     page_request = PageRequest(paging=page, sorting=sort)
 
     result = await product_repo.viewAllProduct(
-        search=search, category=category, pagination=page_request, sort=sort
+        search=search,
+        category=category,
+        pagination=page_request,
+        sort=sort,
+        current_user=current_user,
     )
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
@@ -148,7 +160,11 @@ async def view_all_categories(
     ]
     unique_categories = [entry["category"] for entry in categories_res]
 
-    return {"success": True, "message": "Data Fetched Successfully...", "data": unique_categories}
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": unique_categories,
+    }
 
 
 @Product.get(
@@ -157,7 +173,7 @@ async def view_all_categories(
     status_code=status.HTTP_200_OK,
 )
 async def getProducts(
-    search : str = "",
+    search: str = "",
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -166,17 +182,15 @@ async def getProducts(
     products = await product_repo.collection.aggregate(
         [
             {
-                "$match":{
-                    "product_name":{
-                        "$regex":search,
-                        "$options":"i"
-                    }    
+                "$match": {
+                    "product_name": {"$regex": search, "$options": "i"},
+                    "user_id": current_user.user_id,
+                    "is_deleted": False,
                 }
             },
             {
                 "$project": {
                     "storage_requirement": 0,
-                    "no_of_tablets_per_pack": 0,
                     "category": 0,
                     "state": 0,
                     "expiry_date": 0,
@@ -184,7 +198,7 @@ async def getProducts(
                     "created_at": 0,
                     "updated_at": 0,
                 }
-            }
+            },
         ]
     ).to_list(None)
     return {"success": True, "data": products}

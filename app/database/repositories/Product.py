@@ -1,5 +1,8 @@
+from fastapi import Depends
 from app.Config import ENV_PROJECT
 from app.database.models.Product import product, ProductDB
+from app.oauth2 import get_current_user
+from app.schema.token import TokenData
 from .crud.base_mongo_crud import BaseMongoDbCrud
 from app.database.repositories.crud.base import (
     PageRequest,
@@ -23,9 +26,10 @@ class ProductRepo(BaseMongoDbCrud[ProductDB]):
         return await self.save(ProductDB(**sub.model_dump()))
 
     async def viewAllProduct(
-        self, search: str, category: str, pagination: PageRequest, sort: Sort
+        self, search: str, category: str, pagination: PageRequest, sort: Sort, current_user: TokenData = Depends(get_current_user),
     ):
-        filter_params = {}
+        filter_params = {'user_id': current_user.user_id, "is_deleted": False}
+        # Filter by search term
         if search not in ["", None]:
             filter_params["$or"] = [
                 {"product_name": {"$regex": search, "$options": "i"}},

@@ -98,21 +98,21 @@ async def get_current_user_details(
                         "role": "admin",
                         "UserData": {
                             "name": {
-                                 "first_name": "Jinesh",
+                                 "first_name": "Tohid",
                                  "middle_name": "",
-                                 "last_name": "Prajapat"
+                                 "last_name": "Khan"
                             },
                             "phone_number": {
                                 "country_code": "+91",
-                                "phone_number": "8905009854"
+                                "phone_number": "6367097548"
                             },
                             "shop_name": "Pharma",
                             "address": {
-                                "street_address": "Rishabhdeo,",
-                                "street_address_line_2": "",
-                                "city": "Udaipur, Rajasthan",
+                                "street_address": "Near JNV Rajsamand,",
+                                "street_address_line_2": "Rajnagar",
+                                "city": "Rajsamand",
                                 "state": "Rajasthan",
-                                "zip_code": "313908"
+                                "zip_code": "313324"
                             },
                             "licence_number": "LX56834838642"
                         }
