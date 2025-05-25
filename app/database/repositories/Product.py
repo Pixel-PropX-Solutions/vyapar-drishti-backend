@@ -14,6 +14,7 @@ from app.database.repositories.crud.base import (
 )
 from pydantic import BaseModel
 from typing import List
+import re
 
 
 class ProductRepo(BaseMongoDbCrud[ProductDB]):
@@ -26,16 +27,29 @@ class ProductRepo(BaseMongoDbCrud[ProductDB]):
         return await self.save(ProductDB(**sub.model_dump()))
 
     async def viewAllProduct(
-        self, search: str, category: str, pagination: PageRequest, sort: Sort, current_user: TokenData = Depends(get_current_user),
+        self,
+        search: str,
+        category: str,
+        pagination: PageRequest,
+        sort: Sort,
+        current_user: TokenData = Depends(get_current_user),
+        is_deleted: bool = False,
     ):
-        filter_params = {'user_id': current_user.user_id, "is_deleted": False}
+        filter_params = {"user_id": current_user.user_id, "is_deleted": is_deleted}
         # Filter by search term
         if search not in ["", None]:
-            filter_params["$or"] = [
-                {"product_name": {"$regex": search, "$options": "i"}},
-                {"category": {"$regex": search, "$options": "i"}},
-                {"description": {"$regex": search, "$options": "i"}},
-            ]
+            try:
+                safe_search = re.escape(search)
+                filter_params["$or"] = [
+                    {"product_name": {"$regex": safe_search, "$options": "i"}},
+                    {"hsn_code": {"$regex": safe_search, "$options": "i"}},
+                    {"barcode": {"$regex": safe_search, "$options": "i"}},
+                    {"category": {"$regex": safe_search, "$options": "i"}},
+                    {"description": {"$regex": safe_search, "$options": "i"}},
+                ]
+            except re.error:
+                # If regex is invalid, ignore search filter or handle as needed
+                pass
         if category not in ["", None]:
             filter_params["category"] = category
 
@@ -56,16 +70,51 @@ class ProductRepo(BaseMongoDbCrud[ProductDB]):
 
         pipeline = [
             {"$match": filter_params},
-            {"$sort": sort_stage},
-            {"$project": {"created_at": 0, "updated_at": 0}},
             {
-                "$facet": {
-                    "docs": [
-                        {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
-                        {"$limit": pagination.paging.limit},
-                    ],
-                    "count": [{"$count": "count"}],
-                }
+            "$lookup": {
+                "from": "Category",
+                "localField": "category",
+                "foreignField": "_id",
+                "as": "categoryDetails",
+            }
+            },
+            # Use $unwind with preserveNullAndEmptyArrays to keep products without categories
+            {"$unwind": {"path": "$categoryDetails", "preserveNullAndEmptyArrays": True}},
+            {"$sort": sort_stage},
+            {
+            "$project": {
+                "_id": 1,
+                "product_name": 1,
+                "selling_price": 1,
+                "user_id": 1,
+                "is_deleted": 1,
+                "unit": 1,
+                "hsn_code": 1,
+                "purchase_price": 1,
+                "barcode": 1,
+                "image": 1,
+                "description": 1,
+                "opening_quantity": 1,
+                "opening_purchase_price": 1,
+                "opening_stock_value": 1,
+                "low_stock_alert": 1,
+                "show_active_stock": 1,
+                "category": {
+                "$ifNull": ["$categoryDetails.category_name", None]
+                },
+                "category_desc": {
+                "$ifNull": ["$categoryDetails.description", None]
+                },
+            }
+            },
+            {
+            "$facet": {
+                "docs": [
+                {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
+                {"$limit": pagination.paging.limit},
+                ],
+                "count": [{"$count": "count"}],
+            }
             },
         ]
 
@@ -93,29 +142,28 @@ class ProductRepo(BaseMongoDbCrud[ProductDB]):
             ),
         )
 
-    async def group_products_by_stock_level(self,chemist_id:str):
+    async def group_products_by_stock_level(self, chemist_id: str):
         pipeline = [
             {
                 "$set": {
                     "stock_level": {
                         "$switch": {
                             "branches": [
-                                { "case": { "$lte": ["$quantity", 10] }, "then": "Low" },
-                                { "case": { "$gte": ["$quantity", 200] }, "then": "Overstock" }
+                                {"case": {"$lte": ["$quantity", 10]}, "then": "Low"},
+                                {
+                                    "case": {"$gte": ["$quantity", 200]},
+                                    "then": "Overstock",
+                                },
                             ],
-                            "default": "Medium"
+                            "default": "Medium",
                         }
                     }
                 }
             },
-            {
-                "$group": {
-                    "_id": "$stock_level",
-                    "count": { "$sum": 1 }
-                }
-            }
+            {"$group": {"_id": "$stock_level", "count": {"$sum": 1}}},
         ]
 
         return await self.collection.aggregate(pipeline).to_list(None)
-        
+
+
 product_repo = ProductRepo()

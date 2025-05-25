@@ -4,6 +4,8 @@ from app.Config import ENV_PROJECT
 from app.routes.api.v1.auth import auth as auth_endpoints
 from app.routes.api.v1.admin import admin as admin_endponits
 from app.routes.api.v1.product import Product as product_endpoints
+from app.routes.api.v1.cloudinary import Cloudinary as cloudinary_endpoints
+from app.routes.api.v1.category import Category as category_endpoints
 from app.routes.api.v1.inventory import inventory as inventory_endpoints
 from app.routes.api.v1.orders import OrdersRouter as orders_endpoints
 from app.routes.api.v1.extraction import extraction as extraction_endpoints
@@ -28,6 +30,18 @@ routers.include_router(
 )
 
 routers.include_router(
+    cloudinary_endpoints,
+    prefix=ENV_PROJECT.BASE_API_V1 + "/cloudinary",
+    tags=["Cloudinary"],
+)
+
+routers.include_router(
+    category_endpoints,
+    prefix=ENV_PROJECT.BASE_API_V1 + "/category",
+    tags=["Category"],
+)
+
+routers.include_router(
     inventory_endpoints, prefix=ENV_PROJECT.BASE_API_V1 + "/inventory", tags=["Inventory"]
 )
 
@@ -36,21 +50,31 @@ routers.include_router(
 )
 
 routers.include_router(
-    extraction_endpoints, prefix=ENV_PROJECT.BASE_API_V1 + "/extraction", tags=["Extraction"]
+    extraction_endpoints,
+    prefix=ENV_PROJECT.BASE_API_V1 + "/extraction",
+    tags=["Extraction"],
 )
 
 routers.include_router(
-    product_Stock_endpoints, prefix=ENV_PROJECT.BASE_API_V1 + "/product_stock", tags=["Product Stock"],
+    product_Stock_endpoints,
+    prefix=ENV_PROJECT.BASE_API_V1 + "/product_stock",
+    tags=["Product Stock"],
 )
 
 routers.include_router(
-    stock_movement_endpoints, prefix=ENV_PROJECT.BASE_API_V1 + "/stock_movement", tags=["Stock Movement"],
+    stock_movement_endpoints,
+    prefix=ENV_PROJECT.BASE_API_V1 + "/stock_movement",
+    tags=["Stock Movement"],
 )
 
 routers.include_router(
-    sales_endpoints, prefix=ENV_PROJECT.BASE_API_V1 + "/sales", tags=["Sales"],
-)   
+    sales_endpoints,
+    prefix=ENV_PROJECT.BASE_API_V1 + "/sales",
+    tags=["Sales"],
+)
 
 routers.include_router(
-    analytics_endpoints, prefix=ENV_PROJECT.BASE_API_V1 + "/analytics", tags=["Analytics"],
-)   
+    analytics_endpoints,
+    prefix=ENV_PROJECT.BASE_API_V1 + "/analytics",
+    tags=["Analytics"],
+)
