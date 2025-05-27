@@ -17,7 +17,7 @@ from app.database.repositories.crud.base import (
 
 def model_serializer(entity, id):
     result = entity.dict(by_alias=True)
-    print("Result : ",result)
+    # print("Result : ",result)
     result[id] = str(result[id])
     
     return result

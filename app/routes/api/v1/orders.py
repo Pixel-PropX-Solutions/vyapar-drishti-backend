@@ -6,7 +6,7 @@ from app.schema.token import TokenData
 from app.database.models.Orders import OrderStatus, Orders1, OrdersCreate
 from app.oauth2 import get_current_user
 import app.http_exception as http_exception
-from app.database.repositories.Stockist import stockist_repo
+# from app.database.repositories.Stockist import stockist_repo
 from app.database.repositories.Chemist import chemist_repo
 from app.database.repositories.Orders import orders_repo
 import datetime
@@ -169,7 +169,7 @@ async def getOrdersDetails(
         },
     ]
 
-    data = await stockist_repo.findOne({"_id": orderExists["stockist_id"]})
+    # data = await stockist_repo.findOne({"_id": orderExists["stockist_id"]})
     response = await order_details_repo.collection.aggregate(pipeline=pipeline).to_list(
         None
     )
@@ -178,12 +178,12 @@ async def getOrdersDetails(
         "message": "Order Details updated successfully",
         "success": True,
         "data": {
-            "stockist": {
-                "name": data["name"],
-                "company_name": data["company_name"],
-                "address": data["address"],
-                "phone_number": data["phone_number"],
-            },
+            # "stockist": {
+            #     "name": data["name"],
+            #     "company_name": data["company_name"],
+            #     "address": data["address"],
+            #     "phone_number": data["phone_number"],
+            # },
             "orders": response,
             "order_details": orderExists,
         },

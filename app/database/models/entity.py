@@ -1,24 +1,34 @@
 from pydantic import BaseModel
-from typing import Union, Optional,Dict
-import datetime
+from typing import Optional
+
 
 class Name(BaseModel):
-    first_name: str
-    middle_name: Optional[str] = None
-    last_name: Optional[str] = None
+    first: str
+    last: Optional[str] = None
 
 
-class phoneNumber(BaseModel):
-    country_code: str = "+91"
-    phone_number: str
+class PhoneNumber(BaseModel):
+    code: str = "+91"
+    number: str  
 
-
-class Address(BaseModel):
-    street_address: Optional[str] = None
-    street_address_line_2: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    zip_code: Optional[str] = None
-
-
-
+class ProductDetails(BaseModel):
+    _id: str
+    name: str
+    quantity: int
+    unit_price: float
+    total_price: float
+    tax_rate: Optional[float] = None
+    tax_amount: Optional[float] = None
+    discount: Optional[float] = None
+    discount_amount: Optional[float] = None
+    
+class BankDetails(BaseModel):
+    account_number: str
+    confirm_account_number: str
+    ifsc_code: str
+    bank_name: str
+    branch_name: str
+    upi_id: Optional[str] = None
+    upi_number: Optional[str] = None
+    opening_balance: Optional[float] = 0.0
+    account_holder_name: Optional[str] = None

@@ -1,6 +1,6 @@
 from app.Config import ENV_PROJECT
 from .crud.base_mongo_crud import BaseMongoDbCrud
-from app.database.models.Sale_Details import SaleDetails, SaleDetailsDB
+from app.database.models.Sale import SaleDetails, SaleDetailsDB
 
 class SaleDetailsRepo(BaseMongoDbCrud):
     def __init__(self):

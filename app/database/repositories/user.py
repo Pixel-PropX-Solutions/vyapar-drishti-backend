@@ -1,5 +1,5 @@
 from app.Config import ENV_PROJECT
-from app.database.models.user import User, UserDB
+from app.database.models.User import User, UserDB
 from .crud.base_mongo_crud import BaseMongoDbCrud
 from app.database.repositories.crud.base import (
     PageRequest,

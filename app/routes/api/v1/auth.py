@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, status, Response, Heade
 from fastapi.responses import ORJSONResponse
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from app.Config import ENV_PROJECT
+from app.database.models.User import User, UserCreate
 from loguru import logger
 from pydantic import BaseModel
 import app.http_exception as http_exception
@@ -26,10 +27,15 @@ from app.oauth2 import (
     set_cookies,
 )
 from app.schema.token import TokenData
-from app.utils import hashing
+from app.utils import generatePassword, hashing
 from app.database.repositories.user import user_repo
+from app.utils.generatePassword import generatePassword
+
 # from app.utils.mailer_module import mail, template
 from app.Config import ENV_PROJECT
+from app.utils.mailer_module import template
+from app.utils.mailer_module import mail
+from app.database.repositories.company import company_repo, Company
 
 # from app.schema.password import SetPassword
 from typing import Optional
@@ -60,25 +66,84 @@ async def login(
             "password": ENV_PROJECT.ADMIN_PASSWORD,
             "_id": "",
         }
-    elif user_type in [
-        UserTypeEnum.User
-    ]:
+    elif user_type in [UserTypeEnum.USER]:
         user = await user_repo.findOne(
             {"email": creds.username},
             {"_id", "password"},
         )
-
     if hashing.verify_hash(creds.password, user["password"]):
-        print("i am in hashing if statement")
         token_data = TokenData(
             user_id=user["_id"], user_type=user_type.value, scope="login"
         )
         token_generated = await create_access_token(token_data)
         set_cookies(response, token_generated.access_token, token_generated.refresh_token)
         return {"ok": True, "accessToken": token_generated.access_token}
-    print("i am not in hashing if statement")
 
     raise http_exception.CredentialsInvalidException()
+
+
+@auth.post("/register", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
+async def register(
+    response: Response,
+    user: UserCreate,
+    company_name: str = None,
+    brand_name: str = None,
+):
+
+    userExists = await user_repo.findOne({"email": user.email})
+    if userExists is not None:
+        raise http_exception.ResourceNotFoundException()
+
+    password = await generatePassword.createPassword()
+
+    mail.send(
+        "Welcome to Vyapar Drishti",
+        user.email,
+        template.Onboard(role="user", email=user.email, password=password),
+    )
+
+    inserted_dict = {}
+
+    keys = ["password", "email", "phone", "user_type", "name"]
+    values = [hash_password(password=password), user.email, user.phone, "user", user.name]
+
+    for k, v in zip(keys, values):
+        inserted_dict[k] = v
+
+    user_res = await user_repo.new(User(**inserted_dict))
+    if company_name and brand_name:
+        company_data = {
+            "user_id": user_res.id,
+            "company_name": company_name,
+            "brand_name": brand_name,
+            "email": user.email,
+            "phone": user.phone,
+        }
+        com_res = await company_repo.new(Company(**company_data))
+        if com_res is None:
+            raise http_exception.ResourceConflictException(
+                message="Company creation failed, please try again."
+            )
+
+    else:
+        company_data = {
+            "user_id": user_res.id,
+            "company_name": "Default Company",
+            "brand_name": "Default Brand",
+            "email": user.email,
+            "phone": user.phone,
+        }
+        com_res = await company_repo.new(Company(**company_data))
+        if com_res is None:
+            raise http_exception.ResourceConflictException(
+                message="Company creation failed, please try again."
+            )
+    token_data = TokenData(
+        user_id=user_res.id, user_type=user_res.user_type.value, scope="login"
+    )
+    token_generated = await create_access_token(token_data)
+    set_cookies(response, token_generated.access_token, token_generated.refresh_token)
+    return {"ok": True, "accessToken": token_generated.access_token}
 
 
 @auth.get("/current/user", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
@@ -98,13 +163,13 @@ async def get_current_user_details(
                         "role": "admin",
                         "UserData": {
                             "name": {
-                                 "first_name": "Tohid",
-                                 "middle_name": "",
-                                 "last_name": "Khan"
+                                "first_name": "Tohid",
+                                "middle_name": "",
+                                "last_name": "Khan",
                             },
                             "phone_number": {
                                 "country_code": "+91",
-                                "phone_number": "6367097548"
+                                "phone_number": "6367097548",
                             },
                             "shop_name": "Pharma",
                             "address": {
@@ -112,47 +177,22 @@ async def get_current_user_details(
                                 "street_address_line_2": "Rajnagar",
                                 "city": "Rajsamand",
                                 "state": "Rajasthan",
-                                "zip_code": "313324"
+                                "zip_code": "313324",
                             },
-                            "licence_number": "LX56834838642"
-                        }
+                            "licence_number": "LX56834838642",
+                        },
                     }
                 ],
             }
         else:
             raise http_exception.ResourceNotFoundException()
 
-    user_role = user["role"]
-
     pipeline = [
         {"$match": {"_id": current_user.user_id}},
         {
-            "$lookup": {
-                "from": user_role,
-                "localField": "_id",
-                "foreignField": "user_id",
-                "as": "UserData",
-            }
-        },
-        {
-            "$set": {
-                "UserData": {
-                    "$cond": [
-                        {"$eq": [{"$size": "$UserData"}, 0]},
-                        None,
-                        {"$arrayElemAt": ["$UserData", 0]},
-                    ]
-                }
-            }
-        },
-        {
             "$project": {
                 "password": 0,
-                "created_at": 0,
                 "updated_at": 0,
-                "UserData.user_id": 0,
-                "UserData.created_at": 0,
-                "UserData.updated_at": 0,
             }
         },
     ]

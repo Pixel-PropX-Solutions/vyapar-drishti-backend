@@ -1,6 +1,6 @@
 from app.Config import ENV_PROJECT
 from .crud.base_mongo_crud import BaseMongoDbCrud
-from app.database.models.Sales import Sales, SalesDB
+from app.database.models.Purchase import PurchaseDB, Purchase
 from app.database.repositories.crud.base import (
     PageRequest,
     Meta,
@@ -10,15 +10,15 @@ from app.database.repositories.crud.base import (
     Page,
 )
 
-class SalesRepo(BaseMongoDbCrud[SalesDB]):
+class PurchaseRepo(BaseMongoDbCrud[PurchaseDB]):
     def __init__(self):
         super().__init__(
             ENV_PROJECT.MONGO_DATABASE, "Sales", unique_attributes=[]
         )
 
-    async def new(self, sub: Sales):
+    async def new(self, sub: Purchase):
         return await self.save(
-            SalesDB(**sub.model_dump())
+            PurchaseDB(**sub.model_dump())
         )
 
     async def get_all_sales(
@@ -143,4 +143,4 @@ class SalesRepo(BaseMongoDbCrud[SalesDB]):
             ),
         )
 
-sales_repo = SalesRepo()
+purchase_repo = PurchaseRepo()

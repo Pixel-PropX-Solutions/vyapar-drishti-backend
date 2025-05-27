@@ -178,131 +178,131 @@ class ExtractionTools:
         # }
         return data
 
-    async def process_and_insert(file):  # Added a new function
-        extracted_data = await extraction_tools.text_extraction_for_scanned_and_selectable_file_for_json_format_through_gemini(
-            file
-        )
-        if extracted_data is None:
-            print("Failed to extract data.")
-            return
+    # async def process_and_insert(file):  # Added a new function
+    #     extracted_data = await extraction_tools.text_extraction_for_scanned_and_selectable_file_for_json_format_through_gemini(
+    #         file
+    #     )
+    #     if extracted_data is None:
+    #         print("Failed to extract data.")
+    #         return
 
-        # 1.  Establish a connection to MongoDB
-        client = MongoClient(
-            ENV_PROJECT.MONGO_URI
-        )  # Replace with your MongoDB connection string
-        db = client[ENV_PROJECT.MONGO_DATABASE]  # Replace with your actual database name
+    #     # 1.  Establish a connection to MongoDB
+    #     client = MongoClient(
+    #         ENV_PROJECT.MONGO_URI
+    #     )  # Replace with your MongoDB connection string
+    #     db = client[ENV_PROJECT.MONGO_DATABASE]  # Replace with your actual database name
 
-        # 2.  Data to be inserted
-        the_order_id = str(uuid4())  #  Generate a new order ID
-        sale_details = []
+    #     # 2.  Data to be inserted
+    #     the_order_id = str(uuid4())  #  Generate a new order ID
+    #     sale_details = []
 
-        # 3. Process extracted data for database insertion
-        for item in extracted_data["items"]:
-            try:
-                sale_detail_item = {
-                    "product_id": item.get(
-                        "product_id", "some_product_uuid"
-                    ),  #  You'll need to map product_name to product_id
-                    "quantity": int(item["quantity"]),
-                    "unit_price": float(item["MRP"]),
-                    "batch": item.get("batch", ""),
-                    "expiry": item.get("expiry", ""),
-                    "sale_id": the_order_id,
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow(),
-                }
-                sale_details.append(sale_detail_item)
-            except (ValueError, TypeError) as e:
-                print(f"Error processing item: {item}. Error: {e}")
-                # Handle the error, e.g., skip this item, or log it, or raise an exception
-                continue  # Skip to the next item
-        # 4. Insert into SaleDetails Collection
-        sale_details_collection = db["SaleDetails"]
-        if sale_details:  # only insert if there are sale_details
-            try:
-                sale_details_collection.insert_many(sale_details)
-            except Exception as e:
-                print(f"Error inserting into SaleDetails: {e}")
-                # Handle error
-                client.close()
-                return
+    #     # 3. Process extracted data for database insertion
+    #     for item in extracted_data["items"]:
+    #         try:
+    #             sale_detail_item = {
+    #                 "product_id": item.get(
+    #                     "product_id", "some_product_uuid"
+    #                 ),  #  You'll need to map product_name to product_id
+    #                 "quantity": int(item["quantity"]),
+    #                 "unit_price": float(item["MRP"]),
+    #                 "batch": item.get("batch", ""),
+    #                 "expiry": item.get("expiry", ""),
+    #                 "sale_id": the_order_id,
+    #                 "created_at": datetime.utcnow(),
+    #                 "updated_at": datetime.utcnow(),
+    #             }
+    #             sale_details.append(sale_detail_item)
+    #         except (ValueError, TypeError) as e:
+    #             print(f"Error processing item: {item}. Error: {e}")
+    #             # Handle the error, e.g., skip this item, or log it, or raise an exception
+    #             continue  # Skip to the next item
+    #     # 4. Insert into SaleDetails Collection
+    #     sale_details_collection = db["SaleDetails"]
+    #     if sale_details:  # only insert if there are sale_details
+    #         try:
+    #             sale_details_collection.insert_many(sale_details)
+    #         except Exception as e:
+    #             print(f"Error inserting into SaleDetails: {e}")
+    #             # Handle error
+    #             client.close()
+    #             return
 
-            # 5. Update ProductStock Collection
-            product_stock_collection = db["ProductStock"]
-            for item in sale_details:
-                product_id = item["product_id"]
-                quantity = item["quantity"]
-                try:
-                    result = product_stock_collection.update_one(
-                        {"product_id": product_id},
-                        {
-                            "$inc": {"stock_available": -quantity}
-                        },  # Corrected to decrement
-                    )
-                    if result.modified_count == 0:
-                        print(
-                            f"Warning: Product stock not updated for product_id: {product_id}"
-                        )
-                except Exception as e:
-                    print(f"Error updating product stock: {e}")
-                    # Handle error
-                    client.close()
-                    return
-        else:
-            print("No sale details to insert")
-        return the_order_id  # returning the order id
+    #         # 5. Update ProductStock Collection
+    #         product_stock_collection = db["ProductStock"]
+    #         for item in sale_details:
+    #             product_id = item["product_id"]
+    #             quantity = item["quantity"]
+    #             try:
+    #                 result = product_stock_collection.update_one(
+    #                     {"product_id": product_id},
+    #                     {
+    #                         "$inc": {"stock_available": -quantity}
+    #                     },  # Corrected to decrement
+    #                 )
+    #                 if result.modified_count == 0:
+    #                     print(
+    #                         f"Warning: Product stock not updated for product_id: {product_id}"
+    #                     )
+    #             except Exception as e:
+    #                 print(f"Error updating product stock: {e}")
+    #                 # Handle error
+    #                 client.close()
+    #                 return
+    #     else:
+    #         print("No sale details to insert")
+    #     return the_order_id  # returning the order id
 
 
 extraction_tools = ExtractionTools()
 
 
-# SaleDetails Collection
+# # SaleDetails Collection
 
-from pymongo import MongoClient
-from datetime import datetime
+# from pymongo import MongoClient
+# from datetime import datetime
 
-# 1.  Establish a connection to MongoDB
-client = MongoClient(ENV_PROJECT.MONGO_URI)  # Replace with your MongoDB connection string
-db = client[ENV_PROJECT.MONGO_DATABASE]  # Replace with your actual database name
+# # 1.  Establish a connection to MongoDB
+# client = MongoClient(ENV_PROJECT.MONGO_URI)  # Replace with your MongoDB connection string
+# db = client[ENV_PROJECT.MONGO_DATABASE]  # Replace with your actual database name
 
-# 2.  Data to be inserted
-the_order_id = "order_uuid"  #  Replace with your actual order ID (UUID)
+# # 2.  Data to be inserted
+# the_order_id = "order_uuid"  #  Replace with your actual order ID (UUID)
 
-sale_details = [
-    {
-        "product_id": "product_uuid_1",  # Replace with actual product UUID
-        "quantity": 2,
-        "unit_price": 25.00,
-        "sale_id": the_order_id,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-    },
-    {
-        "product_id": "product_uuid_2",  # Replace with actual product UUID
-        "quantity": 1,
-        "unit_price": 50.00,
-        "sale_id": the_order_id,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-    },
-    #  Add more items as needed
-]
+# sale_details = [
+#     {
+#         "product_id": "product_uuid_1",  # Replace with actual product UUID
+#         "quantity": 2,
+#         "unit_price": 25.00,
+#         "sale_id": the_order_id,
+#         "created_at": datetime.utcnow(),
+#         "updated_at": datetime.utcnow(),
+#     },
+#     {
+#         "product_id": "product_uuid_2",  # Replace with actual product UUID
+#         "quantity": 1,
+#         "unit_price": 50.00,
+#         "sale_id": the_order_id,
+#         "created_at": datetime.utcnow(),
+#         "updated_at": datetime.utcnow(),
+#     },
+#     #  Add more items as needed
+# ]
 
-# 3. Insert into SaleDetails Collection
-sale_details_collection = db["SaleDetails"]  # Get the SaleDetails collection
-sale_details_collection.insert_many(sale_details)  # Use insert_many
+# # 3. Insert into SaleDetails Collection
+# sale_details_collection = db["SaleDetails"]  # Get the SaleDetails collection
+# sale_details_collection.insert_many(sale_details)  # Use insert_many
 
 
-# 4. Update ProductStock Collection
-product_stock_collection = db["ProductStock"]  # Get the ProductStock Collection
-for item in sale_details:
-    product_id = item["product_id"]
-    quantity = item["quantity"]
+# # 4. Update ProductStock Collection
+# product_stock_collection = db["ProductStock"]  # Get the ProductStock Collection
+# for item in sale_details:
+#     product_id = item["product_id"]
+#     quantity = item["quantity"]
 
-    product_stock_collection.update_one(
-        {"product_id": product_id},  # Filter: match by product_id
-        {"$inc": {"stock_available": quantity}},  # Update: decrement stock
-    )
+#     product_stock_collection.update_one(
+#         {"product_id": product_id},  # Filter: match by product_id
+#         {"$inc": {"stock_available": quantity}},  # Update: decrement stock
+#     )
 
-# 5. Close the connection (optional, but good practice)
-client.close()
+# # 5. Close the connection (optional, but good practice)
+# client.close()
