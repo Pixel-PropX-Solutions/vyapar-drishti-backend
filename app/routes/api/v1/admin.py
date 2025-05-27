@@ -8,7 +8,7 @@ from app.schema.enums import UserRole
 # from app.database.models.common import Username
 import app.http_exception as http_exception
 from app.utils.mailer_module import mail
-from app.database.models.User import User
+from app.database.models.user import User
 from app.database.repositories.user import user_repo
 from app.utils.generatePassword import generatePassword
 from app.utils.hashing import hash_password
@@ -19,7 +19,7 @@ import asyncio
 
 # from app.utils.cloudinary_client import cloudinary_client
 from app.utils.mailer_module import template
-from app.database.models.User import UserCreate
+from app.database.models.user import UserCreate
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 from fastapi import Query
 from app.database.repositories.user import user_repo

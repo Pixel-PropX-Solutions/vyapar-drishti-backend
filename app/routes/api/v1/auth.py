@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, status, Response, Heade
 from fastapi.responses import ORJSONResponse
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from app.Config import ENV_PROJECT
-from app.database.models.User import User, UserCreate
+from app.database.models.user import User, UserCreate
 from loguru import logger
 from pydantic import BaseModel
 import app.http_exception as http_exception

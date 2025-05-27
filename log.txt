@@ -4928,3 +4928,4 @@
 "{\"@timestamp\": \"2025-05-27T11:59:28.698Z\", \"level\": \"ERROR\", \"projectName\": \"Vyapar Drishti\", \"message\": \"None\", \"thread\": \"MainThread\", \"logger_name\": \"app.core.app_configure\", \"process\": \"SpawnProcess-6\"}"
 "{\"@timestamp\": \"2025-05-27T11:59:28.873Z\", \"level\": \"ERROR\", \"projectName\": \"Vyapar Drishti\", \"message\": \"None\", \"thread\": \"MainThread\", \"logger_name\": \"app.core.app_configure\", \"process\": \"SpawnProcess-6\"}"
 "{\"@timestamp\": \"2025-05-27T11:59:40.896Z\", \"level\": \"INFO\", \"projectName\": \"Vyapar Drishti\", \"message\": \"Closed MongoDB Connection\", \"thread\": \"MainThread\", \"logger_name\": \"app.core.events\", \"process\": \"SpawnProcess-6\"}"
+"{\"@timestamp\": \"2025-05-27T12:39:22.286Z\", \"level\": \"INFO\", \"projectName\": \"Vyapar Drishti\", \"message\": \"MongoDB Connected.\", \"thread\": \"MainThread\", \"logger_name\": \"app.core.events\", \"process\": \"SpawnProcess-4\"}"
