@@ -40,7 +40,6 @@ class ExtractionTools:
         for page_num in range(len(docs)):
             data = docs[page_num].get_text("text")
             extracted_text += data
-        # print(extracted_text)
 
         if len(extracted_text) < 50:
             extracted_text = ""
@@ -54,255 +53,295 @@ class ExtractionTools:
                     text_file.write(f"{text_file_name} - Page No {i + 1}\n\n")
                     text_file.write(text)
                     text_file.write("\n\n")
-        # print(extracted_text)
         prompt = f"""
-        You are a billing parser that extract the following information from the chemist shop bill text into a JSON object. If a field is not found, use "null". Follow these strict guidelines:
+        You are a billing parser that extracts the following information from a bill text into a JSON object. The bill can be either a sale or a purchase, but not both. If a field is not found, use "null". If the bill is a sale, fill the 'sale' object (using the Sale model fields) and set 'purchase' to null. If the bill is a purchase, fill the 'purchase' object (using the Purchase model fields) and set 'sale' to null. Use the following structure and field names:
 
-          Output Format:
+        Output Format:
         {{
-            "invoice_no": "string",
-            "date": "DD-MM-YYYY",
-            "stockist": {{
-                "name": "string",
-                "address": {{
-                    "street_address_1": "string",
-                    "street_address_2": "string",
-                    "city": "string",
-                    "state": "string",
-                    "zip_code": "string"
+            "sale": {{
+                "status": "string",
+                "creditor": {{
+                    "name": {{
+                        "first": "string",
+                        "last": "string",
+                    }},
+                    "phone_number": "string",
+                    "email": "string",
+                    "gstin": "string",
+                    "company_name": "string",
+                    "pan_number": "string",
+                    "billing_address": {{
+                        "state":  "string",
+                        "address_1":  "string",
+                        "address_2":  "string",
+                        "pinCode": "string",
+                        "city": "string",
+                        "country": "string",
+                    }},
+                    "shipping_address":{{
+                        "title": "string",
+                        "notes": "string",
+                        "state":  "string",
+                        "address_1":  "string",
+                        "address_2":  "string",
+                        "pinCode": "string",
+                        "city": "string",
+                        "country": "string",
+                    }},
                 }},
-                "phone": "string",
-                "GSTIN": "string",
-                "DL_No": "string"
-            }},
-            "chemist": {{
-                "name": "string",
-                "address": {{
-                    "street_address_1": "string",
-                    "street_address_2": "string",
-                    "city": "string",
-                    "state": "string",
-                    "zip_code": "string"
+                "debitor": {{
+                    "name": {{
+                        "first": "string",
+                        "last": "string",
+                    }},
+                    "billing_address": {{
+                        "state":  "string",
+                        "address_1":  "string",
+                        "address_2":  "string",
+                        "pinCode": "string",
+                        "city": "string",
+                        "country": "string",
+                    }},
+                    "phone_number": "string",
+                    "email": "string",
+                    "company_name": "string",
+                    "gstin": "string",
+                    "pan_number": "string",
                 }},
-                "GSTIN": "string",
-                "DL_No": "string"
+                "product_details": [
+                    {{
+                        "name": "string",
+                        "quantity": 0,
+                        "unit_price": 0.0,
+                        "total_price": 0.0,
+                        "tax_rate": 0.0,
+                        "tax_amount": 0.0,
+                        "discount": 0.0,
+                        "discount_amount": 0.0
+                    }}
+                ],
+                "sale_number": "string",
+                "date": "DD-MM-YYYY",
+                "due_date": "DD-MM-YYYY",
+                "payment_method": "string",
+                "gst_total": 0.0,
+                "total_discount": 0.0,
+                "total_amount": 0.0,
+                "total_tax_amount": 0.0,
+                "round_off_amount": 0.0,
+                "grand_total": 0.0
             }},
-            "items": [
-                {{
-                    "product_name": "string",
-                    "pack": "string",
-                    "batch": "string",
-                    "HSN": "string",
-                    "expiry": "YYYY-MM",
-                    "quantity": "string",
-                    "MRP": "string",
-                    "rate": "string",
-                    "GST_percent": "string",
-                    "amount": "string"
-                }}
-            ],
-            "totals": {{
-                "subtotal": 0.0,
-                "discount": 0.0,
-                "GST_total": 0.0,
-                "grand_total": 0.0,
-                "outstanding_amount": 0.0
+            "purchase": {{
+                "status": "string",
+                "creditor": {{
+                    "name": {{
+                        "first": "string",
+                        "last": "string",
+                    }},
+                    "phone_number": "string",
+                    "email": "string",
+                    "gstin": "string",
+                    "company_name": "string",
+                    "billing_address": {{
+                        "state":  "string",
+                        "address_1":  "string",
+                        "address_2":  "string",
+                        "pinCode": "string",
+                        "city": "string",
+                        "country": "string",
+                    }},
+                    "shipping_address": {{
+                        "title": "string",
+                        "notes": "string",
+                        "state":  "string",
+                        "address_1":  "string",
+                        "address_2":  "string",
+                        "pinCode": "string",
+                        "city": "string",
+                        "country": "string",
+                    }},
+                }},
+                "debitor": {{
+                    "name": {{
+                        "first": "string",
+                        "last": "string",
+                    }},
+                    "billing_address": {{
+                        "state":  "string",
+                        "address_1":  "string",
+                        "address_2":  "string",
+                        "pinCode": "string",
+                        "city": "string",
+                        "country": "string",
+                    }},
+                    "phone_number": "string",
+                    "email": "string",
+                    "company_name": "string",
+                    "gstin": "string",
+                }},
+                "product_details": [
+                    {{
+                        "name": "string",
+                        "quantity": 0,
+                        "unit_price": 0.0,
+                        "total_price": 0.0,
+                        "tax_rate": 0.0,
+                        "tax_amount": 0.0,
+                        "discount": 0.0,
+                        "discount_amount": 0.0
+                    }}
+                ],
+                "date": "DD-MM-YYYY",
+                "due_date": "DD-MM-YYYY",
+                "purchase_number": "string",
+                "invoice_number": "string",
+                "payment_method": "string",
+                "gst_total": 0.0,
+                "total_discount": 0.0,
+                "total_amount": 0.0,
+                "toatal_tax_amount": 0.0,
+                "round_off_amount": 0.0,
+                "grand_total": 0.0
             }}
         }}
-        Basic information from the documents to be extracted:
-
-        stokist -> the supplier who sells the medicines.
-        chemist -> the buyer who purchase the medicines.
-        invoice_no -> unique sequential code that is systematically assigned to invoices.
-        date -> Date of the invoice in DD-MM-YYYY format.
-        items -> list or table of all medicines details.
-
-        Stokist Details :
-        name -> Name of the stokist.
-        address -> Residential address of stokist.
-        street_address_1 -> First part of Street address.
-        street_address_2 -> Second part of Street address.
-        city -> City name.
-        state -> State name (abbreviation or full).
-        zip_code -> Postal code.
-        phone -> contact number of stockist.
-        GSTIN -> 15-digit PAN-based number allotted to stokist.
-        DL_NO -> Drug license number alloted to stokist.
-
-        Chemist Details :
-        name -> Name of the chemist.
-        address -> Residential address of chemist.
-        street_address_1 -> First part of Street address.
-        street_address_2 -> Second part of Street address.
-        city -> City name.
-        state -> State name (abbreviation or full).
-        zip_code -> Postal code.
-        GSTIN -> 15-digit PAN-based number allotted to chemist.
-        DL_NO -> Drug license number alloted to chemist.
-
-        Item Details:
-        product_name -> Name of the product.
-        pack -> Pack size of the product(Ltr, ml, Kg, No. of Tablets per pack).
-        batch -> Batch number of the product.
-        HSN -> Harmonized System of Nomenclature code of the product.
-        expiry -> Expiry date of the product in YYYY-MM format.
-        quantity -> Number of units of the product.
-        MRP -> Maximum Retail Price of the product.
-        rate -> Rate of the product.
-        GST_percent -> Goods and Services Tax percentage(Sum of all type of GST(SGST + CGST + IGST)) applicable to the product.
-        amount -> Total amount for the product (quantity * rate).
         
-        Totals Details:
-        subtotal -> The total amount of all the items excluding the taxes and discounts.
-        discount -> Any type of deduction applied to the subtotal before calculating tax.
-        GST_total -> The sum of all type of GST(SGST, IGST and CGST).
-        grand_total -> The final/net amount of the invoice after deducting the discount and adding the total tax amount that is to be paid, including taxes.
-        outstanding_amount -> The remaining balance the buyer still owes to the supplier.
-
-
+        Field Explanations:
+        - sale / purchase: The root object will have both "sale" and "purchase" keys. Only one will be filled based on the bill type; the other will be null.
+        
+        creditor: The party selling the goods/services (for sale: seller, for purchase: supplier)
+        - name: Name of the creditor (seller/supplier).
+            - name.first: First name of the creditor.
+            - name.last: Last name of the creditor (if available).
+        - phone_number: Contact number of the creditor.
+        - email: Email address of the creditor.
+        - gstin: GST Identification Number of the creditor.
+        - company_name: Name of the creditor's company.
+        - pan_number: PAN (Permanent Account Number) of the creditor (if available).
+        - billing_address: Object containing the billing address fields:
+            - state: State of the billing address.
+            - address_1: First line of the billing address.
+            - address_2: Second line of the billing address.
+            - pinCode: Postal code of the billing address.
+            - city: City of the billing address.
+            - country: Country of the billing address.
+        - shipping_address: Object containing the shipping address fields:
+            - title: Title or label for the shipping address (optional).
+            - notes: Any notes related to the shipping address (optional).
+            - state: State of the shipping address.
+            - address_1: First line of the shipping address.
+            - address_2: Second line of the shipping address.
+            - pinCode: Postal code of the shipping address.
+            - city: City of the shipping address.
+            - country: Country of the shipping address.
+        
+        debitor: The party buying the goods/services (for sale: buyer, for purchase: purchaser)
+        - name: Name of the debitor (buyer/purchaser).
+            - name.first: First name of the debitor.
+            - name.last: Last name of the debitor (if available).
+        - billing_address: Object containing the billing address fields:
+            - state: State of the billing address.
+            - address_1: First line of the billing address.
+            - address_2: Second line of the billing address.
+            - pinCode: Postal code of the billing address.
+            - city: City of the billing address.
+            - country: Country of the billing address.
+        - phone_number: Contact number of the debitor.
+        - email: Email address of the debitor.
+        - company_name: Name of the debitor's company.
+        - gstin: GST Identification Number of the debitor.
+        - pan_number: PAN (Permanent Account Number) of the debitor (if available, only in sale).
+        
+        product_details: A list of products/items in the bill. Each item contains:
+        - name: Name of the product (can expand upto 2 or three lines).
+        - quantity: Number of units of the product.
+        - unit_price: Price per unit of the product.
+        - total_price: Total price for the product (quantity × unit_price).
+        - tax_rate: Tax rate applied to the product (percentage) (sum of all the type of tax rates for that product)..
+        - tax_amount: Tax amount for the product (sum of all the type of taxes for that product).
+        - discount: Discount rate applied to the product can be percentage or a particular amount for that product.
+        - discount_amount: Discount amount for the product.
+        
+        Sale-Specific Fields:
+        - sale_number: Unique sequential code assigned to the sale bill.
+        - date: Date of the sale bill in DD-MM-YYYY format.
+        - due_date: Due date for payment in DD-MM-YYYY format.
+        - payment_method: Payment method used (e.g., CASH, CARD, etc.).
+        - gst_total: Total GST amount for the sale.
+        - total_discount: Total discount applied to the sale (or can be sum of the individuals discounts of the products in product details).
+        - total_amount: Total amount before taxes and discounts.
+        - toatal_tax_amount: Total tax amount for the sale (e.g. summation of the tax_amount of all the products in the product_details).
+        - round_off_amount: Rounding adjustment applied to the final amount.
+        - grand_total: Final/net amount to be paid for the sale.
+        - status: Status of the sale bill (e.g., PENDING, PAID).
+        
+        Purchase-Specific Fields:
+        - purchase_number: Unique sequential code assigned to the purchase bill.
+        - invoice_number: Invoice number for the purchase bill.
+        - date: Date of the purchase bill in DD-MM-YYYY format.
+        - due_date: Due date for payment in DD-MM-YYYY format.
+        - payment_method: Payment method used (e.g., CASH, CARD, etc.).
+        - gst_total: Total GST amount for the purchase.
+        - total_discount: Total discount amount applied to the purchase (or can be sum of the individuals discount_amount of the products in product details).
+        - total_amount: Total amount before taxes and discounts.
+        - toatal_tax_amount: Total tax amount for the purchase  (e.g. summation of the tax_amount of all the products in the product_details).
+        - round_off_amount: Rounding adjustment applied to the final amount (can be positive or negative depending on the amount after the decimal point).
+        - grand_total: Final/net amount to be paid for the purchase.
+        - status: Status of the purchase bill (e.g., PENDING, PAID).
+        
+        
+        Instructions:
+        - Extract the text from the bill and format it into the JSON structure provided.
+        - Ensure that the JSON is valid and follows the structure exactly.
+        - If a field is not applicable or not found, set it to "null".
+        - The 'sale' object should be filled if the bill is a sale, and the 'purchase' object should be null.
+        - The 'purchase' object should be filled if the bill is a purchase, and the 'sale' object should be null.
+        - The 'status' field should be set to "PENDING" if not specified.
+        - The 'payment_method' field should be set to "CASH" if not specified.
+        - The 'date' and 'due_date' fields should be in the format "DD-MM-YYYY".
+        - The 'product_details' array should contain objects with the specified fields.
+        - The 'gst_total', 'discount', 'total_amount', 'tax_amount', 'round_off_amount', and 'grand_total' fields should be numeric values.
+        - The 'creditor' and 'debitor' objects should contain the specified fields.
+        - Try dividing the address into 'address_1' and 'address_2' if possible, otherwise set 'address_2' to null.
+        - Try dividing the name of the creditor and debitor into first name and last name if possible, otherwise set last name to null.
+        - The 'billing_address' and 'shipping_address' objects should contain the specified fields.
+        - The 'shipping_address' title and notes fields are optional and can be null.
+        - The 'pan_number' field in the 'creditor' and 'debitor' objects is optional and can be null.
+        - The 'company_name' field in the 'creditor' and 'debitor' objects is optional and can be null.
+        - The 'address_2' field in the 'billing_address' and 'shipping_address' objects is optional and can be null.
+        - The 'phone_number' and 'email' fields in the 'creditor' and 'debitor' objects are optional and can be null.
+        - The 'gstin' field in the 'creditor' and 'debitor' objects is optional and can be null.
+        - The 'name' field in the 'creditor' and 'debitor' objects is mandatory.
+        - The 'product_details' array should contain at least one product object.
+        - The 'name' field in the 'product_details' array is mandatory.
+        - The 'quantity', 'unit_price', 'total_price', 'tax_rate', 'tax_amount', 'discount', and 'discount_amount' fields in the 'product_details' array are mandatory and should be numeric and if not present in bill then set them to 0 or null as specified.
+        - The 'tax_amount' field in the 'product_details' array should be calculated as ('total_price' × 'tax_rate') / 100.
+        - The 'discount_amount' field in the 'product_details' array should be calculated as ('total_price' × 'discount') / 100 if the dicount is percentage type.
+        - The 'grand_total' field should be calculated as the sum of all 'total_price' in 'product_details' plus 'gst_total' minus 'discount' plus 'round_off_amount'.
+        - The 'gst_total' field should be the sum of all 'tax_amount' in 'product_details'.
+        
+        Only one of 'sale' or 'purchase' will be filled based on the bill type, the other must be null.
+        The output should be a valid JSON object with the above structure.
         Input Text:
         {extracted_text}
         """
         response = model.generate_content(prompt)
         content = response.text.strip()
-        # print(content)
         if content.startswith("```json"):
             content = content[len("```json") :].strip()
         if content.endswith("```"):
             content = content[: -len("```")].strip()
 
-        data = json.loads(content)
-        # print(data)
-        # data["token"] = {
-        #     "input_token": input_token,  # Placeholder: replace with actual counting logic if need
-        # }
-        return data
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as e:
+            print("[Gemini JSON Parse Error]", e)
+            print("[Gemini Raw Content]:\n", content)
+            # Optionally, you can raise a custom exception or return a structured error
+            data = None
 
-    # async def process_and_insert(file):  # Added a new function
-    #     extracted_data = await extraction_tools.text_extraction_for_scanned_and_selectable_file_for_json_format_through_gemini(
-    #         file
-    #     )
-    #     if extracted_data is None:
-    #         print("Failed to extract data.")
-    #         return
+        print("Extracted Data :", data)
 
-    #     # 1.  Establish a connection to MongoDB
-    #     client = MongoClient(
-    #         ENV_PROJECT.MONGO_URI
-    #     )  # Replace with your MongoDB connection string
-    #     db = client[ENV_PROJECT.MONGO_DATABASE]  # Replace with your actual database name
-
-    #     # 2.  Data to be inserted
-    #     the_order_id = str(uuid4())  #  Generate a new order ID
-    #     sale_details = []
-
-    #     # 3. Process extracted data for database insertion
-    #     for item in extracted_data["items"]:
-    #         try:
-    #             sale_detail_item = {
-    #                 "product_id": item.get(
-    #                     "product_id", "some_product_uuid"
-    #                 ),  #  You'll need to map product_name to product_id
-    #                 "quantity": int(item["quantity"]),
-    #                 "unit_price": float(item["MRP"]),
-    #                 "batch": item.get("batch", ""),
-    #                 "expiry": item.get("expiry", ""),
-    #                 "sale_id": the_order_id,
-    #                 "created_at": datetime.utcnow(),
-    #                 "updated_at": datetime.utcnow(),
-    #             }
-    #             sale_details.append(sale_detail_item)
-    #         except (ValueError, TypeError) as e:
-    #             print(f"Error processing item: {item}. Error: {e}")
-    #             # Handle the error, e.g., skip this item, or log it, or raise an exception
-    #             continue  # Skip to the next item
-    #     # 4. Insert into SaleDetails Collection
-    #     sale_details_collection = db["SaleDetails"]
-    #     if sale_details:  # only insert if there are sale_details
-    #         try:
-    #             sale_details_collection.insert_many(sale_details)
-    #         except Exception as e:
-    #             print(f"Error inserting into SaleDetails: {e}")
-    #             # Handle error
-    #             client.close()
-    #             return
-
-    #         # 5. Update ProductStock Collection
-    #         product_stock_collection = db["ProductStock"]
-    #         for item in sale_details:
-    #             product_id = item["product_id"]
-    #             quantity = item["quantity"]
-    #             try:
-    #                 result = product_stock_collection.update_one(
-    #                     {"product_id": product_id},
-    #                     {
-    #                         "$inc": {"stock_available": -quantity}
-    #                     },  # Corrected to decrement
-    #                 )
-    #                 if result.modified_count == 0:
-    #                     print(
-    #                         f"Warning: Product stock not updated for product_id: {product_id}"
-    #                     )
-    #             except Exception as e:
-    #                 print(f"Error updating product stock: {e}")
-    #                 # Handle error
-    #                 client.close()
-    #                 return
-    #     else:
-    #         print("No sale details to insert")
-    #     return the_order_id  # returning the order id
+        # return data
 
 
 extraction_tools = ExtractionTools()
-
-
-# # SaleDetails Collection
-
-# from pymongo import MongoClient
-# from datetime import datetime
-
-# # 1.  Establish a connection to MongoDB
-# client = MongoClient(ENV_PROJECT.MONGO_URI)  # Replace with your MongoDB connection string
-# db = client[ENV_PROJECT.MONGO_DATABASE]  # Replace with your actual database name
-
-# # 2.  Data to be inserted
-# the_order_id = "order_uuid"  #  Replace with your actual order ID (UUID)
-
-# sale_details = [
-#     {
-#         "product_id": "product_uuid_1",  # Replace with actual product UUID
-#         "quantity": 2,
-#         "unit_price": 25.00,
-#         "sale_id": the_order_id,
-#         "created_at": datetime.utcnow(),
-#         "updated_at": datetime.utcnow(),
-#     },
-#     {
-#         "product_id": "product_uuid_2",  # Replace with actual product UUID
-#         "quantity": 1,
-#         "unit_price": 50.00,
-#         "sale_id": the_order_id,
-#         "created_at": datetime.utcnow(),
-#         "updated_at": datetime.utcnow(),
-#     },
-#     #  Add more items as needed
-# ]
-
-# # 3. Insert into SaleDetails Collection
-# sale_details_collection = db["SaleDetails"]  # Get the SaleDetails collection
-# sale_details_collection.insert_many(sale_details)  # Use insert_many
-
-
-# # 4. Update ProductStock Collection
-# product_stock_collection = db["ProductStock"]  # Get the ProductStock Collection
-# for item in sale_details:
-#     product_id = item["product_id"]
-#     quantity = item["quantity"]
-
-#     product_stock_collection.update_one(
-#         {"product_id": product_id},  # Filter: match by product_id
-#         {"$inc": {"stock_available": quantity}},  # Update: decrement stock
-#     )
-
-# # 5. Close the connection (optional, but good practice)
-# client.close()

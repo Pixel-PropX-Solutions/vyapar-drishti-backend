@@ -17,7 +17,7 @@ async def upload_file(file: UploadFile = File(...)):
         "message": "Data Extracted Successfully",
         "data": response
     }
-    
+   
 
 @extraction.post("/extraction/save/database")
 async def save_extracted_data_to_database(
@@ -26,6 +26,7 @@ async def save_extracted_data_to_database(
     ):
     if current_user.user_type != "user":
         raise http_exception.CredentialsInvalidException()
+    
     
     order_create_instance = OrdersCreate(
         stockist_id=data["stockist_id"],
@@ -60,11 +61,44 @@ async def save_extracted_data_to_database(
         "data": response
     }
     
-    
-    
-    
-    
-    
 
 
-
+# @extraction.post("/extraction/save/database")
+# async def save_extracted_data_to_database(
+#         data: dict,
+#         current_user : TokenData = Depends(get_current_user)
+#     ):
+#     if current_user.user_type != "user":
+#         raise http_exception.CredentialsInvalidException()
+#     order_create_instance = OrdersCreate(
+#         stockist_id=data["stockist_id"],
+#         order_date=data["date"],
+#         total_amount=data["date"]
+#     )
+#     response = await createUserOrders(
+#         order=order_create_instance,
+#         status = "Pending",
+#         current_user = current_user
+#     )
+#     order_id = response["data"]
+    
+#     order_Details = OrderDetails(
+#         order_id=order_id,
+#         product_details=[
+#             Orders(
+#                 product_id=product["product_id"],
+#                 quantity=product["quantity"],
+#                 unit_price=product["rate"]
+#             ) for product in data["items"]
+#         ]
+#     )
+#     await createOrdersDetails(
+#         orders_details= order_Details,
+#         current_user = current_user
+#     )
+    
+#     return {
+#         "success": True,
+#         "message": "Data Inserted Successfully",
+#         "data": response
+#     }

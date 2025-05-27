@@ -2,20 +2,21 @@ from pydantic import BaseModel, Field
 import datetime
 from uuid import uuid4
 from typing import List
-from app.database.models.entity import Name, BillingAddress, PhoneNumber, ShippingAddress
+from app.database.models.entity import Name, PhoneNumber
 from app.schema.enums import BalanceType
 from typing import Optional
 
 
 class Creditor(BaseModel):
-    name: Name
+    name: str
     user_id: str
-    phone_number: Optional[PhoneNumber] = None
+    id_deleted: Optional[bool] = False
+    phone: Optional[PhoneNumber] = None
     email: Optional[str] = None
     gstin: Optional[str] = None
     company_name: Optional[str] = None
-    billing_address: str
-    shipping_address: Optional[str] = None
+    billing: str
+    shipping: Optional[str] = None
     opening_balance: Optional[float] = 0.0
     balance_type: Optional[BalanceType] = BalanceType.DEBIT
 
@@ -38,5 +39,19 @@ class CreditorDB(Creditor):
 
 
 class CreditorCreate(BaseModel):
-    name: Name
+    name: str
     user_id: str
+    billing: str
+    phone: Optional[PhoneNumber] = None
+    email: Optional[str] = None
+    gstin: Optional[str] = None
+    company_name: Optional[str] = None
+    shipping: Optional[str] = None
+    opening_balance: Optional[float] = 0.0
+    balance_type: Optional[BalanceType] = BalanceType.DEBIT
+    image: Optional[str] = None
+    pan_number: Optional[str] = None
+    credit_limit: Optional[float] = None
+    tags: Optional[List[str]] = None
+    due_date: Optional[float] = None
+    is_deleted: Optional[bool] = False

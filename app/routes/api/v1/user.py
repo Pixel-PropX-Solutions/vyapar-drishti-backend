@@ -1,31 +1,22 @@
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     Form,
     UploadFile,
     status,
-    Response,
-    Header,
 )
 from app.database.repositories.user import user_repo
 from fastapi.responses import ORJSONResponse
-from app.Config import ENV_PROJECT
 from pydantic import BaseModel
 import app.http_exception as http_exception
 from app.schema.token import TokenData
 import app.http_exception as http_exception
 from app.oauth2 import get_current_user
-from app.database import mongodb
-from app.database.repositories.company import billing_repo, Billing
-from app.database.repositories.company import shipping_repo, Shipping
 from app.schema.token import TokenData
 from app.utils.cloudinary_client import cloudinary_client
 from app.database.repositories.company import company_repo, Company
-from app.Config import ENV_PROJECT
 from typing import Optional
-from app.schema.enums import UserTypeEnum
 
 
 user = APIRouter()
@@ -220,14 +211,14 @@ async def get_company(
         {"$unwind": {"path": "$shipping", "preserveNullAndEmptyArrays": True}},
         {
             "$project": {
-                "billing.user_id": 0,
+                # "billing.user_id": 0,
                 "billing.created_at": 0,
                 "billing.updated_at": 0,
-                "billing.is_deleted": 0,
-                "billing.company_id": 0,
-                "shipping.user_id": 0,
-                "shipping.company_id": 0,
-                "shipping.is_deleted": 0,
+                # "billing.is_deleted": 0,
+                # "billing.company_id": 0,
+                # "shipping.user_id": 0,
+                # "shipping.company_id": 0,
+                # "shipping.is_deleted": 0,
                 "shipping.created_at": 0,
                 "shipping.updated_at": 0,
             }
@@ -317,241 +308,3 @@ async def updateCompany(
         "success": True,
         "message": "Company Updated Successfully",
     }
-
-
-# CRUD endpoints for Billing Address
-@user.post(
-    "/create/billing", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
-)
-async def create_billing(
-    company_id: str = Form(...),
-    state: str = Form(...),
-    address_1: str = Form(...),
-    address_2: str = Form(None),
-    pinCode: str = Form(None),
-    city: str = Form(None),
-    country: str = Form(None),
-    current_user: TokenData = Depends(get_current_user),
-):
-    billing_data = {
-        "user_id": current_user.user_id,
-        "company_id": company_id,
-        "state": state,
-        "address_1": address_1,
-        "address_2": address_2,
-        "pinCode": pinCode,
-        "city": city,
-        "country": country,
-        "is_deleted": False,
-    }
-
-    response = await billing_repo.new(Billing(**billing_data))
-    print("response", response)
-    await company_repo.update_one(
-        {"_id": company_id, "user_id": current_user.user_id},
-        {"$set": {"billing": response.billing_id}},
-    )
-    return {"success": True, "message": "Billing Address Created", "data": response}
-
-
-@user.get(
-    "/get/billing/{billing_id}",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def get_billing(
-    billing_id: str, current_user: TokenData = Depends(get_current_user)
-):
-    from app.database.repositories.company import billing_repo
-
-    billing = await billing_repo.findOne(
-        {"_id": billing_id, "user_id": current_user.user_id}
-    )
-    if not billing:
-        raise http_exception.ResourceNotFoundException(detail="Billing Address Not Found")
-    return {"success": True, "data": billing}
-
-
-@user.put(
-    "/update/billing/{billing_id}",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def update_billing(
-    billing_id: str,
-    state: str = Form(...),
-    address_1: str = Form(...),
-    address_2: str = Form(None),
-    pinCode: str = Form(None),
-    city: str = Form(None),
-    country: str = Form(None),
-    current_user: TokenData = Depends(get_current_user),
-):
-
-    update_fields = {
-        "state": state,
-        "address_1": address_1,
-        "address_2": address_2,
-        "pinCode": pinCode,
-        "city": city,
-        "country": country,
-    }
-    await billing_repo.update_one(
-        {"_id": billing_id, "user_id": current_user.user_id}, {"$set": update_fields}
-    )
-    return {"success": True, "message": "Billing Address Updated"}
-
-
-@user.delete(
-    "/delete/billing/{billing_id}",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def delete_billing(
-    billing_id: str, current_user: TokenData = Depends(get_current_user)
-):
-    # from app.database.repositories.company import billing_repo
-    billing = await billing_repo.findOne(
-        {"_id": billing_id, "user_id": current_user.user_id}
-    )
-
-    if not billing:
-        raise http_exception.ResourceNotFoundException(detail="Billing Address Not Found")
-
-    if billing.get("is_deleted", True):
-        raise http_exception.ResourceNotFoundException(
-            detail="Billing Address Already Deleted"
-        )
-
-    # Mark the billing address as deleted instead of removing it
-    await billing_repo.update_one(
-        {"_id": billing_id, "user_id": current_user.user_id},
-        {"$set": {"is_deleted": True}},
-    )
-    # await billing_repo.delete_one({"_id": billing_id, "user_id": current_user.user_id})
-
-    return {"success": True, "message": "Billing Address Deleted"}
-
-
-@user.post(
-    "/create/shipping", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
-)
-async def create_shipping(
-    company_id: str = Form(...),
-    state: str = Form(...),
-    address_1: str = Form(...),
-    address_2: str = Form(None),
-    pinCode: str = Form(None),
-    city: str = Form(None),
-    country: str = Form(None),
-    title: str = Form(None),
-    notes: str = Form(None),
-    current_user: TokenData = Depends(get_current_user),
-):
-    shipping_data = {
-        "user_id": current_user.user_id,
-        "company_id": company_id,
-        "state": state,
-        "address_1": address_1,
-        "address_2": address_2,
-        "pinCode": pinCode,
-        "city": city,
-        "country": country,
-        "title": title,
-        "notes": notes,
-        "is_deleted": False,
-    }
-
-    response = await shipping_repo.new(Shipping(**shipping_data))
-    await company_repo.update_one(
-        {"_id": company_id, "user_id": current_user.user_id},
-        {"$set": {"shipping": response.shipping_id}},
-    )
-    return {"success": True, "message": "Shipping Address Created", "data": response}
-
-
-@user.get(
-    "/get/shipping/{shipping_id}",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def get_shipping(
-    shipping_id: str, current_user: TokenData = Depends(get_current_user)
-):
-    from app.database.repositories.company import shipping_repo
-
-    shipping = await shipping_repo.findOne(
-        {"_id": shipping_id, "user_id": current_user.user_id}
-    )
-    if not shipping:
-        raise http_exception.ResourceNotFoundException(
-            detail="Shipping Address Not Found"
-        )
-    return {"success": True, "data": shipping}
-
-
-@user.put(
-    "/update/shipping/{shipping_id}",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def update_shipping(
-    shipping_id: str,
-    state: str = Form(...),
-    address_1: str = Form(...),
-    address_2: str = Form(None),
-    pinCode: str = Form(None),
-    city: str = Form(None),
-    country: str = Form(None),
-    title: str = Form(None),
-    notes: str = Form(None),
-    current_user: TokenData = Depends(get_current_user),
-):
-    update_fields = {
-        "state": state,
-        "address_1": address_1,
-        "address_2": address_2,
-        "pinCode": pinCode,
-        "city": city,
-        "country": country,
-        "title": title,
-        "notes": notes,
-    }
-    await shipping_repo.update_one(
-        {"_id": shipping_id, "user_id": current_user.user_id}, {"$set": update_fields}
-    )
-    return {"success": True, "message": "Shipping Address Updated"}
-
-
-@user.delete(
-    "/delete/shipping/{shipping_id}",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def delete_shipping(
-    shipping_id: str, current_user: TokenData = Depends(get_current_user)
-):
-    shipping = await shipping_repo.findOne(
-        {"_id": shipping_id, "user_id": current_user.user_id}
-    )
-
-    if not shipping:
-        raise http_exception.ResourceNotFoundException(
-            detail="Shipping Address Not Found"
-        )
-
-    if shipping.get("is_deleted", True):
-        raise http_exception.ResourceNotFoundException(
-            detail="Shipping Address Already Deleted"
-        )
-
-    # Mark the billing address as deleted instead of removing it
-    await shipping_repo.update_one(
-        {"_id": shipping_id, "user_id": current_user.user_id},
-        {"$set": {"is_deleted": True}},
-    )
-
-    # from app.database.repositories.company import shipping_repo
-    # await shipping_repo.delete_one({"_id": shipping_id, "user_id": current_user.user_id})
-
-    return {"success": True, "message": "Shipping Address Deleted"}

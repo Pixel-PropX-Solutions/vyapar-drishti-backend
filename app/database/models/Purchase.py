@@ -18,9 +18,9 @@ class Purchase(BaseModel):
     invoice_number: str
     payment_method: PaymentMode = PaymentMode.CASH
     gst_total: float
-    discount: float
+    total_discount: float
     total_amount: float
-    tax_amount: float
+    total_tax_amount: float
     round_off_amount: float
     grand_total: float
 
