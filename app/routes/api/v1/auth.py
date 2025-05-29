@@ -71,6 +71,9 @@ async def login(
             {"email": creds.username},
             {"_id", "password"},
         )
+    if not user:
+        raise http_exception.CredentialsInvalidException()
+    
     if hashing.verify_hash(creds.password, user["password"]):
         token_data = TokenData(
             user_id=user["_id"], user_type=user_type.value, scope="login"
