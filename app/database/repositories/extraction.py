@@ -65,7 +65,7 @@ class ExtractionTools:
                         "first": "string",
                         "last": "string",
                     }},
-                    "phone_number": "string",
+                    "phone": "string",
                     "email": "string",
                     "gstin": "string",
                     "company_name": "string",
@@ -102,7 +102,7 @@ class ExtractionTools:
                         "city": "string",
                         "country": "string",
                     }},
-                    "phone_number": "string",
+                    "phone": "string",
                     "email": "string",
                     "company_name": "string",
                     "gstin": "string",
@@ -138,7 +138,7 @@ class ExtractionTools:
                         "first": "string",
                         "last": "string",
                     }},
-                    "phone_number": "string",
+                    "phone": "string",
                     "email": "string",
                     "gstin": "string",
                     "company_name": "string",
@@ -174,7 +174,7 @@ class ExtractionTools:
                         "city": "string",
                         "country": "string",
                     }},
-                    "phone_number": "string",
+                    "phone": "string",
                     "email": "string",
                     "company_name": "string",
                     "gstin": "string",
@@ -212,7 +212,7 @@ class ExtractionTools:
         - name: Name of the creditor (seller/supplier).
             - name.first: First name of the creditor.
             - name.last: Last name of the creditor (if available).
-        - phone_number: Contact number of the creditor.
+        - phone: Contact number of the creditor.
         - email: Email address of the creditor.
         - gstin: GST Identification Number of the creditor.
         - company_name: Name of the creditor's company.
@@ -245,7 +245,7 @@ class ExtractionTools:
             - pinCode: Postal code of the billing address.
             - city: City of the billing address.
             - country: Country of the billing address.
-        - phone_number: Contact number of the debitor.
+        - phone: Contact number of the debitor.
         - email: Email address of the debitor.
         - company_name: Name of the debitor's company.
         - gstin: GST Identification Number of the debitor.
@@ -308,7 +308,7 @@ class ExtractionTools:
         - The 'pan_number' field in the 'creditor' and 'debitor' objects is optional and can be null.
         - The 'company_name' field in the 'creditor' and 'debitor' objects is optional and can be null.
         - The 'address_2' field in the 'billing_address' and 'shipping_address' objects is optional and can be null.
-        - The 'phone_number' and 'email' fields in the 'creditor' and 'debitor' objects are optional and can be null.
+        - The 'phone' and 'email' fields in the 'creditor' and 'debitor' objects are optional and can be null.
         - The 'gstin' field in the 'creditor' and 'debitor' objects is optional and can be null.
         - The 'name' field in the 'creditor' and 'debitor' objects is mandatory.
         - The 'product_details' array should contain at least one product object.

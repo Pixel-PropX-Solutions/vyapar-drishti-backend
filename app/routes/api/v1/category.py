@@ -237,4 +237,27 @@ async def deleteCategory(
     if not response:
         raise http_exception.ResourceNotFoundException(detail="Category Not Found")
 
-    return {"success": True, "message": "Product Deleted Successfully"}
+    return {"success": True, "message": "Category Deleted Successfully"}
+
+
+@Category.put(
+    "/restore/category/${category_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def restore_category(
+    category_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    response = await category_repo.update_one(
+        {"_id": category_id, "user_id": current_user.user_id, "is_deleted": True},
+        {"$set": {"is_deleted": False}},
+    )
+
+    if not response:
+        raise http_exception.ResourceNotFoundException(detail="Category Not Found")
+
+    return {"success": True, "message": "Category restored Successfully"}

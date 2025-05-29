@@ -430,7 +430,7 @@ async def viewChemistProfile(
 #             {
 #                 "$project": {
 #                     "address": 0,
-#                     "phone_number": 0,
+#                     "phone": 0,
 #                     "user_id": 0,
 #                     "name": 0,
 #                     "created_at": 0,

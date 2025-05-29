@@ -82,7 +82,7 @@
 #             name: 1,
 #             store_name: 1,
 #             address: 1,
-#             phone_number: 1,
+#             phone: 1,
 #             dl_number: 1,
 #             created_at: 1,
 #             updated_at: 1

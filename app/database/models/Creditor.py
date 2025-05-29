@@ -10,22 +10,22 @@ from typing import Optional
 class Creditor(BaseModel):
     name: str
     user_id: str
-    id_deleted: Optional[bool] = False
+    is_deleted: Optional[bool] = False
     phone: Optional[PhoneNumber] = None
     email: Optional[str] = None
     gstin: Optional[str] = None
     company_name: Optional[str] = None
     billing: str
     shipping: Optional[str] = None
-    opening_balance: Optional[float] = 0.0
-    balance_type: Optional[BalanceType] = BalanceType.DEBIT
+    # opening_balance: Optional[float] = 0.0
+    # balance_type: Optional[BalanceType] = BalanceType.DEBIT
 
     # Additional fields for Creditor
     image: Optional[str] = None
     pan_number: Optional[str] = None
-    credit_limit: Optional[float] = None
+    # credit_limit: Optional[float] = None
     tags: Optional[List[str]] = None
-    due_date: Optional[float] = None
+    # due_date: Optional[float] = None
 
 
 class CreditorDB(Creditor):
@@ -47,11 +47,11 @@ class CreditorCreate(BaseModel):
     gstin: Optional[str] = None
     company_name: Optional[str] = None
     shipping: Optional[str] = None
-    opening_balance: Optional[float] = 0.0
-    balance_type: Optional[BalanceType] = BalanceType.DEBIT
+    # opening_balance: Optional[float] = 0.0
+    # balance_type: Optional[BalanceType] = BalanceType.DEBIT
     image: Optional[str] = None
     pan_number: Optional[str] = None
-    credit_limit: Optional[float] = None
+    # credit_limit: Optional[float] = None
     tags: Optional[List[str]] = None
-    due_date: Optional[float] = None
+    # due_date: Optional[float] = None
     is_deleted: Optional[bool] = False

@@ -15,7 +15,7 @@ import app.http_exception as http_exception
 from app.oauth2 import get_current_user
 from app.schema.token import TokenData
 from app.utils.cloudinary_client import cloudinary_client
-from app.database.repositories.company import company_repo, Company
+from app.database.repositories.company import company_repo, Company, billing_repo, Billing
 from typing import Optional
 
 
@@ -170,6 +170,40 @@ async def createCompany(
         )
 
     return {"success": True, "message": "Company Created Successfully"}
+
+
+@user.post(
+    "/create/company/billing", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+)
+async def create_company_billing(
+    company_id: str = Form(...),
+    state: str = Form(...),
+    address_1: str = Form(...),
+    address_2: str = Form(None),
+    pinCode: str = Form(None),
+    city: str = Form(None),
+    country: str = Form(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    billing_data = {
+        "user_id": current_user.user_id,
+        # "company_id": company_id,
+        "state": state,
+        "address_1": address_1,
+        "address_2": address_2,
+        "pinCode": pinCode,
+        "city": city,
+        "country": country,
+        "is_deleted": False,
+    }
+
+    response = await billing_repo.new(Billing(**billing_data))
+    print("response", response)
+    await company_repo.update_one(
+        {"_id": company_id, "user_id": current_user.user_id},
+        {"$set": {"billing": response.billing_id}},
+    )
+    return {"success": True, "message": "Billing Address Created", "data": response}
 
 
 @user.get("/company", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)

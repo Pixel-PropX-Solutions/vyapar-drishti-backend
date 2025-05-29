@@ -45,7 +45,7 @@ async def create_shipping(
 ):
     shipping_data = {
         "user_id": current_user.user_id,
-        "company_id": company_id,
+        # "company_id": company_id,
         "state": state,
         "address_1": address_1,
         "address_2": address_2,
@@ -84,6 +84,41 @@ async def get_shipping(
         raise http_exception.ResourceNotFoundException(
             detail="Shipping Address Not Found"
         )
+    return {"success": True, "data": shipping}
+
+
+@shipping.get(
+    "/get/all/shipping",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_all_shipping(current_user: TokenData = Depends(get_current_user)):
+
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    shipping = await shipping_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "user_id": current_user.user_id,
+                    "is_deleted": False,
+                }
+            },
+            {
+                "$project": {
+                    "created_at": 0,
+                    "updated_at": 0,
+                }
+            },
+        ]
+    ).to_list(None)
+
+    if not shipping:
+        raise http_exception.ResourceNotFoundException(
+            detail="Shipping Address Not Found"
+        )
+
     return {"success": True, "data": shipping}
 
 
@@ -142,13 +177,34 @@ async def delete_shipping(
             detail="Shipping Address Already Deleted"
         )
 
-    # Mark the billing address as deleted instead of removing it
     await shipping_repo.update_one(
         {"_id": shipping_id, "user_id": current_user.user_id},
         {"$set": {"is_deleted": True}},
     )
 
-    # from app.database.repositories.company import shipping_repo
-    # await shipping_repo.delete_one({"_id": shipping_id, "user_id": current_user.user_id})
-
     return {"success": True, "message": "Shipping Address Deleted"}
+
+
+@shipping.put(
+    "/restore/shipping/{shipping_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def restored_shipping(
+    shipping_id: str, current_user: TokenData = Depends(get_current_user)
+):
+    shipping = await shipping_repo.findOne(
+        {"_id": shipping_id, "user_id": current_user.user_id, "is_deleted": True}
+    )
+
+    if not shipping:
+        raise http_exception.ResourceNotFoundException(
+            detail="Shipping Address Not Found"
+        )
+
+    await shipping_repo.update_one(
+        {"_id": shipping_id, "user_id": current_user.user_id, "is_deleted": True},
+        {"$set": {"is_deleted": False}},
+    )
+
+    return {"success": True, "message": "Shipping Address Restored"}

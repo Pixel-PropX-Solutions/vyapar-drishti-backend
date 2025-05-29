@@ -6,7 +6,7 @@ from typing import Optional
 
 class Billing(BaseModel):
     user_id: str
-    company_id: str
+    # company_id: str
     state: str
     address_1: str
     is_deleted: bool = False
@@ -30,7 +30,7 @@ class BillingDB(Billing):
 
 class BillingCreate(BaseModel):
     user_id: str
-    company_id: str
+    # company_id: str
     state: str
     address_1: str
     is_deleted: bool = False

@@ -30,5 +30,5 @@ class BankDetails(BaseModel):
     branch_name: str
     upi_id: Optional[str] = None
     upi_number: Optional[str] = None
-    opening_balance: Optional[float] = 0.0
+    # opening_balance: Optional[float] = 0.0
     account_holder_name: Optional[str] = None

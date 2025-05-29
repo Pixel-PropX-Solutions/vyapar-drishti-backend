@@ -22,9 +22,10 @@ class creditorRepo(BaseMongoDbCrud[CreditorDB]):
     async def viewAllCreditors(
         self,
         search: str,
-        id_deleted: bool,
+        is_deleted: bool,
         pagination: PageRequest,
         sort: Sort,
+        state: str = None,
         current_user_id: str = None,
     ):
         filter_params = {}
@@ -50,14 +51,19 @@ class creditorRepo(BaseMongoDbCrud[CreditorDB]):
                     }
                 },
             ]
+        if state not in ["", None]:
+            filter_params["$or"] = [
+                {"billing.state": {"$regex": f"^{state}", "$options": "i"}},
+                {"shipping.state": {"$regex": f"^{state}", "$options": "i"}},
+            ]
 
         sort_fields_mapping = {
             "name": "name",
             "company_name": "company_name",
             "credit_limit": "credit_limit",
             "balance_type": "balance_type",
-            "city": "StockistData.billing.city",
-            "state": "StockistData.billing.state",
+            "city": ["billing.city", "shipping.city"],
+            "state": ["billing.state", "shipping.state"],
             "created_at": "created_at",
         }
 
@@ -68,7 +74,7 @@ class creditorRepo(BaseMongoDbCrud[CreditorDB]):
         pipeline = []
         pipeline.extend(
             [
-                {"$match": {"id_deleted": id_deleted, "user_id": current_user_id}},
+                {"$match": {"is_deleted": is_deleted, "user_id": current_user_id}},
                 {
                     "$lookup": {
                         "from": "Billing",
@@ -89,12 +95,9 @@ class creditorRepo(BaseMongoDbCrud[CreditorDB]):
                 {"$unwind": {"path": "$shipping", "preserveNullAndEmptyArrays": True}},
                 {
                     "$project": {
-                        # "StockistData._id": 0,
                         "billing.user_id": 0,
-                        # "billing.created_at": 0,
                         "billing.updated_at": 0,
                         "shipping.user_id": 0,
-                        # "shipping.created_at": 0,
                         "shipping.updated_at": 0,
                     }
                 },
@@ -150,24 +153,28 @@ class creditorRepo(BaseMongoDbCrud[CreditorDB]):
                         "$setUnion": [
                             {
                                 "$cond": [
-                                    {"$and": [
-                                        {"$ne": ["$billing_state", None]},
-                                        {"$ne": ["$billing_state", ""]}
-                                    ]},
+                                    {
+                                        "$and": [
+                                            {"$ne": ["$billing_state", None]},
+                                            {"$ne": ["$billing_state", ""]},
+                                        ]
+                                    },
                                     ["$billing_state"],
-                                    []
+                                    [],
                                 ]
                             },
                             {
                                 "$cond": [
-                                    {"$and": [
-                                        {"$ne": ["$shipping_state", None]},
-                                        {"$ne": ["$shipping_state", ""]}
-                                    ]},
+                                    {
+                                        "$and": [
+                                            {"$ne": ["$shipping_state", None]},
+                                            {"$ne": ["$shipping_state", ""]},
+                                        ]
+                                    },
                                     ["$shipping_state"],
-                                    []
+                                    [],
                                 ]
-                            }
+                            },
                         ]
                     }
                 }
@@ -177,8 +184,7 @@ class creditorRepo(BaseMongoDbCrud[CreditorDB]):
             {"$sort": {"_id": 1}},
             {"$project": {"state": "$_id", "_id": 0}},
         ]
-        
-        
+
         res = [doc async for doc in self.collection.aggregate(pipeline)]
         states_res = [
             doc async for doc in self.collection.aggregate(unique_states_pipeline)

@@ -20,7 +20,7 @@ Product = APIRouter()
 @Product.post(
     "/create/product", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
-async def createProduct(
+async def create_product(
     product_name: str = Form(...),
     selling_price: float = Form(...),
     unit: str = Form(None),
@@ -90,43 +90,11 @@ async def createProduct(
 
 
 @Product.get(
-    "/view/all/product", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
-)
-async def view_all_product(
-    current_user: TokenData = Depends(get_current_user),
-    search: str = None,
-    category: str = None,
-    is_deleted: bool = False,
-    page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=60),
-    sortField: str = "created_at",
-    sortOrder: SortingOrder = SortingOrder.DESC,
-):
-    if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
-
-    page = Page(page=page_no, limit=limit)
-    sort = Sort(sort_field=sortField, sort_order=sortOrder)
-    page_request = PageRequest(paging=page, sorting=sort)
-
-    result = await product_repo.viewAllProduct(
-        search=search,
-        category=category,
-        pagination=page_request,
-        sort=sort,
-        current_user=current_user,
-        is_deleted=is_deleted,
-    )
-
-    return {"success": True, "message": "Data Fetched Successfully...", "data": result}
-
-
-@Product.get(
     "/get/product/{product_id}",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def getProduct(
+async def get_product(
     product_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
@@ -183,34 +151,73 @@ async def getProduct(
     return {"success": True, "data": product}
 
 
-@Product.delete(
-    "/delete/product/{product_id}",
+@Product.get(
+    "/view/all/product", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+)
+async def view_all_product(
+    current_user: TokenData = Depends(get_current_user),
+    search: str = None,
+    category: str = None,
+    is_deleted: bool = False,
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(10, le=60),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await product_repo.viewAllProduct(
+        search=search,
+        category=category,
+        pagination=page_request,
+        sort=sort,
+        current_user=current_user,
+        is_deleted=is_deleted,
+    )
+
+    return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+
+
+@Product.get(
+    "/view/products/with_id",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def deleteProduct(
-    product_id: str,
+async def get_products(
+    search: str = "",
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
-    product = await product_repo.findOne(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False}
-    )
-
-    print("product", product)
-    if not product:
-        raise http_exception.NotFoundException(detail="Product Not Found")
-
-    response = await product_repo.update_one(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False},
-        {"$set": {"is_deleted": True}},
-    )
-
-    print("response", response)
-
-    return {"success": True, "message": "Product Deleted Successfully"}
+    products = await product_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "product_name": {"$regex": search, "$options": "i"},
+                    "user_id": current_user.user_id,
+                    "is_deleted": False,
+                }
+            },
+            {
+                "$project": {
+                    "storage_requirement": 0,
+                    "category": 0,
+                    "state": 0,
+                    "expiry_date": 0,
+                    "description": 0,
+                    "created_at": 0,
+                    "updated_at": 0,
+                }
+            },
+        ]
+    ).to_list(None)
+    return {"success": True, "data": products}
 
 
 @Product.put(
@@ -218,7 +225,7 @@ async def deleteProduct(
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def updateProduct(
+async def update_product(
     product_id: str = "",
     unit: str = Form(None),
     barcode: str = Form(None),
@@ -293,38 +300,58 @@ async def updateProduct(
     }
 
 
-@Product.get(
-    "/view/products/with_id",
+@Product.delete(
+    "/delete/product/{product_id}",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def getProducts(
-    search: str = "",
+async def delete_product(
+    product_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
-    products = await product_repo.collection.aggregate(
-        [
-            {
-                "$match": {
-                    "product_name": {"$regex": search, "$options": "i"},
-                    "user_id": current_user.user_id,
-                    "is_deleted": False,
-                }
-            },
-            {
-                "$project": {
-                    "storage_requirement": 0,
-                    "category": 0,
-                    "state": 0,
-                    "expiry_date": 0,
-                    "description": 0,
-                    "created_at": 0,
-                    "updated_at": 0,
-                }
-            },
-        ]
-    ).to_list(None)
-    return {"success": True, "data": products}
+    product = await product_repo.findOne(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False}
+    )
+
+    print("product", product)
+    if not product:
+        raise http_exception.NotFoundException(detail="Product Not Found")
+
+    response = await product_repo.update_one(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False},
+        {"$set": {"is_deleted": True}},
+    )
+
+    print("response", response)
+
+    return {"success": True, "message": "Product Deleted Successfully"}
+
+
+@Product.put(
+    "/restore/product/{product_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def restore_product(
+    product_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    product = await product_repo.findOne(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": True}
+    )
+
+    if not product:
+        raise http_exception.NotFoundException(detail="Product Not Found")
+
+    await product_repo.update_one(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": True},
+        {"$set": {"is_deleted": False}},
+    )
+
+    return {"success": True, "message": "Product Restored Successfully"}

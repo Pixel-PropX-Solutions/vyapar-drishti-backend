@@ -167,9 +167,9 @@ async def get_current_user_details(
                                 "middle_name": "",
                                 "last_name": "Khan",
                             },
-                            "phone_number": {
-                                "country_code": "+91",
-                                "phone_number": "6367097548",
+                            "phone": {
+                                "code": "+91",
+                                "number": "6367097548",
                             },
                             "shop_name": "Pharma",
                             "address": {

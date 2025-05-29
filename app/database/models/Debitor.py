@@ -9,20 +9,21 @@ from typing import Optional
 
 
 class Debitor(BaseModel):
-    name: Name
+    name: str
     user_id: str
-    billing_address: str
-    phone_number: Optional[PhoneNumber] = None
+    billing: str
+    is_deleted: Optional[bool] = False
+    phone: Optional[PhoneNumber] = None
     email: Optional[str] = None
     company_name: Optional[str] = None
     gstin: Optional[str] = None
-    opening_balance: Optional[float] = 0.0
-    balance_type: Optional[BalanceType] = BalanceType.DEBIT
+    # opening_balance: Optional[float] = 0.0
+    # balance_type: Optional[BalanceType] = BalanceType.DEBIT
 
     # Additional fields for Debitor
     image: Optional[str] = None
     pan_number: Optional[str] = None
-    debit_limit: Optional[float] = None
+    # debit_limit: Optional[float] = None
     tags: Optional[List[str]] = None
 
 
@@ -37,5 +38,18 @@ class DebitorDB(Debitor):
 
 
 class DebitorCreate(BaseModel):
-    name: Name
+    name: str
     user_id: str
+    billing: str
+    is_deleted: Optional[bool] = False
+    
+    phone: Optional[PhoneNumber] = None
+    email: Optional[str] = None
+    company_name: Optional[str] = None
+    gstin: Optional[str] = None
+    # opening_balance: Optional[float] = 0.0
+    # balance_type: Optional[BalanceType] = BalanceType.DEBIT
+    image: Optional[str] = None
+    pan_number: Optional[str] = None
+    # debit_limit: Optional[float] = None
+    tags: Optional[List[str]] = None
