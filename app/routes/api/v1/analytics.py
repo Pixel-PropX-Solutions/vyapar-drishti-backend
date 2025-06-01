@@ -32,7 +32,6 @@
 
 #         return {"success": True, "data": {"total_sales_amount": total_sales_amount}}
 #     except Exception as e:
-#         print(f"Error in get_total_sales_amount: {e}")
 #         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -73,7 +72,6 @@
 
 #         return {"success": True, "data": sales_data}
 #     except Exception as e:
-#         print(f"Error in get_sales_per_chemist_amount: {e}")
 #         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -118,5 +116,4 @@
 
 #         return {"success": True, "data": top_5_sales}
 #     except Exception as e:
-#         print(f"Error in get_top_5_pharmacies_by_sales: {e}")
 #         raise HTTPException(status_code=500, detail="Internal server error")

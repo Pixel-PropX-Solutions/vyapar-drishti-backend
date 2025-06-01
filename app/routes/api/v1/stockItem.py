@@ -8,10 +8,11 @@ from fastapi import Query
 from app.schema.token import TokenData
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 
-from app.database.models.Product import ProductCreate
-from app.database.repositories.Product import product_repo
-from app.database.models.Product import product
+from app.database.models.StockItem import StockItemCreate
+from app.database.repositories.stockItemRepo import stock_item_repo
+from app.database.models.StockItem import StockItem
 from app.utils.cloudinary_client import cloudinary_client
+from typing import Optional, Union
 
 
 Product = APIRouter()
@@ -21,20 +22,27 @@ Product = APIRouter()
     "/create/product", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
 async def create_product(
-    product_name: str = Form(...),
-    selling_price: float = Form(...),
+    name: str = Form(...),
+    company_id: str= Form(...),
     unit: str = Form(None),
-    hsn_code: str = Form(None),
-    purchase_price: float = Form(None),
-    barcode: str = Form(None),
-    category: str = Form(None),
-    description: str = Form(None),
-    opening_quantity: int = Form(None),
-    opening_purchase_price: float = Form(None),
-    opening_stock_value: int = Form(None),
-    low_stock_alert: int = Form(None),
-    show_active_stock: bool = Form(True),
-    image: UploadFile = File(None),
+    is_deleted: bool = False,
+
+    # optional fields
+    alias_name: Optional[str] = "",
+    category: Optional[str] = "",
+    group: Optional[str] = "",
+    image: Optional[str] = "",
+    description: Optional[str] = "",
+
+    # Additonal Optional fields
+    opening_balance: Optional[float] = 0,
+    opening_rate: Optional[float] = 0,
+    opening_value: Optional[float] = 0,
+    gst_nature_of_goods: Optional[str] = "",
+    gst_hsn_code: Optional[str] = "",
+    gst_taxability: Optional[str] = "",
+    low_stock_alert: Optional[int] = 0,
+
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -56,30 +64,34 @@ async def create_product(
                 detail="File size exceeds the 5 MB limit."
             )
         upload_result = await cloudinary_client.upload_file(image)
-        print("upload_result", upload_result)
         image_url = upload_result["url"]
 
     product_data = {
-        "product_name": product_name,
-        "selling_price": selling_price,
-        "user_id": current_user.user_id,
-        "is_deleted": False,
+        # required fields
+        "name": name,
+        "company_id": company_id,
         "unit": unit,
-        "hsn_code": hsn_code,
-        "purchase_price": purchase_price,
-        "barcode": barcode,
+        "is_deleted": is_deleted,
+        "user_id": current_user.user_id,
+        
+        # optional fields
+        "alias_name": alias_name,
         "category": category,
+        "group": group,
         "image": image_url,
         "description": description,
-        "opening_quantity": opening_quantity,
-        "opening_purchase_price": opening_purchase_price,
-        "opening_stock_value": opening_stock_value,
+        
+        # additonal optional fields
+        "opening_balance": opening_balance,
+        "opening_rate": opening_rate,
+        "opening_value": opening_value,
+        "gst_nature_of_goods": gst_nature_of_goods,
+        "gst_hsn_code": gst_hsn_code,
+        "gst_taxability": gst_taxability,
         "low_stock_alert": low_stock_alert,
-        "show_active_stock": show_active_stock,
     }
 
-    print("product_data", product_data)
-    response = await product_repo.new(product(**product_data))
+    response = await stock_item_repo.new(StockItem(**product_data))
 
     if not response:
         raise http_exception.ResourceAlreadyExistsException(
@@ -96,48 +108,69 @@ async def create_product(
 )
 async def get_product(
     product_id: str,
+    company_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
-    product = await product_repo.collection.aggregate(
+    product = await stock_item_repo.collection.aggregate(
         [
             {
                 "$match": {
                     "_id": product_id,
                     "user_id": current_user.user_id,
+                    'company_id': company_id,
+                    "is_deleted": False,
                 }
             },
             {
                 "$lookup": {
                     "from": "Category",
-                    "localField": "category",
+                    "localField": "_category",
                     "foreignField": "_id",
-                    "as": "categoryDetails",
+                    "as": "category",
                 }
             },
-            {"$unwind": {"path": "$categoryDetails", "preserveNullAndEmptyArrays": True}},
+            {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
+            {
+                "$lookup": {
+                    "from": "Group",
+                    "localField": "_group",
+                    "foreignField": "_id",
+                    "as": "group",
+                }
+            },
+            {"$unwind": {"path": "$group", "preserveNullAndEmptyArrays": True}},
             {
                 "$project": {
                     "_id": 1,
-                    "product_name": 1,
-                    "selling_price": 1,
+                    "name": 1,
+                    "company_id": 1,
                     "user_id": 1,
-                    "is_deleted": 1,
                     "unit": 1,
-                    "hsn_code": 1,
-                    "purchase_price": 1,
-                    "barcode": 1,
+                    "_unit": 1,
+                    "is_deleted": 1,
+                    
+                    # optional fields
+                    "alias_name": 1,
+                    "category": {"$ifNull": ["$category.name", None]},
+                    "_category": {"$ifNull": ["$category._id", None]},
+                    "category_desc": {"$ifNull": ["$category.description", None]},
+                    "group": {"$ifNull": ["$group.name", None]},
+                    "_group": {"$ifNull": ["$group._id", None]},
+                    "group_desc": {"$ifNull": ["$group.description", None]},
                     "image": 1,
                     "description": 1,
-                    "opening_quantity": 1,
-                    "opening_purchase_price": 1,
-                    "opening_stock_value": 1,
+                    
+                    # additional optional fields
+                    "opening_balance": 1,
+                    "opening_rate": 1,
+                    "opening_value": 1,
+                    "gst_nature_of_goods": 1,
+                    "gst_hsn_code": 1,
+                    "gst_taxability": 1,
                     "low_stock_alert": 1,
-                    "show_active_stock": 1,
-                    "category": {"$ifNull": ["$categoryDetails.category_name", None]},
-                    "category_desc": {"$ifNull": ["$categoryDetails.description", None]},
                     "created_at": 1,
                     "updated_at": 1,
                 }
@@ -156,8 +189,10 @@ async def get_product(
 )
 async def view_all_product(
     current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(...),
     search: str = None,
     category: str = None,
+    group: str = None,
     is_deleted: bool = False,
     page_no: int = Query(1, ge=1),
     limit: int = Query(10, le=60),
@@ -171,10 +206,12 @@ async def view_all_product(
     sort = Sort(sort_field=sortField, sort_order=sortOrder)
     page_request = PageRequest(paging=page, sorting=sort)
 
-    result = await product_repo.viewAllProduct(
+    result = await stock_item_repo.viewAllProduct(
         search=search,
+        company_id=company_id,
         category=category,
         pagination=page_request,
+        group=group,
         sort=sort,
         current_user=current_user,
         is_deleted=is_deleted,
@@ -195,24 +232,33 @@ async def get_products(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
-    products = await product_repo.collection.aggregate(
+    products = await stock_item_repo.collection.aggregate(
         [
             {
                 "$match": {
-                    "product_name": {"$regex": search, "$options": "i"},
+                    "name": {"$regex": search, "$options": "i"},
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 }
             },
             {
                 "$project": {
-                    "storage_requirement": 0,
-                    "category": 0,
-                    "state": 0,
-                    "expiry_date": 0,
-                    "description": 0,
-                    "created_at": 0,
-                    "updated_at": 0,
+                    "_id": 1,
+                    "name": 1,
+                    "company_id": 1,
+                    "user_id": 1,
+                    "unit": 1,
+                    "_unit": 1,
+                    "is_deleted": 1,
+                    
+                    # optional fields
+                    "alias_name": 1,
+                    "category": {"$ifNull": ["$category.name", None]},
+                    "_category": {"$ifNull": ["$category._id", None]},
+                    "group": {"$ifNull": ["$group.name", None]},
+                    "_group": {"$ifNull": ["$group._id", None]},
+                    "image": 1,
+                    "description": 1,
                 }
             },
         ]
@@ -246,7 +292,7 @@ async def update_product(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
-    productExists = await product_repo.findOne(
+    productExists = await stock_item_repo.findOne(
         {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False},
     )
     if productExists is None:
@@ -289,7 +335,7 @@ async def update_product(
     if image:
         update_fields["image"] = image_url
 
-    await product_repo.update_one(
+    await stock_item_repo.update_one(
         {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False},
         {"$set": update_fields},
     )
@@ -307,25 +353,24 @@ async def update_product(
 )
 async def delete_product(
     product_id: str,
+    company_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
-    product = await product_repo.findOne(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False}
+    product = await stock_item_repo.findOne(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False, "company_id": company_id}
     )
 
-    print("product", product)
     if not product:
         raise http_exception.NotFoundException(detail="Product Not Found")
 
-    response = await product_repo.update_one(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False},
+    response = await stock_item_repo.update_one(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False, "company_id": company_id},
         {"$set": {"is_deleted": True}},
     )
 
-    print("response", response)
 
     return {"success": True, "message": "Product Deleted Successfully"}
 
@@ -337,20 +382,21 @@ async def delete_product(
 )
 async def restore_product(
     product_id: str,
+    company_id: str = Query(...),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
-    product = await product_repo.findOne(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": True}
+    product = await stock_item_repo.findOne(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": True, "company_id": company_id}
     )
 
     if not product:
         raise http_exception.NotFoundException(detail="Product Not Found")
 
-    await product_repo.update_one(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": True},
+    await stock_item_repo.update_one(
+        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": True, "company_id": company_id},
         {"$set": {"is_deleted": False}},
     )
 

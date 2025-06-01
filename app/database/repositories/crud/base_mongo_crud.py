@@ -17,7 +17,6 @@ from app.database.repositories.crud.base import (
 
 def model_serializer(entity, id):
     result = entity.dict(by_alias=True)
-    # print("Result : ",result)
     result[id] = str(result[id])
     
     return result
@@ -202,6 +201,9 @@ class BaseMongoDbCrud(AsyncPagingAndSortingRepository[T]):
 
     async def update_one(self, filter: dict, update: dict):
         return await self.collection.update_one(filter, update)
+
+    async def update_many(self, filter: dict, update: dict):
+        return await self.collection.update_many(filter, update)
 
     async def filterByName(self, name: str):
         await self.collection.find_one({"name": {"$regex": name}})

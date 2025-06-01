@@ -35,7 +35,7 @@ from app.utils.generatePassword import generatePassword
 from app.Config import ENV_PROJECT
 from app.utils.mailer_module import template
 from app.utils.mailer_module import mail
-from app.database.repositories.company import company_repo, Company
+from app.database.repositories.companyRepo import company_repo, Company
 
 # from app.schema.password import SetPassword
 from typing import Optional
@@ -73,7 +73,7 @@ async def login(
         )
     if not user:
         raise http_exception.CredentialsInvalidException()
-    
+
     if hashing.verify_hash(creds.password, user["password"]):
         token_data = TokenData(
             user_id=user["_id"], user_type=user_type.value, scope="login"
@@ -89,8 +89,6 @@ async def login(
 async def register(
     response: Response,
     user: UserCreate,
-    company_name: str = None,
-    brand_name: str = None,
 ):
 
     userExists = await user_repo.findOne({"email": user.email})
@@ -114,33 +112,7 @@ async def register(
         inserted_dict[k] = v
 
     user_res = await user_repo.new(User(**inserted_dict))
-    if company_name and brand_name:
-        company_data = {
-            "user_id": user_res.id,
-            "company_name": company_name,
-            "brand_name": brand_name,
-            "email": user.email,
-            "phone": user.phone,
-        }
-        com_res = await company_repo.new(Company(**company_data))
-        if com_res is None:
-            raise http_exception.ResourceConflictException(
-                message="Company creation failed, please try again."
-            )
 
-    else:
-        company_data = {
-            "user_id": user_res.id,
-            "company_name": "Default Company",
-            "brand_name": "Default Brand",
-            "email": user.email,
-            "phone": user.phone,
-        }
-        com_res = await company_repo.new(Company(**company_data))
-        if com_res is None:
-            raise http_exception.ResourceConflictException(
-                message="Company creation failed, please try again."
-            )
     token_data = TokenData(
         user_id=user_res.id, user_type=user_res.user_type.value, scope="login"
     )
@@ -163,34 +135,24 @@ async def get_current_user_details(
                     {
                         "_id": "adim-0001",
                         "email": "admin@dristi.com",
-                        "role": "admin",
-                        "UserData": {
-                            "name": {
-                                "first_name": "Tohid",
-                                "middle_name": "",
-                                "last_name": "Khan",
-                            },
-                            "phone": {
-                                "code": "+91",
-                                "number": "6367097548",
-                            },
-                            "shop_name": "Pharma",
-                            "address": {
-                                "street_address": "Near JNV Rajsamand,",
-                                "street_address_line_2": "Rajnagar",
-                                "city": "Rajsamand",
-                                "state": "Rajasthan",
-                                "zip_code": "313324",
-                            },
-                            "licence_number": "LX56834838642",
+                        "user_type": "admin",
+                        "name": {
+                            "first": "Tohid",
+                            "last": "Khan",
                         },
+                        "phone": {
+                            "code": "+91",
+                            "number": "6367097548",
+                        },
+                        "image": "",
+                        "created_at": "2023-10-01T00:00:00Z",
                     }
                 ],
             }
         else:
             raise http_exception.ResourceNotFoundException()
 
-    pipeline = [
+    user_pipeline = [
         {"$match": {"_id": current_user.user_id}},
         {
             "$project": {
@@ -200,7 +162,40 @@ async def get_current_user_details(
         },
     ]
 
-    response = await user_repo.collection.aggregate(pipeline=pipeline).to_list(None)
+    company_pipeline = [
+        {"$match": {"user_id": current_user.user_id, "is_deleted": False}},
+        {
+            "$project": {
+                "company_id": "$_id",
+                "name": 1,
+                "image": 1,
+                "address_1": 1,
+                "address_2": 1,
+                "pinCode": 1,
+                "state": 1,
+                "country": 1,
+                "phone": 1,
+                "email": 1,
+                "financial_year_start": 1,
+                "books_begin_from": 1,
+                'is_selected': 1,
+            },
+        },
+    ]
+
+    response = await user_repo.collection.aggregate(pipeline=user_pipeline).to_list(None)
+    if not response:
+        raise http_exception.ResourceNotFoundException("User not found")
+
+    company = await company_repo.collection.aggregate(pipeline=company_pipeline).to_list(
+        None
+    )
+    
+    data = response[0]
+    if company:
+        data["company"] = company
+    else:
+        data["company"] = []
 
     return {
         "success": True,

@@ -54,7 +54,6 @@
 #     if isinstance(newSales, dict):
 #         newSales = SalesDB.parse_obj(newSales)
 
-#     print("newSales", newSales)
 
 #     # 2. Create Sale Details record
 #     salesDetails = SaleDetails(
@@ -64,7 +63,6 @@
 #         unit_price=salesProduct.unit_price,
 #     )
 #     newSalesDetails = await sale_details_repo.new(salesDetails)
-#     print("newSalesDetails", newSalesDetails)
 
 #     # 3. Create Stock Movement (OUT)
 #     stock_movement = StockMovement(
@@ -75,7 +73,6 @@
 #         unit_price=salesProduct.unit_price,
 #     )
 #     newStockMovement = await stock_movement_repo.new(stock_movement)
-#     print("newStockMovement", newStockMovement)
 
 #     # 4. Update Product Stock (decrease available quantity)
 #     product_stock = await product_stock_repo.get_product_stock(
@@ -96,7 +93,6 @@
 
 #     operations = [update_operation]
 #     result = await product_stock_repo.bulk_write(operations)
-#     print("reults", result)
 
 #     return {"sale_id": newSales.sale_id, "message": "Sale created successfully"}
 

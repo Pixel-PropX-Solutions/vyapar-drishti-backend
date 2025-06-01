@@ -1,23 +1,52 @@
+from typing import Optional
 from pydantic import BaseModel, Field
-import datetime
 from uuid import uuid4
+import datetime
 
-# Base Inventory Schema
-class Inventory(BaseModel):
-    chemist_id: str
-    product_id: str
-    quantity: int
-    last_restock_date: datetime.datetime
+class InventoryItem(BaseModel):
+    vouchar_id: str # Foreign key to trn_voucher._id
+    item: str
+    _item: str
+    quantity: float # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
+    rate: float
+    amount: float # Total amount for the item in the voucher(Sales, purchase), negative for sale or positive for purchase
+    
+    # Additional fields for the item
+    # These fields are optional and can be used for additional charges or discounts
+    additional_amount: Optional[float] = 0.0
+    discount_amount: Optional[float] = 0.0
+    godown: Optional[str] = ""
+    _godown: Optional[str] = ""
+    tracking_number: Optional[str] = None
+    order_number: Optional[str] = None
+    order_duedate: Optional[datetime.date] = None
 
-# Database Schema (Includes ID and Timestamps)
-class InventoryDB(Inventory):
-    inventory_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
-    created_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
-    updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
 
-# Schema for Creating New Inventory (Excludes inventory_id and timestamps)
-class InventoryCreate(BaseModel):
-    chemist_id: str
-    product_id: str
-    quantity: int
-    last_restock_date: datetime.datetime
+class InventoryItemDB(InventoryItem):
+    id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
+    created_at: datetime.datetime = Field(
+        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
+    )
+    updated_at: datetime.datetime = Field(
+        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
+    )
+
+
+class InventoryItemCreate(BaseModel):
+    vouchar_id: str  # Foreign key to trn_voucher._id
+    item: str
+    _item: str
+    quantity: float # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
+    rate: float
+    amount: float # Total amount for the item in the voucher(Sales, purchase), negative for sale or positive for purchase
+    
+    # Additional fields for the item
+    # These fields are optional and can be used for additional charges or discounts
+    additional_amount: Optional[float] = 0.0
+    discount_amount: Optional[float] = 0.0
+    godown: Optional[str] = ""
+    _godown: Optional[str] = ""
+    tracking_number: Optional[str] = None
+    order_number: Optional[str] = None
+    order_duedate: Optional[datetime.date] = None
+

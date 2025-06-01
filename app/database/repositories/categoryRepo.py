@@ -1,6 +1,6 @@
 from fastapi import Depends
 from app.Config import ENV_PROJECT
-from app.database.models.Category import CategoryDB, category
+from app.database.models.Category import Category, CategoryDB
 from app.oauth2 import get_current_user
 from app.schema.token import TokenData
 from .crud.base_mongo_crud import BaseMongoDbCrud
@@ -17,10 +17,10 @@ from app.database.repositories.crud.base import (
 class CategoryRepo(BaseMongoDbCrud[CategoryDB]):
     def __init__(self):
         super().__init__(
-            ENV_PROJECT.MONGO_DATABASE, "Category", unique_attributes=["category_name"]
+            ENV_PROJECT.MONGO_DATABASE, "Category", unique_attributes=["name", 'user_id', 'company_id']
         )
 
-    async def new(self, sub: category):
+    async def new(self, sub: Category):
         return await self.save(CategoryDB(**sub.model_dump()))
 
     async def viewAllCategories(

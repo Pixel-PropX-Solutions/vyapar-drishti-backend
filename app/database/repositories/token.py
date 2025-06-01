@@ -26,7 +26,6 @@ class RefreshTokenRepository(BaseMongoDbCrud[RefreshTokenDB]):
             logger.error(e)
             raise http_exception.ResourceConflictException()
         except Exception as e:
-            print(e)
             logger.error(e)
             raise http_exception.InternalServerErrorException()
 

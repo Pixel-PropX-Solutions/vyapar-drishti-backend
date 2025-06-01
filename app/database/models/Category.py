@@ -5,9 +5,11 @@ from typing import Optional
 
 
 # Base Category Schema
-class category(BaseModel):
+class Category(BaseModel):
     # required fields
-    category_name: str
+    name: str
+    under: Optional[str] = "Primary" 
+    company_id: str
     user_id: str
     is_deleted: bool
     image: str | None
@@ -15,7 +17,7 @@ class category(BaseModel):
 
 
 # Database Schema
-class CategoryDB(category):
+class CategoryDB(Category):
     category_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
     created_at: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
@@ -28,8 +30,9 @@ class CategoryDB(category):
 # Schema for Creating a New Category
 class CategoryCreate(BaseModel):
     # required fields
-    category_name: str
+    name: str
     user_id: str
+    under: Optional[str] = "Primary" 
     image: Optional[str] = None
     description: Optional[str] = None
     is_deleted: Optional[bool] = False

@@ -15,7 +15,7 @@ import app.http_exception as http_exception
 from app.oauth2 import get_current_user
 from app.schema.token import TokenData
 from app.utils.cloudinary_client import cloudinary_client
-from app.database.repositories.company import company_repo, Company, billing_repo, Billing
+from app.database.repositories.companyRepo import company_repo, Company
 from typing import Optional
 
 
@@ -86,8 +86,8 @@ async def update_user(
     if res.modified_count == 0:
         raise http_exception.ResourceNotFoundException(
             detail="User not found or no changes made."
-        )   
-        
+        )
+
     if res is None:
         raise http_exception.ResourceNotFoundException(
             detail="User not found or no changes made."
@@ -102,18 +102,22 @@ async def update_user(
     "/create/company", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
 async def createCompany(
-    compnay_name: str = Form(...),
-    brand_name: str = Form(...),
-    phone: str = Form(None),
+    name: str = Form(...),
+    number: str = Form(None),
     code: str = Form(None),
     email: str = Form(None),
     gstin: str = Form(None),
-    alter_phone: str = Form(None),
-    business_type: str = Form(None),
-    alter_code: str = Form(None),
     website: str = Form(None),
     pan_number: str = Form(None),
     image: UploadFile = File(None),
+    mailing_name: str = Form(None),
+    address_1: str = Form(None),
+    address_2: str = Form(None),
+    pinCode: str = Form(None),
+    state: str = Form(None),
+    country: str = Form(None),
+    financial_year_start: str = Form(None),
+    books_begin_from: str = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -135,33 +139,33 @@ async def createCompany(
                 detail="File size exceeds the 5 MB limit."
             )
         upload_result = await cloudinary_client.upload_file(image)
-        print("upload_result", upload_result)
         image_url = upload_result["url"]
 
     # Only include phone and alter_phone if both code and number are provided
     phone_obj = None
-    if code is not None and phone is not None:
-        phone_obj = {"code": code, "number": phone}
-    
-    alter_phone_obj = None
-    if alter_code is not None and alter_phone is not None:
-        alter_phone_obj = {"code": alter_code, "number": alter_phone}
+    if code is not None and number is not None:
+        phone_obj = {"code": code, "number": number}
 
     company_data = {
-        "brand_name": brand_name,
-        "company_name": compnay_name,
+        "name": name,
         "user_id": current_user.user_id,
         "phone": phone_obj,
         "email": email,
         "gstin": gstin,
         "pan_number": pan_number,
-        "business_type": business_type,
         "website": website,
         "image": image_url,
-        "alter_phone": alter_phone_obj,
+        "mailing_name": mailing_name,
+        "address_1": address_1,
+        "address_2": address_2,
+        "pinCode": pinCode,
+        "state": state,
+        "country": country,
+        "financial_year_start": financial_year_start,
+        "books_begin_from": books_begin_from,
+        "is_deleted": False,
     }
 
-    print("company_data", company_data)
     response = await company_repo.new(Company(**company_data))
 
     if not response:
@@ -172,8 +176,68 @@ async def createCompany(
     return {"success": True, "message": "Company Created Successfully"}
 
 
+@user.get("/all/company", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
+async def get_all_company(
+    current_user: TokenData = Depends(get_current_user),
+):
+    user = await user_repo.findOne({"_id": current_user.user_id})
+    if user is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Not Found. Please create a User first."
+        )
+
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    pipeline = [
+        {
+            "$match": {
+                "user_id": current_user.user_id,
+                "is_deleted": False,
+            }
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "name": 1,
+                "user_id": 1,
+                "mailing_name": 1,
+                "image": 1,
+                "address_1": 1,
+                "address_2": 1,
+                "pinCode": 1,
+                "state": 1,
+                "country": 1,
+                "phone": 1,
+                "email": 1,
+                "financial_year_start": 1,
+                "books_begin_from": 1,
+                "gstin": 1,
+                "pan": 1,
+                "is_selected": 1,
+                "website": 1,
+                "created_at": 1,
+                "updated_at": 1,
+            }
+        },
+    ]
+    company = await company_repo.collection.aggregate(pipeline=pipeline).to_list(None)
+    if company is not None:
+        return {
+            "success": True,
+            "message": "All Companies Fetched Successfully",
+            "data": company,
+        }
+    else:
+        raise http_exception.ResourceNotFoundException(
+            detail="Company Not Found. Please create a company first."
+        )
+
+
 @user.post(
-    "/create/company/billing", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+    "/create/company/billing",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
 )
 async def create_company_billing(
     company_id: str = Form(...),
@@ -197,8 +261,7 @@ async def create_company_billing(
         "is_deleted": False,
     }
 
-    response = await billing_repo.new(Billing(**billing_data))
-    print("response", response)
+    # response = await billing_repo.new(Billing(**billing_data))
     await company_repo.update_one(
         {"_id": company_id, "user_id": current_user.user_id},
         {"$set": {"billing": response.billing_id}},
@@ -208,6 +271,7 @@ async def create_company_billing(
 
 @user.get("/company", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
 async def get_company(
+    # company_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
     user = await user_repo.findOne({"_id": current_user.user_id})
@@ -223,38 +287,50 @@ async def get_company(
         {
             "$match": {
                 "user_id": current_user.user_id,
+                "is_selected": True,
+                "is_deleted": False,
             }
         },
-        {
-            "$lookup": {
-                "from": "Billing",
-                "localField": "billing",
-                "foreignField": "_id",
-                "as": "billing",
-            }
-        },
-        {"$unwind": {"path": "$billing", "preserveNullAndEmptyArrays": True}},
-        {
-            "$lookup": {
-                "from": "Shipping",
-                "localField": "shipping",
-                "foreignField": "_id",
-                "as": "shipping",
-            }
-        },
-        {"$unwind": {"path": "$shipping", "preserveNullAndEmptyArrays": True}},
+        # {
+        #     "$lookup": {
+        #         "from": "Billing",
+        #         "localField": "billing",
+        #         "foreignField": "_id",
+        #         "as": "billing",
+        #     }
+        # },
+        # {"$unwind": {"path": "$billing", "preserveNullAndEmptyArrays": True}},
+        # {
+        #     "$lookup": {
+        #         "from": "Shipping",
+        #         "localField": "shipping",
+        #         "foreignField": "_id",
+        #         "as": "shipping",
+        #     }
+        # },
+        # {"$unwind": {"path": "$shipping", "preserveNullAndEmptyArrays": True}},
         {
             "$project": {
-                # "billing.user_id": 0,
-                "billing.created_at": 0,
-                "billing.updated_at": 0,
-                # "billing.is_deleted": 0,
-                # "billing.company_id": 0,
-                # "shipping.user_id": 0,
-                # "shipping.company_id": 0,
-                # "shipping.is_deleted": 0,
-                "shipping.created_at": 0,
-                "shipping.updated_at": 0,
+                "_id": 1,
+                "name": 1,
+                "user_id": 1,
+                "mailing_name": 1,
+                "image": 1,
+                "address_1": 1,
+                "address_2": 1,
+                "pinCode": 1,
+                "state": 1,
+                "country": 1,
+                "phone": 1,
+                "email": 1,
+                "financial_year_start": 1,
+                "books_begin_from": 1,
+                "gstin": 1,
+                "pan": 1,
+                "is_selected": 1,
+                "website": 1,
+                "created_at": 1,
+                "updated_at": 1,
             }
         },
     ]
@@ -278,25 +354,29 @@ async def get_company(
 )
 async def updateCompany(
     company_id: str,
-    company_name: str = Form(...),
-    brand_name: str = Form(...),
+    name: str = Form(...),
     number: str = Form(None),
     code: str = Form(None),
     email: str = Form(None),
     gstin: str = Form(None),
-    alter_number: str = Form(None),
-    business_type: str = Form(None),
-    alter_code: str = Form(None),
     website: str = Form(None),
     pan_number: str = Form(None),
     image: UploadFile = File(None),
+    mailing_name: str = Form(None),
+    address_1: str = Form(None),
+    address_2: str = Form(None),
+    pinCode: str = Form(None),
+    state: str = Form(None),
+    country: str = Form(None),
+    financial_year_start: str = Form(None),
+    books_begin_from: str = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
     companyExists = await company_repo.findOne(
-        {"_id": company_id, "user_id": current_user.user_id},
+        {"_id": company_id, "user_id": current_user.user_id, "is_deleted": False},
     )
     if companyExists is None:
         raise http_exception.ResourceNotFoundException()
@@ -319,16 +399,25 @@ async def updateCompany(
         upload_result = await cloudinary_client.upload_file(image)
         image_url = upload_result["url"]
 
+    phone_obj = None
+    if code is not None and number is not None:
+        phone_obj = {"code": code, "number": number}
+
     update_fields = {
-        "company_name": company_name,
-        "brand_name": brand_name,
-        "phone": {"code": code, "number": number},
-        "alter_phone": {"code": alter_code, "number": alter_number},
+        "name": name,
+        "phone": phone_obj,
         "email": email,
         "gstin": gstin,
-        "pan_number": pan_number,
-        "business_type": business_type,
         "website": website,
+        "pan": pan_number,
+        "mailing_name": mailing_name,
+        "address_1": address_1,
+        "address_2": address_2,
+        "pinCode": pinCode,
+        "state": state,
+        "country": country,
+        "financial_year_start": financial_year_start,
+        "books_begin_from": books_begin_from,
     }
     if image:
         update_fields["image"] = image_url
@@ -341,4 +430,39 @@ async def updateCompany(
     return {
         "success": True,
         "message": "Company Updated Successfully",
+    }
+
+
+@user.put(
+    "/set/company/{company_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def updateCurrentCompany(
+    company_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    companyExists = await company_repo.findOne(
+        {"_id": company_id, "user_id": current_user.user_id, "is_deleted": False},
+    )
+    
+    if companyExists is None:
+        raise http_exception.ResourceNotFoundException()
+    
+    await company_repo.update_many(
+        {"user_id": current_user.user_id, "is_deleted": False},
+        {"$set": {"is_selected": False}},
+    )
+
+    await company_repo.update_one(
+        {"_id": company_id, "user_id": current_user.user_id},
+        {"$set": {"is_selected": True}},
+    )
+
+    return {
+        "success": True,
+        "message": "Current Company selected Successfully",
     }

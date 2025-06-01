@@ -9,8 +9,8 @@ from app.schema.token import TokenData
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 
 from app.database.models.Category import CategoryCreate
-from app.database.repositories.Category import category_repo
-from app.database.models.Category import category
+from app.database.repositories.categoryRepo import category_repo
+from app.database.models.Category import Category
 from app.utils.cloudinary_client import cloudinary_client
 
 
@@ -45,7 +45,6 @@ async def createCategory(
                 detail="File size exceeds the 5 MB limit."
             )
         upload_result = await cloudinary_client.upload_file(image)
-        print("upload_result", upload_result)
         image_url = upload_result["url"]
 
     category_data = {
@@ -56,7 +55,7 @@ async def createCategory(
         "description": description,
     }
 
-    response = await category_repo.new(category(**category_data))
+    response = await category_repo.new(Category(**category_data))
 
     if not response:
         raise http_exception.ResourceAlreadyExistsException(
