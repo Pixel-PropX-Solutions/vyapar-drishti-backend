@@ -1,8 +1,6 @@
 from fastapi import Depends
 from app.Config import ENV_PROJECT
 from app.database.models.Company import Company, CompanyDB
-# from app.database.models.Billing import Billing, BillingDB
-# from app.database.models.Shipping import Shipping, ShippingDB
 from app.oauth2 import get_current_user
 from app.schema.token import TokenData
 from .crud.base_mongo_crud import BaseMongoDbCrud
@@ -22,7 +20,7 @@ import re
 class CompanyRepo(BaseMongoDbCrud[CompanyDB]):
     def __init__(self):
         super().__init__(
-            ENV_PROJECT.MONGO_DATABASE, "Company", unique_attributes=["name", "user_id"]
+            ENV_PROJECT.MONGO_DATABASE, "Company", unique_attributes=["company_name", "user_id", 'state', 'country']
         )
 
     async def new(self, sub: Company):

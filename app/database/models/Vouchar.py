@@ -3,32 +3,42 @@ import datetime
 from uuid import uuid4
 from typing import Optional, List
 from app.database.models.Inventory import InventoryItem
+from app.database.models.Accounting import Accounting
 
-
-class VoucherBase(BaseModel):
+class Voucher(BaseModel):
     company_id: str
     user_id: str
-    alterid: int = 0
-    date: datetime.date
+    date: str
+    voucher_number: str = ""
     voucher_type: str = ""
     _voucher_type: str = ""
-    voucher_number: str = ""
-    reference_number: str = ""
     narration: str = ""
-    party_name: str = ""  # This is the name or id of the party( Ledger ) involved in the voucher
-    _party_name: str = "" # This is the name or id of the party( Ledger ) involved in the voucher
-    place_of_supply: str = ""
-    items: List[InventoryItem] = []
-    
-    # Optional fields
-    reference_date: Optional[datetime.date] = None
+    party_name: str = (
+        ""  # This is the name or id of the party( Ledger ) involved in the voucher
+    )
+    _party_name: str = (
+        ""  # This is the name or id of the party( Ledger ) involved in the voucher
+    )
+
+    # Conditional fields 
+    reference_date: Optional[str] = (
+        None  # Required if using bill-wise accounting or tracking references(e.g. bills in sales/purchase).
+    )
+    reference_number: Optional[str] = (
+        ""  # Required if using bill-wise accounting or tracking references (e.g. invoice date) in bill-wise entries.
+    )
+    place_of_supply: str = (
+        ""  # Required if GST is enabled (used for determining IGST/CGST/SGST applicability).
+    )
+
+    # Automatically set fields
     is_invoice: Optional[int] = 0
     is_accounting_voucher: Optional[int] = 0
     is_inventory_voucher: Optional[int] = 0
     is_order_voucher: Optional[int] = 0
 
 
-class VoucherBaseDB(VoucherBase):
+class VoucherDB(Voucher):
     vouchar_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
     created_at: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
@@ -38,28 +48,21 @@ class VoucherBaseDB(VoucherBase):
     )
 
 
-class VoucherBaseCreate(BaseModel):
+class VoucherCreate(BaseModel):
     company_id: str
-    user_id: str
-    alterid: int = 0
-    date: datetime.date
-    voucher_type: str = ""
-    _voucher_type: str = ""
-    voucher_number: str = ""
-    reference_number: str = ""
-    narration: str = ""
-    party_name: str = ""
-    _party_name: str = ""
-    place_of_supply: str = ""
-    items: List[InventoryItem] = []
-
+    date: str
+    voucher_type: str
+    _voucher_type: str
+    voucher_number: str
+    party_name: str
+    _party_name: str
+    narration: Optional[str] = ""
+    reference_number: Optional[str] = None
+    reference_date: Optional[str] = None
+    place_of_supply: Optional[str] = None
     
-    # Optional fields
-    reference_date: Optional[datetime.date] = None
-    is_invoice: Optional[int] = 0
-    is_accounting_voucher: Optional[int] = 0
-    is_inventory_voucher: Optional[int] = 0
-    is_order_voucher: Optional[int] = 0
+    accounting: List[Accounting]
+    items: List[InventoryItem] = []
 
 
 class VoucherUpdate(BaseModel):

@@ -6,7 +6,7 @@ from typing import Optional
 
 
 class Ledger(BaseModel):
-    name: str
+    ledger_name: str
     company_id: str
     user_id: str
     parent: str # Group under which the ledger falls (e.g., "Sales Accounts")
@@ -16,6 +16,7 @@ class Ledger(BaseModel):
     is_deemed_positive: Optional[bool] = False # Indicates and Controls Debit/Credit nature
     opening_balance: Optional[float] = 0.0 # Opening balance for the ledger, can be positive or negative, Amount if ledger is not zeroed
     image: Optional[str] = None
+    qr_image: Optional[str] = None
     is_deleted: Optional[bool] = False
     
     
@@ -30,16 +31,16 @@ class Ledger(BaseModel):
     phone: Optional[PhoneNumber] = None 
 
     # Optional tax details
-    it_pan: Optional[str] = None
-    gstn: Optional[str] = None
-    gst_registration_type: Optional[str] = None
-    gst_supply_type: Optional[str] = None
-    gst_duty_head: Optional[str] = None
-    tax_rate: Optional[float] = 0.0
+    # it_pan: Optional[str] = None
+    # gstn: Optional[str] = None
+    # gst_registration_type: Optional[str] = None
+    # gst_supply_type: Optional[str] = None
+    # gst_duty_head: Optional[str] = None
+    # tax_rate: Optional[float] = 0.0
 
     # # Optional bank details
-    # bank_account_holder: Optional[str] = None
-    # bank_account_number: Optional[str] = None
+    # account_holder: Optional[str] = None
+    # account_number: Optional[str] = None
     # bank_ifsc: Optional[str] = None
     # bank_swift: Optional[str] = None
     # bank_name: Optional[str] = None
@@ -57,7 +58,7 @@ class LedgerDB(Ledger):
 
 
 class LedgerCreate(BaseModel):
-    name: str
+    ledger_name: str
     company_id: str
     user_id: str
     parent: str # Group under which the ledger falls (e.g., "Sales Accounts")

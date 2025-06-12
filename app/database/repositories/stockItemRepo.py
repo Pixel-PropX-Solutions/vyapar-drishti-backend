@@ -2,7 +2,7 @@ from fastapi import Depends
 from app.Config import ENV_PROJECT
 from app.database.models.StockItem import StockItem, StockItemDB
 from app.database.repositories.categoryRepo import category_repo
-from app.database.repositories.groupRepo import group_repo
+from app.database.repositories.inventoryGroupRepo import inventory_group_repo 
 from app.oauth2 import get_current_user
 from app.schema.token import TokenData
 from .crud.base_mongo_crud import BaseMongoDbCrud
@@ -24,7 +24,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         super().__init__(
             ENV_PROJECT.MONGO_DATABASE,
             "StockItem",
-            unique_attributes=["name", "user_id", "company_id"],
+            unique_attributes=["stock_item_name", "user_id", "company_id", 'unit'],
         )
 
     async def new(self, sub: StockItem):
@@ -39,11 +39,11 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         pagination: PageRequest,
         sort: Sort,
         current_user: TokenData = Depends(get_current_user),
-        is_deleted: bool = False,
+        # is_deleted: bool = False,
     ):
         filter_params = {
             "user_id": current_user.user_id,
-            "is_deleted": is_deleted,
+            "is_deleted": False,
             "company_id": company_id,
         }
         # Filter by search term
@@ -51,7 +51,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             try:
                 safe_search = re.escape(search)
                 filter_params["$or"] = [
-                    {"name": {"$regex": safe_search, "$options": "i"}},
+                    {"stock_item_name": {"$regex": safe_search, "$options": "i"}},
                     {"alias_name": {"$regex": safe_search, "$options": "i"}},
                     {"category": {"$regex": safe_search, "$options": "i"}},
                     {"group": {"$regex": safe_search, "$options": "i"}},
@@ -69,8 +69,8 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
 
         # Define sorting logic
         sort_options = {
-            "name_asc": {"name": 1},
-            "name_desc": {"name": -1},
+            "name_asc": {"stock_item_name": 1},
+            "name_desc": {"stock_item_name": -1},
             # "price_asc": {"selling_price": 1},
             # "price_desc": {"selling_price": -1},
             "created_at_asc": {"created_at": 1},
@@ -87,53 +87,143 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {
                 "$lookup": {
                     "from": "Category",
-                    "localField": "_category",
-                    "foreignField": "_id",
+                    "localField": "category",
+                    "foreignField": "category_name",
                     "as": "category",
                 }
             },
-            # Use $unwind with preserveNullAndEmptyArrays to keep products without categories
             {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
             {
                 "$lookup": {
                     "from": "Group",
-                    "localField": "_group",
-                    "foreignField": "_id",
+                    "localField": "group",
+                    "foreignField": "inventory_group_name",
                     "as": "group",
                 }
             },
-            # Use $unwind with preserveNullAndEmptyArrays to keep products without categories
             {"$unwind": {"path": "$group", "preserveNullAndEmptyArrays": True}},
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "localField": "name",
+                    "foreignField": "item",
+                    "as": "inventory_entries",
+                }
+            },
+            {
+                "$unwind": {
+                    "path": "$inventory_entries",
+                    "preserveNullAndEmptyArrays": True,
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Voucher",
+                    "localField": "inventory_entries.vouchar_id",
+                    "foreignField": "_id",
+                    "as": "voucher",
+                }
+            },
+            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "company_id": {"$first": "$company_id"},
+                    "stock_item_name": {"$first": "$stock_item_name"},
+                    "unit": {"$first": "$unit"},
+                    "category": {"$first": "$category"},
+                    "alias_name": {"$first": "$alias_name"},
+                    "image": {"$first": "$image"},
+                    "description": {"$first": "$description"},
+                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    "low_stock_alert": {"$first": "$low_stock_alert"},
+                    "created_at": {"$first": "$created_at"},
+                    "updated_at": {"$first": "$updated_at"},
+                    "group": {"$first": "$group"},
+                    "purchase_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        {"$toLower": "$voucher.voucher_type"},
+                                        "purchase",
+                                    ]
+                                },
+                                "$inventory_entries.quantity",
+                                0,
+                            ]
+                        }
+                    },
+                    "purchase_value": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        {"$toLower": "$voucher.voucher_type"},
+                                        "purchase",
+                                    ]
+                                },
+                                "$inventory_entries.amount",
+                                0,
+                            ]
+                        }
+                    },
+                    "sales_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
+                                {"$abs": "$inventory_entries.quantity"},
+                                0,
+                            ]
+                        }
+                    },
+                    "sales_value": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
+                                {"$abs": "$inventory_entries.amount"},
+                                0,
+                            ]
+                        }
+                    },
+                }
+            },
             {"$sort": sort_stage},
             {
                 "$project": {
                     "_id": 1,
-                    "name": 1,
+                    "stock_item_name": 1,
                     "company_id": 1,
                     "user_id": 1,
                     "unit": 1,
-                    "_unit": 1,
-                    "is_deleted": 1,
-                    # optional fields
                     "alias_name": 1,
-                    "category": {"$ifNull": ["$category.name", None]},
-                    "_category": {"$ifNull": ["$category._id", None]},
-                    "category_desc": {"$ifNull": ["$category.description", None]},
-                    "group": {"$ifNull": ["$group.name", None]},
-                    "_group": {"$ifNull": ["$group._id", None]},
-                    "group_desc": {"$ifNull": ["$group.description", None]},
+                    "category": {"$ifNull": ["$category.category_name", None]},
+                    "group": {"$ifNull": ["$group.inventory_group_name", None]},
                     "image": 1,
                     "description": 1,
-                    # additional optional fields
-                    "opening_balance": 1,
-                    "opening_rate": 1,
-                    "opening_value": 1,
-                    "gst_nature_of_goods": 1,
+                    # "gst_nature_of_goods": 1,
                     "gst_hsn_code": 1,
-                    "gst_taxability": 1,
+                    # "gst_taxability": 1,
                     "low_stock_alert": 1,
                     "created_at": 1,
                     "updated_at": 1,
+                    "current_stock": {
+                        "$subtract": [
+                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
+                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                        ]
+                    },
+                    "avg_purchase_rate": {
+                        "$cond": [
+                            {"$gt": ["$purchase_qty", 0]},
+                            {"$divide": ["$purchase_value", "$purchase_qty"]},
+                            0,
+                        ]
+                    },
+                    "purchase_qty": "$purchase_qty",
+                    "purchase_value": "$purchase_value",
+                    "sales_qty": "$sales_qty",
+                    "sales_value": "$sales_value",
                 }
             },
             {
@@ -151,7 +241,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "is_deleted": is_deleted,
+                    "is_deleted": False,
                     "company_id": company_id,
                 }
             },
@@ -160,72 +250,72 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {"$sort": {"category": 1}},
         ]
 
-        unique_groups_pipeline = [
-            {
-                "$match": {
-                    "user_id": current_user.user_id,
-                    "is_deleted": is_deleted,
-                    "company_id": company_id,
-                }
-            },
-            {"$group": {"_id": "$category"}},
-            {"$project": {"_id": 0, "category": "$_id"}},
-            {"$sort": {"category": 1}},
-        ]
+        # unique_groups_pipeline = [
+        #     {
+        #         "$match": {
+        #             "user_id": current_user.user_id,
+        #             "is_deleted": False,
+        #             "company_id": company_id,
+        #         }
+        #     },
+        #     {"$group": {"_id": "$group"}},
+        #     {"$project": {"_id": 0, "group": "$_id"}},
+        #     {"$sort": {"group": 1}},
+        # ]
 
         res = [doc async for doc in self.collection.aggregate(pipeline)]
 
-        categories_res = [
-            doc
-            async for doc in category_repo.collection.aggregate(
-                unique_categories_pipeline
-            )
-        ]
+        # categories_res = [
+        #     doc
+        #     async for doc in category_repo.collection.aggregate(
+        #         unique_categories_pipeline
+        #     )
+        # ]
 
-        group_res = [
-            doc
-            async for doc in group_repo.collection.aggregate(unique_categories_pipeline)
-        ]
+        # group_res = [
+        #     doc
+        #     async for doc in inventory_group_repo.collection.aggregate(unique_groups_pipeline)
+        # ]
         docs = res[0]["docs"]
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
-        
-        # Extract unique categories and groups
-        unique_categories = [entry["category"] for entry in categories_res]
-        
-        unique_groups = [entry["group"] for entry in group_res]
 
+        # Extract unique categories and groups
+        # unique_categories = [entry["category"] for entry in categories_res]
+
+        # unique_groups = [entry["group"] for entry in group_res]
+        print("DOCS", docs)
         return PaginatedResponse(
             docs=docs,
             meta=Meta(
                 page=pagination.paging.page,
                 limit=pagination.paging.limit,
                 total=count,
-                unique=unique_categories,
+                unique=[],
             ),
         )
 
-    async def group_products_by_stock_level(self, chemist_id: str):
-        pipeline = [
-            {
-                "$set": {
-                    "stock_level": {
-                        "$switch": {
-                            "branches": [
-                                {"case": {"$lte": ["$quantity", 10]}, "then": "Low"},
-                                {
-                                    "case": {"$gte": ["$quantity", 200]},
-                                    "then": "Overstock",
-                                },
-                            ],
-                            "default": "Medium",
-                        }
-                    }
-                }
-            },
-            {"$group": {"_id": "$stock_level", "count": {"$sum": 1}}},
-        ]
+    # async def group_products_by_stock_level(self, chemist_id: str):
+    #     pipeline = [
+    #         {
+    #             "$set": {
+    #                 "stock_level": {
+    #                     "$switch": {
+    #                         "branches": [
+    #                             {"case": {"$lte": ["$quantity", 10]}, "then": "Low"},
+    #                             {
+    #                                 "case": {"$gte": ["$quantity", 200]},
+    #                                 "then": "Overstock",
+    #                             },
+    #                         ],
+    #                         "default": "Medium",
+    #                     }
+    #                 }
+    #             }
+    #         },
+    #         {"$group": {"_id": "$stock_level", "count": {"$sum": 1}}},
+    #     ]
 
-        return await self.collection.aggregate(pipeline).to_list(None)
+    #     return await self.collection.aggregate(pipeline).to_list(None)
 
 
 stock_item_repo = StockItemRepo()

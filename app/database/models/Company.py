@@ -6,7 +6,7 @@ from typing import Optional
 
 
 class Company(BaseModel):
-    name: str
+    company_name: str
 
     # Primary Mailing Details
     user_id: str
@@ -45,7 +45,7 @@ class CompanyDB(Company):
 
 
 class CompanyCreate(BaseModel):
-    name: str
+    company_name: str
 
     # Primary Mailing Details
     user_id: str

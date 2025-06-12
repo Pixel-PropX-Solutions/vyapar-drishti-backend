@@ -7,13 +7,13 @@ from typing import Optional
 # Base Category Schema
 class Category(BaseModel):
     # required fields
-    name: str
-    under: Optional[str] = "Primary" 
+    category_name: str  
+    under: Optional[str] = "Primary"
     company_id: str
     user_id: str
-    is_deleted: bool
-    image: str | None
-    description: str | None
+    is_deleted: bool = False
+    image: Optional[str] = None
+    description: Optional[str] = None
 
 
 # Database Schema
@@ -30,9 +30,10 @@ class CategoryDB(Category):
 # Schema for Creating a New Category
 class CategoryCreate(BaseModel):
     # required fields
-    name: str
+    category_name: str  
     user_id: str
-    under: Optional[str] = "Primary" 
+    company_id: str
+    under: Optional[str] = "Primary Category"
     image: Optional[str] = None
     description: Optional[str] = None
     is_deleted: Optional[bool] = False

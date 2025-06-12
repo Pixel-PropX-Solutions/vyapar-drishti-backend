@@ -4,7 +4,7 @@ from uuid import uuid4
 import datetime
 
 class VoucherType(BaseModel):
-    name: str
+    vouchar_type_name: str
     user_id: str
     company_id: str
     parent: Optional[str] = ''
@@ -20,7 +20,7 @@ class VoucherTypeDB(VoucherType):
     updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 class VoucherTypeCreate(BaseModel):
-    name: str
+    vouchar_type_name: str
     user_id: str
     company_id: str
     parent: Optional[str] = ''

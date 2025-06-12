@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pharmacy Invoice Template</title>
+</head>
+
+<body style="font-family: Arial, sans-serif; margin: 0; padding: 10px; font-size: 11px; line-height: 1.3; color: #000;">
+
+    <!-- Main Invoice Table Container -->
+    <table style="width: 100%; max-width: 800px; margin: 0 auto; border: 2px solid #000; border-collapse: collapse;"
+        cellpadding="0" cellspacing="0">
+
+        <!-- Header Section -->
+        <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #000;">
+                <table style="width: 100%; border-collapse: collapse;" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <!-- Company Details -->
+                        <td style="width: 50%; vertical-align: top; padding-right: 15px;">
+                            <div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">{{ party.name }}
+                            </div>
+                            <div style="margin-bottom: 3px;">{{ party.address }}</div>
+                            {% if party.phone.code and party.phone.number %}
+                            <div style="margin-bottom: 3px;"><strong>Phone:</strong> {{ party.phone.code }}&nbsp;{{
+                                party.phone.number }}</div>
+                            {% endif %}
+                            {% if party.email %}
+                            <div style="margin-bottom: 3px;"><strong>Email:</strong> {{ party.email }}</div>
+                            {% endif %}
+                            {% if party.gst_no %}
+                            <div style="margin-bottom: 3px;"><strong>GST No.:</strong> {{ party.gst_no }}</div>
+                            {% endif %}
+                            {% if party.pan_no %}
+                            <div style="margin-bottom: 8px;"><strong>PAN No.:</strong> {{ party.pan_no }}</div>
+                            {% endif %}
+                        </td>
+
+                        <!-- Invoice Details -->
+                        <td style="width: 25%; vertical-align: top; text-align: left;">
+                            <div style="margin-bottom: 3px;"><strong>Invoice No.:</strong> {{ invoice.voucher_number }}
+                            </div>
+                            <div style="margin-bottom: 8px;"><strong>Date:</strong> {{ invoice.date }}</div>
+                            <div style="font-weight: bold; margin-bottom: 3px;">{{ customer.name }}</div>
+                            {% if customer.address %}
+                            <div style="margin-bottom: 3px;">{{ customer.address }}</div>
+                            {% endif %}
+                            {% if customer.phone.code and customer.phone.number %}
+                            <div style="margin-bottom: 3px;"><strong>Phone:</strong> {{ customer.phone.code }}&nbsp;{{
+                                customer.phone.number }}</div>
+                            {% endif %}
+                            {% if customer.gst_no %}
+                            <div style="margin-bottom: 3px;"><strong>GST No.:</strong> {{ customer.gst_no }}</div>
+                            {% endif %}
+                            {% if customer.pan_no %}
+                            <div><strong>PAN No.:</strong> {{ customer.pan_no }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+
+        <!-- Invoice Header -->
+        <tr>
+            <td
+                style="text-align: center; padding: 8px; background-color: #f2f2f2; border-bottom: 1px solid #000; font-size: 16px; font-weight: bold;">
+                {{invoice.voucher_type|default('Sales') }}&nbsp;Invoice
+            </td>
+        </tr>
+
+        <!-- Product Details Table -->
+        <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #000;">
+                <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;" cellpadding="4"
+                    cellspacing="0">
+                    <tr style="background-color: #f2f2f2;">
+                        <th
+                            style="border: 1px solid #000; font-size: 10px; font-weight: bold; text-align: center; padding: 4px;">
+                            SN</th>
+                        <th
+                            style="border: 1px solid #000; font-size: 10px; font-weight: bold; text-align: center; padding: 4px; width: 16%;">
+                            NAME OF PRODUCTS</th>
+                        <th
+                            style="border: 1px solid #000; font-size: 10px; font-weight: bold; text-align: center; padding: 4px;">
+                            Pack</th>
+                        <th
+                            style="border: 1px solid #000; font-size: 10px; font-weight: bold; text-align: center; padding: 4px;">
+                            HSN</th>
+                        <th
+                            style="border: 1px solid #000; font-size: 10px; font-weight: bold; text-align: center; padding: 4px;">
+                            Qty.</th>
+                        <th style="border: 1px solid #000; font-size: 10px; font-weight: bold; text-align: center; padding:
+                        4px;">
+                            RATE</th>
+                        <th
+                            style="border: 1px solid #000; font-size: 10px; font-weight: bold; text-align: center; padding: 4px;">
+                            AMOUNT</th>
+                    </tr>
+                    {% for item in invoice["items"] %}
+                    <tr {% if loop.index0 % 2==1 %}style="background-color: #f9f9f9;" {% endif %}>
+                        <td style="border: 1px solid #000; font-size: 10px; text-align: center; padding: 4px;">{{
+                            loop.index }}</td>
+                        <td style="border: 1px solid #000; font-size: 10px; text-align: left; padding: 4px;">{{
+                            item.name }}</td>
+                        <td style="border: 1px solid #000; font-size: 10px; text-align: center; padding: 4px;">{{
+                            item.pack }}</td>
+                        <td style="border: 1px solid #000; font-size: 10px; text-align: center; padding: 4px;">{{
+                            item.hsn }}</td>
+                        <td style="border: 1px solid #000; font-size: 10px; text-align: center; padding: 4px;">{{
+                            item.qty }}</td>
+                        <td style="border: 1px solid #000; font-size: 10px; text-align: center; padding: 4px;">{{
+                            item.rate }}</td>
+                        <td
+                            style="border: 1px solid #000; font-size: 10px; text-align: center; padding: 4px; font-weight: bold;">
+                            {{ item.amount }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% for i in range(invoice["items"]|length + 1, 8) %}
+                    <tr {% if i % 2==0 %}style="background-color: #f9f9f9;" {% endif %}>
+                        <td style="border: 1px solid #000; font-size: 10px; text-align: center; padding: 4px;">{{ i }}
+                        </td>
+                        {% for _ in range(6) %}
+                        <td style="border: 1px solid #000; font-size: 10px; text-align: center; padding: 4px;">&nbsp;
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </table>
+            </td>
+        </tr>
+
+        <!-- Totals Section -->
+        <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #000;">
+                <table style="width: 100%; border-collapse: collapse;" cellpadding="0" cellspacing="0">
+                    <tr>
+
+                        <td style="width: 40%; vertical-align: top; padding-right: 10px;">
+                            <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;"
+                                cellpadding="4" cellspacing="0">
+                                <tr>
+                                    <td style="text-align: left; padding: 10px;">
+                                        {% if party.bank_name %}
+                                        <div style=" padding-top: 5px;">
+                                            <strong>BANK NAME:</strong> {{ party.bank_name }}
+                                        </div>
+                                        <div style=" padding-top: 5px;">
+                                            <strong>BRANCH :</strong> {{ party.bank_branch }}
+                                        </div>
+                                        <div style=" padding-top: 5px;">
+                                            <strong>ACCOUNT NO.:</strong> {{ party.account_no }}
+                                        </div>
+                                        <div style=" padding-top: 5px;">
+                                            <strong>IFSC :</strong> {{ party.ifsc }}
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td style="text-align: center; padding: 10px;">
+                                        <img src="{{ invoice.qr_code_url|default('https://res.cloudinary.com/dnkp2gm1d/image/upload/v1748330177/vl3hnkzfyr5y1jjsn5pb.jpg') }}"
+                                            alt="QR Code" style="width: 100px; height: 100px; border: 1px solid #ccc;">
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+
+                        <!-- Amount Summary -->
+                        <td style="width: 25%; vertical-align: top; padding-left: 10px;">
+                            <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;"
+                                cellpadding="4" cellspacing="0">
+                                <tr>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 10px; padding: 4px; font-weight: bold;">
+                                        SUB TOTAL</td>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 10px; padding: 4px; text-align: right;">
+                                        {{ invoice.total }}</td>
+                                </tr>
+                                <tr>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 10px; padding: 4px; font-weight: bold;">
+                                        DISCOUNT</td>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 10px; padding: 4px; text-align: right;">
+                                        {{ invoice.discount|default(0.0) }}</td>
+                                </tr>
+                                <tr>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 10px; padding: 4px; font-weight: bold;">
+                                        TOTAL</td>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 10px; padding: 4px; text-align: right;">
+                                        {{ invoice.total }}</td>
+                                </tr>
+                                <!-- <tr>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 10px; padding: 4px; font-weight: bold;">
+                                        CR/DR NOTE</td>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 10px; padding: 4px; text-align: right;">
+                                        {{ invoice.cr_dr_note }}</td>
+                                </tr> -->
+                                <tr>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 10px; padding: 4px; font-weight: bold;">
+                                        Round Off</td>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 10px; padding: 4px; text-align: right;">
+                                        {{ invoice.round_off|default(0.0) }}</td>
+                                </tr>
+
+                            </table>
+                            <table
+                                style="width: 100%; border-collapse: collapse; border: 1px solid #000; background-color: #f2f2f2; margin-top: 8px;"
+                                cellpadding="4" cellspacing="0">
+                                <tr>
+                                    <td
+                                        style="border: 1px solid #000; font-size: 14px; padding: 8px; text-align: center; font-weight: bold;">
+                                        GRAND TOTAL: &#8377; {{ invoice.grand_total }}
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        </tr>
+
+        <!-- Terms and Conditions -->
+        <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #000;">
+                <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;" cellpadding="8"
+                    cellspacing="0">
+                    <tr>
+                        <td style="font-size: 11px; line-height: 1.4; padding-left: 10px; padding-top: 10px;">
+                            <!-- <div style="margin-bottom: 5px;">Tax payable on reverse charge (Y/N): {{
+                                invoice.reverse_charge|default('N') }}</div> -->
+                            <div style="font-weight: bold; margin-bottom: 5px;">Terms & Conditions :</div>
+                            <div style="margin-bottom: 8px;">
+                                1. This is to certify that we have a valid GST Registration and the above information is
+                                true.<br>
+                                2. Interest @ 18% per annum will be charged on payments due after 15 days from the date
+                                of billing.<br>
+                                3. Please accept goods in proper condition only.<br>
+                                4. All Disputes & claims will be referred to the court at Udaipur jurisdiction.<br>
+                                5. Do not make payment without the printed receipt. Please keep the receipt safe.
+                            </div>
+                            <div style="font-weight: bold; margin-bottom: 5px;">Additional Terms and Conditions :</div>
+                            <div style="border-bottom: 1px solid #000; height: 20px; margin-bottom: 5px;"></div>
+                            <div style="border-bottom: 1px solid #000; height: 20px;"></div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+
+        <!-- Signature Section -->
+        <tr>
+            <td style="padding: 15px;">
+                <table style="width: 100%; border-collapse: collapse;" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td style="width: 40%; text-align: center; vertical-align: top;">
+                            <div style="border-top: 1px solid #000; width: 200px; margin: 0 auto 5px auto;"></div>
+                            <div style="font-weight: bold; font-size: 12px;">Receiver's Signature</div>
+                        </td>
+                        <td style="width: 20%;">&nbsp;</td>
+                        <td style="width: 40%; text-align: center; vertical-align: top;">
+                            <div style="border-top: 1px solid #000; width: 200px; margin: 0 auto 5px auto;"></div>
+                            <div style="font-weight: bold; font-size: 12px;">For {{ party.name }}</div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+
+        <!-- Motto -->
+        <tr>
+            <td
+                style="text-align: center; padding: 10px; font-size: 14px; font-weight: bold; color: #C04000; text-decoration: underline;">
+                {{ company.motto|default("LIFE'S A JOURNEY, KEEP SMILING") }}
+            </td>
+        </tr>
+
+    </table>
+
+</body>
+
+</html>

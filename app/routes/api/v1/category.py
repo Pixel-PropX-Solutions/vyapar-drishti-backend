@@ -10,20 +10,23 @@ from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRe
 
 from app.database.models.Category import CategoryCreate
 from app.database.repositories.categoryRepo import category_repo
-from app.database.models.Category import Category
+
+# from app.database.models.Category import Category
 from app.utils.cloudinary_client import cloudinary_client
 
 
-Category = APIRouter()
+category_router = APIRouter()
 
 
-@Category.post(
+@category_router.post(
     "/create/category", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
 async def createCategory(
     category_name: str = Form(...),
     description: str = Form(None),
     image: UploadFile = File(None),
+    under: str = Form("Primary"),
+    company_id: str = Form(...),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -50,12 +53,14 @@ async def createCategory(
     category_data = {
         "category_name": category_name,
         "user_id": current_user.user_id,
+        "under": under,
+        "company_id": company_id,
         "is_deleted": False,
         "image": image_url,
         "description": description,
     }
 
-    response = await category_repo.new(Category(**category_data))
+    response = await category_repo.new(CategoryCreate(**category_data))
 
     if not response:
         raise http_exception.ResourceAlreadyExistsException(
@@ -65,21 +70,26 @@ async def createCategory(
     return {"success": True, "message": "Category Created Successfully", "data": response}
 
 
-@Category.get(
+@category_router.get(
     "/get/category",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
 async def getCategory(
     category_id: str,
+    company_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
     categories = await category_repo.findOne(
-        {"_id": category_id, "user_id": current_user.user_id, "is_deleted": False},
-        {"created_at": 0, "updated_at": 0},
+        {
+            "_id": category_id,
+            "user_id": current_user.user_id,
+            "company_id": company_id,
+            "is_deleted": False,
+        },
     )
     if not categories:
         raise http_exception
@@ -91,17 +101,18 @@ async def getCategory(
     }
 
 
-@Category.get(
+@category_router.get(
     "/view/all/category", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
 async def view_all_category(
-    current_user: TokenData = Depends(get_current_user),
+    company_id: str,
+    parent: str = None,
     search: str = None,
     page_no: int = Query(1, ge=1),
     limit: int = Query(10, le=60),
-    is_deleted: bool = False,
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
+    current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
@@ -113,18 +124,20 @@ async def view_all_category(
     result = await category_repo.viewAllCategories(
         search=search,
         pagination=page_request,
+        company_id=company_id,
         sort=sort,
-        is_deleted=is_deleted,
+        parent=parent,
         current_user=current_user,
     )
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
 
 
-@Category.get(
+@category_router.get(
     "/view/categories", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
 async def view_all_categories(
+    company_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -134,6 +147,7 @@ async def view_all_categories(
         [
             {
                 "$match": {
+                    "company_id": company_id,
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 }
@@ -141,9 +155,10 @@ async def view_all_categories(
             {
                 "$project": {
                     "user_id": 0,
+                    "company_id": 0,
                     "is_deleted": 0,
                     "image": 0,
-                    "description": 0,
+                    # "description": 0,
                     "created_at": 0,
                     "updated_at": 0,
                 }
@@ -158,7 +173,43 @@ async def view_all_categories(
     }
 
 
-@Category.put(
+@category_router.get(
+    "/view/default/category",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def view_default_category(
+    company_id: str = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "admin" and current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
+
+    result = await category_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "company_id": company_id,
+                    "user_id": current_user.user_id,
+                },
+            },
+            {
+                "$project": {
+                    "_id": 1,
+                    "category_name": 1,
+                    "description": 1,
+                    "under": 1,
+                }
+            },
+        ]
+    ).to_list(None)
+
+    ("result", result)
+
+    return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+
+
+@category_router.put(
     "/update/category/{category_id}",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
@@ -166,6 +217,8 @@ async def view_all_categories(
 async def updateCategory(
     category_id: str = "",
     category_name: str = Form(...),
+    company_id: str = Form(...),
+    under: str = Form(None),
     description: str = Form(None),
     image: UploadFile = File(None),
     current_user: TokenData = Depends(get_current_user),
@@ -174,7 +227,12 @@ async def updateCategory(
         raise http_exception.CredentialsInvalidException()
 
     categoryExists = await category_repo.findOne(
-        {"_id": category_id, "user_id": current_user.user_id, "is_deleted": False},
+        {
+            "_id": category_id,
+            "user_id": current_user.user_id,
+            "company_id": company_id,
+            "is_deleted": False,
+        },
     )
     if categoryExists is None:
         raise http_exception.ResourceNotFoundException()
@@ -201,12 +259,18 @@ async def updateCategory(
         "is_deleted": False,
         "description": description,
         "category_name": category_name,
+        "under": under,
     }
     if image:
         update_fields["image"] = image_url
 
     await category_repo.update_one(
-        {"_id": category_id, "user_id": current_user.user_id, "is_deleted": False},
+        {
+            "_id": category_id,
+            "user_id": current_user.user_id,
+            "company_id": company_id,
+            "is_deleted": False,
+        },
         {"$set": update_fields},
     )
 
@@ -216,47 +280,47 @@ async def updateCategory(
     }
 
 
-@Category.delete(
-    "/delete/category/${category_id}",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def deleteCategory(
-    category_id: str,
-    current_user: TokenData = Depends(get_current_user),
-):
-    if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
+# @category_router.delete(
+#     "/delete/category/${category_id}",
+#     response_class=ORJSONResponse,
+#     status_code=status.HTTP_200_OK,
+# )
+# async def deleteCategory(
+#     category_id: str,
+#     current_user: TokenData = Depends(get_current_user),
+# ):
+#     if current_user.user_type != "user" and current_user.user_type != "admin":
+#         raise http_exception.CredentialsInvalidException()
 
-    response = await category_repo.update_one(
-        {"_id": category_id, "user_id": current_user.user_id, "is_deleted": False},
-        {"$set": {"is_deleted": True}},
-    )
+#     response = await category_repo.update_one(
+#         {"_id": category_id, "user_id": current_user.user_id, "is_deleted": False},
+#         {"$set": {"is_deleted": True}},
+#     )
 
-    if not response:
-        raise http_exception.ResourceNotFoundException(detail="Category Not Found")
+#     if not response:
+#         raise http_exception.ResourceNotFoundException(detail="Category Not Found")
 
-    return {"success": True, "message": "Category Deleted Successfully"}
+#     return {"success": True, "message": "Category Deleted Successfully"}
 
 
-@Category.put(
-    "/restore/category/${category_id}",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def restore_category(
-    category_id: str,
-    current_user: TokenData = Depends(get_current_user),
-):
-    if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
+# @category_router.put(
+#     "/restore/category/${category_id}",
+#     response_class=ORJSONResponse,
+#     status_code=status.HTTP_200_OK,
+# )
+# async def restore_category(
+#     category_id: str,
+#     current_user: TokenData = Depends(get_current_user),
+# ):
+#     if current_user.user_type != "user" and current_user.user_type != "admin":
+#         raise http_exception.CredentialsInvalidException()
 
-    response = await category_repo.update_one(
-        {"_id": category_id, "user_id": current_user.user_id, "is_deleted": True},
-        {"$set": {"is_deleted": False}},
-    )
+#     response = await category_repo.update_one(
+#         {"_id": category_id, "user_id": current_user.user_id, "is_deleted": True},
+#         {"$set": {"is_deleted": False}},
+#     )
 
-    if not response:
-        raise http_exception.ResourceNotFoundException(detail="Category Not Found")
+#     if not response:
+#         raise http_exception.ResourceNotFoundException(detail="Category Not Found")
 
-    return {"success": True, "message": "Category restored Successfully"}
+#     return {"success": True, "message": "Category restored Successfully"}

@@ -167,7 +167,7 @@ async def get_current_user_details(
         {
             "$project": {
                 "company_id": "$_id",
-                "name": 1,
+                "company_name": 1,
                 "image": 1,
                 "address_1": 1,
                 "address_2": 1,

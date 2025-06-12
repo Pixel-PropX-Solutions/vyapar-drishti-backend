@@ -17,7 +17,9 @@ from app.database.repositories.crud.base import (
 class CategoryRepo(BaseMongoDbCrud[CategoryDB]):
     def __init__(self):
         super().__init__(
-            ENV_PROJECT.MONGO_DATABASE, "Category", unique_attributes=["name", 'user_id', 'company_id']
+            ENV_PROJECT.MONGO_DATABASE,
+            "Category",
+            unique_attributes=["category_name", "user_id", "company_id"],
         )
 
     async def new(self, sub: Category):
@@ -26,12 +28,17 @@ class CategoryRepo(BaseMongoDbCrud[CategoryDB]):
     async def viewAllCategories(
         self,
         search: str,
+        company_id: str,
         pagination: PageRequest,
         sort: Sort,
         current_user: TokenData = Depends(get_current_user),
-        is_deleted: bool = False,
+        parent: str = "Primary",
     ):
-        filter_params = {"user_id": current_user.user_id, "is_deleted": is_deleted}
+        filter_params = {
+            "user_id": current_user.user_id,
+            "company_id": company_id,
+            "is_deleted": False,
+        }
         # Filter by search term
         if search is not None and isinstance(search, str) and search.strip() != "":
             filter_params["$or"] = [
@@ -39,34 +46,32 @@ class CategoryRepo(BaseMongoDbCrud[CategoryDB]):
                 {"description": {"$regex": search, "$options": "i"}},
             ]
 
-        # Define sorting logic
-        sort_options = {
-            "name_asc": {"category_name": 1},
-            "name_desc": {"category_name": -1},
-            "created_at_asc": {"created_at": 1},
-            "created_at_desc": {"created_at": -1},
-            "updated_at_asc": {"updated_at": 1},
-            "updated_at_desc": {"updated_at": -1},
+        sort_fields_mapping = {
+            "category_name": "category_name",
+            "parent": "parent",
+            "created_at": "created_at",
+            "updated_at": "updated_at",
         }
 
-        # Construct sorting key
-        sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
-
-        sort_stage = sort_options.get(sort_key, {"created_at": 1})
+        sort_field_mapped = sort_fields_mapping.get(sort.sort_field, "category_name")
+        sort_order_value = 1 if sort.sort_order == SortingOrder.ASC else -1
+        sort_stage = {sort_field_mapped: sort_order_value}
 
         pipeline = [
             {"$match": filter_params},
             {"$sort": sort_stage},
             {
                 "$project": {
-                    "created_at": 1,
-                    "updated_at": 1,
+                    "_id": 1,
+                    "user_id": 1,
+                    "company_id": 1,
                     "category_name": 1,
+                    "under": 1,
                     "description": 1,
                     "image": 1,
-                    "user_id": 1,
                     "is_deleted": 1,
-                    "_id": 1,
+                    "created_at": 1,
+                    "updated_at": 1,
                 }
             },
             {

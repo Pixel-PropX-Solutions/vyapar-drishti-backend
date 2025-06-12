@@ -10,6 +10,7 @@ from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRe
 from fastapi import Query
 from app.database.repositories.ledgerRepo import ledger_repo
 from app.utils.cloudinary_client import cloudinary_client
+import sys
 
 
 ledger = APIRouter()
@@ -21,7 +22,7 @@ async def create_ledger(
     parent: str = Form(...),  # Group in which the ledger (e.g."Sales Accounts")
     name: str = Form(...),
     email: str = Form(""),
-    phone: str = Form(""),
+    number: str = Form(""),
     code: str = Form(""),
     image: UploadFile = File(None),
     alias: str = Form(None),
@@ -54,7 +55,7 @@ async def create_ledger(
 
     ledgerExists = await ledger_repo.findOne(
         {
-            "name": name,
+            "ledger_name": name,
             "user_id": current_user.user_id,
             "company_id": company_id,
         }
@@ -84,11 +85,11 @@ async def create_ledger(
         image_url = upload_result["url"]
 
     phone_data = None
-    if code is not None or phone is not None:
-        phone_data = {"code": code, "number": phone}
+    if code is not None or number is not None:
+        phone_data = {"code": code, "number": number}
 
     ledger_data = {
-        "name": name,
+        "ledger_name": name,
         "user_id": current_user.user_id,
         "company_id": company_id,
         "is_deleted": False,
@@ -138,8 +139,9 @@ async def view_all_ledger(
     parent: str = Query(None),
     company_id: str = Query(None),
     is_deleted: bool = False,
+    limit: int = Query(10, le=sys.maxsize),
+    # limit: int = Query(10, le=INT_MAX_VALUE),
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=20),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):
@@ -160,6 +162,70 @@ async def view_all_ledger(
         pagination=page_request,
         sort=sort,
     )
+
+    return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+
+
+@ledger.get(
+    "/view/all/ledgers", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+)
+async def view_all_ledgers(
+    company_id: str = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "admin" and current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
+
+    result = await ledger_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "user_id": current_user.user_id,
+                    "company_id": company_id,
+                    "is_deleted": False,
+                },
+            },
+            {
+                "$project": {"_id": 1, "ledger_name": 1, "parent": 1, "alias": 1},
+            },
+        ]
+    ).to_list(None)
+
+    return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+
+
+@ledger.get(
+    "/view/ledgers/with/type",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def view_ledgers_with_type(
+    type: str,
+    company_id: str = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "admin" and current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
+
+    print(f"Type: {type}, Company ID: {company_id}")
+    
+    result = await ledger_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "user_id": current_user.user_id,
+                    "company_id": company_id,
+                    "parent": type,
+                    "is_deleted": False,
+                },
+            },
+            {
+                "$project": {"_id": 1, "ledger_name": 1, "parent": 1, "alias": 1},
+            },
+        ]
+    ).to_list(None)
+    
+    print(f"Result: {result}")
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
 

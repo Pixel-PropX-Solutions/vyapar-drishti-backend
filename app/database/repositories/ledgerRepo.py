@@ -15,7 +15,7 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
         super().__init__(
             ENV_PROJECT.MONGO_DATABASE,
             "Ledger",
-            unique_attributes=["name", "user_id", "company_id"],
+            unique_attributes=["ledger_name", "user_id", "company_id", 'parent'],
         )
 
     async def new(self, sub: Ledger):
@@ -38,7 +38,7 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
             filter_params["$or"] = [
                 {"email": {"$regex": f"^{search}", "$options": "i"}},
                 {
-                    "name": {
+                    "ledger_name": {
                         "$regex": f"^{search}",
                         "$options": "i",
                     }
@@ -80,7 +80,7 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
             ]
 
         sort_fields_mapping = {
-            "name": "name",
+            "name": "ledger_name",
             "parent": "parent",
             "city": "mailing_pincode",
             "state": "mailing_state",

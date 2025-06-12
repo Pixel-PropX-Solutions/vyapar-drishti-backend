@@ -10,6 +10,8 @@ from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRe
 
 from app.database.models.StockItem import StockItemCreate
 from app.database.repositories.stockItemRepo import stock_item_repo
+from app.database.repositories.voucharRepo import vouchar_repo
+from app.database.repositories.InventoryRepo import inventory_repo
 from app.database.models.StockItem import StockItem
 from app.utils.cloudinary_client import cloudinary_client
 from typing import Optional, Union
@@ -22,27 +24,23 @@ Product = APIRouter()
     "/create/product", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
 async def create_product(
-    name: str = Form(...),
-    company_id: str= Form(...),
-    unit: str = Form(None),
-    is_deleted: bool = False,
-
+    stock_item_name: str = Form(...),
+    company_id: str = Form(...),
+    unit: str = Form(...),
     # optional fields
-    alias_name: Optional[str] = "",
-    category: Optional[str] = "",
-    group: Optional[str] = "",
-    image: Optional[str] = "",
-    description: Optional[str] = "",
-
+    alias_name: str = Form(None),
+    category: str = Form(None),
+    group: str = Form(None),
+    image: UploadFile = File(None),
+    description: str = Form(None),
     # Additonal Optional fields
-    opening_balance: Optional[float] = 0,
-    opening_rate: Optional[float] = 0,
-    opening_value: Optional[float] = 0,
-    gst_nature_of_goods: Optional[str] = "",
-    gst_hsn_code: Optional[str] = "",
-    gst_taxability: Optional[str] = "",
-    low_stock_alert: Optional[int] = 0,
-
+    opening_balance: float = Form(None),
+    opening_rate: float = Form(None),
+    opening_value: float = Form(None),
+    gst_nature_of_goods: str = Form(None),
+    gst_hsn_code: str = Form(None),
+    gst_taxability: str = Form(None),
+    low_stock_alert: int = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -68,19 +66,17 @@ async def create_product(
 
     product_data = {
         # required fields
-        "name": name,
+        "stock_item_name": stock_item_name,
         "company_id": company_id,
         "unit": unit,
-        "is_deleted": is_deleted,
+        "is_deleted": False,
         "user_id": current_user.user_id,
-        
         # optional fields
         "alias_name": alias_name,
         "category": category,
         "group": group,
         "image": image_url,
         "description": description,
-        
         # additonal optional fields
         "opening_balance": opening_balance,
         "opening_rate": opening_rate,
@@ -120,15 +116,15 @@ async def get_product(
                 "$match": {
                     "_id": product_id,
                     "user_id": current_user.user_id,
-                    'company_id': company_id,
+                    "company_id": company_id,
                     "is_deleted": False,
                 }
             },
             {
                 "$lookup": {
                     "from": "Category",
-                    "localField": "_category",
-                    "foreignField": "_id",
+                    "localField": "category",
+                    "foreignField": "category_name",
                     "as": "category",
                 }
             },
@@ -136,52 +132,336 @@ async def get_product(
             {
                 "$lookup": {
                     "from": "Group",
-                    "localField": "_group",
-                    "foreignField": "_id",
+                    "localField": "group",
+                    "foreignField": "inventory_group_name",
                     "as": "group",
                 }
             },
             {"$unwind": {"path": "$group", "preserveNullAndEmptyArrays": True}},
             {
+                "$lookup": {
+                    "from": "Inventory",
+                    "localField": "name",
+                    "foreignField": "item",
+                    "as": "inventory_entries",
+                }
+            },
+            {
+                "$unwind": {
+                    "path": "$inventory_entries",
+                    "preserveNullAndEmptyArrays": True,
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Voucher",
+                    "localField": "inventory_entries.vouchar_id",
+                    "foreignField": "_id",
+                    "as": "voucher",
+                }
+            },
+            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "company_id": {"$first": "$company_id"},
+                    "stock_item_name": {"$first": "$stock_item_name"},
+                    "unit": {"$first": "$unit"},
+                    "category": {"$first": "$category"},
+                    "alias_name": {"$first": "$alias_name"},
+                    "image": {"$first": "$image"},
+                    "description": {"$first": "$description"},
+                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    "group": {"$first": "$group"},
+                    "purchase_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        {"$toLower": "$voucher.voucher_type"},
+                                        "purchase",
+                                    ]
+                                },
+                                "$inventory_entries.quantity",
+                                0,
+                            ]
+                        }
+                    },
+                    "purchase_value": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        {"$toLower": "$voucher.voucher_type"},
+                                        "purchase",
+                                    ]
+                                },
+                                "$inventory_entries.amount",
+                                0,
+                            ]
+                        }
+                    },
+                    "sales_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
+                                {"$abs": "$inventory_entries.quantity"},
+                                0,
+                            ]
+                        }
+                    },
+                    "sales_value": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
+                                {"$abs": "$inventory_entries.amount"},
+                                0,
+                            ]
+                        }
+                    },
+                }
+            },
+            {
                 "$project": {
                     "_id": 1,
-                    "name": 1,
+                    "stock_item_name": 1,
                     "company_id": 1,
                     "user_id": 1,
                     "unit": 1,
                     "_unit": 1,
-                    "is_deleted": 1,
-                    
-                    # optional fields
                     "alias_name": 1,
-                    "category": {"$ifNull": ["$category.name", None]},
+                    "category": {"$ifNull": ["$category.category_name", None]},
                     "_category": {"$ifNull": ["$category._id", None]},
-                    "category_desc": {"$ifNull": ["$category.description", None]},
-                    "group": {"$ifNull": ["$group.name", None]},
+                    "group": {"$ifNull": ["$group.inventory_group_name", None]},
                     "_group": {"$ifNull": ["$group._id", None]},
-                    "group_desc": {"$ifNull": ["$group.description", None]},
                     "image": 1,
                     "description": 1,
-                    
-                    # additional optional fields
-                    "opening_balance": 1,
-                    "opening_rate": 1,
-                    "opening_value": 1,
                     "gst_nature_of_goods": 1,
                     "gst_hsn_code": 1,
                     "gst_taxability": 1,
                     "low_stock_alert": 1,
                     "created_at": 1,
                     "updated_at": 1,
+                    "current_stock": {
+                        "$subtract": [
+                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
+                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                        ]
+                    },
+                    "avg_purchase_rate": {
+                        "$cond": [
+                            {"$gt": ["$purchase_qty", 0]},
+                            {"$divide": ["$purchase_value", "$purchase_qty"]},
+                            0,
+                        ]
+                    },
+                    "purchase_qty": "$purchase_qty",
+                    "purchase_value": "$purchase_value",
+                    "sales_qty": "$sales_qty",
+                    "sales_value": "$sales_value",
                 }
             },
         ]
     ).to_list(None)
 
-    if not product:
-        raise http_exception
+    if product:
+        return {"success": True, "data": product}
+    else:
+        raise http_exception.ResourceNotFoundException()
 
-    return {"success": True, "data": product}
+
+@Product.get(
+    "/get/product/details/{product_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_product(
+    product_id: str,
+    company_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    product = await stock_item_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "_id": product_id,
+                    "user_id": current_user.user_id,
+                    "company_id": company_id,
+                    "is_deleted": False,
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Category",
+                    "localField": "category",
+                    "foreignField": "category_name",
+                    "as": "category",
+                }
+            },
+            {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
+            {
+                "$lookup": {
+                    "from": "Group",
+                    "localField": "group",
+                    "foreignField": "inventory_group_name",
+                    "as": "group",
+                }
+            },
+            {"$unwind": {"path": "$group", "preserveNullAndEmptyArrays": True}},
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "localField": "name",
+                    "foreignField": "item",
+                    "as": "inventory_entries",
+                }
+            },
+            {
+                "$unwind": {
+                    "path": "$inventory_entries",
+                    "preserveNullAndEmptyArrays": True,
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Voucher",
+                    "localField": "inventory_entries.vouchar_id",
+                    "foreignField": "_id",
+                    "as": "voucher",
+                }
+            },
+            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "company_id": {"$first": "$company_id"},
+                    "stock_item_name": {"$first": "$stock_item_name"},
+                    "unit": {"$first": "$unit"},
+                    "category": {"$first": "$category"},
+                    "alias_name": {"$first": "$alias_name"},
+                    "image": {"$first": "$image"},
+                    "description": {"$first": "$description"},
+                    "user_id": {"$first": "$user_id"},
+                    "_unit": {"$first": "$_unit"},
+                    "_category": {"$first": "$_category"},
+                    "_group": {"$first": "$_group"},
+                    "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
+                    "gst_taxability": {"$first": "$gst_taxability"},
+                    "low_stock_alert": {"$first": "$low_stock_alert"},
+                    "created_at": {"$first": "$created_at"},
+                    "updated_at": {"$first": "$updated_at"},
+                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    "opening_balance": {"$first": "$opening_balance"},
+                    "opening_rate": {"$first": "$opening_rate"},
+                    "opening_value": {"$first": "$opening_value"},
+                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    "group": {"$first": "$group"},
+                    "purchase_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        {"$toLower": "$voucher.voucher_type"},
+                                        "purchase",
+                                    ]
+                                },
+                                "$inventory_entries.quantity",
+                                0,
+                            ]
+                        }
+                    },
+                    "purchase_value": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        {"$toLower": "$voucher.voucher_type"},
+                                        "purchase",
+                                    ]
+                                },
+                                "$inventory_entries.amount",
+                                0,
+                            ]
+                        }
+                    },
+                    "sales_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
+                                {"$abs": "$inventory_entries.quantity"},
+                                0,
+                            ]
+                        }
+                    },
+                    "sales_value": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
+                                {"$abs": "$inventory_entries.amount"},
+                                0,
+                            ]
+                        }
+                    },
+                }
+            },
+            {
+                "$project": {
+                    "_id": 1,
+                    "stock_item_name": 1,
+                    "company_id": 1,
+                    "user_id": 1,
+                    "unit": 1,
+                    "_unit": 1,
+                    "alias_name": 1,
+                    "category": {"$ifNull": ["$category.category_name", None]},
+                    "_category": {"$ifNull": ["$category._id", None]},
+                    "group": {"$ifNull": ["$group.inventory_group_name", None]},
+                    "_group": {"$ifNull": ["$group._id", None]},
+                    "image": 1,
+                    "description": 1,
+                    "gst_nature_of_goods": 1,
+                    "gst_hsn_code": 1,
+                    "gst_taxability": 1,
+                    "low_stock_alert": 1,
+                    "created_at": 1,
+                    "updated_at": 1,
+                    "current_stock": {
+                        "$subtract": [
+                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
+                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                        ]
+                    },
+                    "avg_purchase_rate": {
+                        "$cond": [
+                            {"$gt": ["$purchase_qty", 0]},
+                            {"$divide": ["$purchase_value", "$purchase_qty"]},
+                            0,
+                        ]
+                    },
+                    "purchase_qty": "$purchase_qty",
+                    "purchase_value": "$purchase_value",
+                    "sales_qty": "$sales_qty",
+                    "sales_value": "$sales_value",
+                    "opening_balance": 1,
+                    "opening_rate": 1,
+                    "opening_value": 1,
+                }
+            },
+        ]
+    ).to_list(None)
+
+    if product:
+        return {"success": True, "data": product}
+    else:
+        raise http_exception.ResourceNotFoundException()
 
 
 @Product.get(
@@ -193,7 +473,7 @@ async def view_all_product(
     search: str = None,
     category: str = None,
     group: str = None,
-    is_deleted: bool = False,
+    # is_deleted: bool = False,
     page_no: int = Query(1, ge=1),
     limit: int = Query(10, le=60),
     sortField: str = "created_at",
@@ -214,7 +494,7 @@ async def view_all_product(
         group=group,
         sort=sort,
         current_user=current_user,
-        is_deleted=is_deleted,
+        # is_deleted=is_deleted,
     )
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
@@ -226,7 +506,7 @@ async def view_all_product(
     status_code=status.HTTP_200_OK,
 )
 async def get_products(
-    search: str = "",
+    company_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -236,7 +516,7 @@ async def get_products(
         [
             {
                 "$match": {
-                    "name": {"$regex": search, "$options": "i"},
+                    "company_id": company_id,
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 }
@@ -244,21 +524,15 @@ async def get_products(
             {
                 "$project": {
                     "_id": 1,
-                    "name": 1,
-                    "company_id": 1,
-                    "user_id": 1,
+                    "stock_item_name": 1,
+                    # "company_id": 1,
                     "unit": 1,
-                    "_unit": 1,
-                    "is_deleted": 1,
-                    
+                    # "_unit": 1,
                     # optional fields
-                    "alias_name": 1,
-                    "category": {"$ifNull": ["$category.name", None]},
-                    "_category": {"$ifNull": ["$category._id", None]},
-                    "group": {"$ifNull": ["$group.name", None]},
-                    "_group": {"$ifNull": ["$group._id", None]},
-                    "image": 1,
-                    "description": 1,
+                    # "alias_name": 1,
+                    # "category": {"$ifNull": ["$category.name", None]},
+                    # "group": {"$ifNull": ["$group.name", None]},
+                    # "image": 1,
                 }
             },
         ]
@@ -273,27 +547,35 @@ async def get_products(
 )
 async def update_product(
     product_id: str = "",
-    unit: str = Form(None),
-    barcode: str = Form(None),
+    name: str = Form(...),
+    company_id: str = Form(...),
+    unit: str = Form(...),
+    # optional fields
+    alias_name: str = Form(None),
     category: str = Form(None),
-    hsn_code: str = Form(None),
-    product_name: str = Form(...),
-    description: str = Form(None),
+    group: str = Form(None),
     image: UploadFile = File(None),
-    selling_price: float = Form(...),
+    description: str = Form(None),
+    # Additonal Optional fields
+    opening_balance: float = Form(None),
+    opening_rate: float = Form(None),
+    opening_value: float = Form(None),
+    gst_nature_of_goods: str = Form(None),
+    gst_hsn_code: str = Form(None),
+    gst_taxability: str = Form(None),
     low_stock_alert: int = Form(None),
-    purchase_price: float = Form(None),
-    opening_quantity: int = Form(None),
-    show_active_stock: bool = Form(True),
-    opening_stock_value: int = Form(None),
-    opening_purchase_price: float = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
     productExists = await stock_item_repo.findOne(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False},
+        {
+            "_id": product_id,
+            "user_id": current_user.user_id,
+            "is_deleted": False,
+            "company_id": company_id,
+        },
     )
     if productExists is None:
         raise http_exception.ResourceNotFoundException()
@@ -317,26 +599,32 @@ async def update_product(
         image_url = upload_result["url"]
 
     update_fields = {
+        "stock_item_name": name,
         "unit": unit,
-        "barcode": barcode,
-        "is_deleted": False,
-        "hsn_code": hsn_code,
+        # optional fields
+        "alias_name": alias_name,
         "category": category,
+        "group": group,
         "description": description,
-        "product_name": product_name,
-        "selling_price": selling_price,
-        "purchase_price": purchase_price,
+        # additonal optional fields
+        "opening_balance": opening_balance,
+        "opening_rate": opening_rate,
+        "opening_value": opening_value,
+        "gst_nature_of_goods": gst_nature_of_goods,
+        "gst_hsn_code": gst_hsn_code,
+        "gst_taxability": gst_taxability,
         "low_stock_alert": low_stock_alert,
-        "opening_quantity": opening_quantity,
-        "show_active_stock": show_active_stock,
-        "opening_stock_value": opening_stock_value,
-        "opening_purchase_price": opening_purchase_price,
     }
     if image:
         update_fields["image"] = image_url
 
     await stock_item_repo.update_one(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False},
+        {
+            "_id": product_id,
+            "user_id": current_user.user_id,
+            "is_deleted": False,
+            "company_id": company_id,
+        },
         {"$set": update_fields},
     )
 
@@ -360,44 +648,93 @@ async def delete_product(
         raise http_exception.CredentialsInvalidException()
 
     product = await stock_item_repo.findOne(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False, "company_id": company_id}
+        {
+            "_id": product_id,
+            "user_id": current_user.user_id,
+            "is_deleted": False,
+            "company_id": company_id,
+        }
     )
 
     if not product:
         raise http_exception.NotFoundException(detail="Product Not Found")
 
-    response = await stock_item_repo.update_one(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": False, "company_id": company_id},
-        {"$set": {"is_deleted": True}},
-    )
+    if product:
+        vouchar_id_list = await inventory_repo.findAll(
+            {
+                "item": product.name,
+            },
+            {"project": {"vouchar_id": 1, "_id": 1}},
+        )
 
+        # Check if the product is associated with any inventory items
+        if vouchar_id_list:
+            for vouchar in vouchar_id_list:
+                vouchar_id = vouchar.get("vouchar_id")
+
+                is_vouchar_present = await vouchar_repo.findAll(
+                    {
+                        "_id": vouchar_id,
+                        "company_id": company_id,
+                        "user_id": current_user.user_id,
+                    }
+                )
+                if is_vouchar_present:
+                    raise http_exception.BadRequestException(
+                        detail="Product cannot be deleted as it is associated with invoices."
+                    )
+
+            raise http_exception.BadRequestException(
+                detail="Product cannot be deleted as it is associated with inventory items."
+            )
+
+        if not vouchar_id_list:
+            # If no inventory items are associated, proceed to delete the product
+            await stock_item_repo.deleteOne(
+                {
+                    "_id": product_id,
+                    "user_id": current_user.user_id,
+                    "is_deleted": False,
+                    "company_id": company_id,
+                },
+            )
 
     return {"success": True, "message": "Product Deleted Successfully"}
 
 
-@Product.put(
-    "/restore/product/{product_id}",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def restore_product(
-    product_id: str,
-    company_id: str = Query(...),
-    current_user: TokenData = Depends(get_current_user),
-):
-    if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
+# @Product.put(
+#     "/restore/product/{product_id}",
+#     response_class=ORJSONResponse,
+#     status_code=status.HTTP_200_OK,
+# )
+# async def restore_product(
+#     product_id: str,
+#     company_id: str = Query(...),
+#     current_user: TokenData = Depends(get_current_user),
+# ):
+#     if current_user.user_type != "user" and current_user.user_type != "admin":
+#         raise http_exception.CredentialsInvalidException()
 
-    product = await stock_item_repo.findOne(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": True, "company_id": company_id}
-    )
+#     product = await stock_item_repo.findOne(
+#         {
+#             "_id": product_id,
+#             "user_id": current_user.user_id,
+#             "is_deleted": True,
+#             "company_id": company_id,
+#         }
+#     )
 
-    if not product:
-        raise http_exception.NotFoundException(detail="Product Not Found")
+#     if not product:
+#         raise http_exception.NotFoundException(detail="Product Not Found")
 
-    await stock_item_repo.update_one(
-        {"_id": product_id, "user_id": current_user.user_id, "is_deleted": True, "company_id": company_id},
-        {"$set": {"is_deleted": False}},
-    )
+#     await stock_item_repo.update_one(
+#         {
+#             "_id": product_id,
+#             "user_id": current_user.user_id,
+#             "is_deleted": True,
+#             "company_id": company_id,
+#         },
+#         {"$set": {"is_deleted": False}},
+#     )
 
-    return {"success": True, "message": "Product Restored Successfully"}
+#     return {"success": True, "message": "Product Restored Successfully"}

@@ -147,7 +147,7 @@ async def createCompany(
         phone_obj = {"code": code, "number": number}
 
     company_data = {
-        "name": name,
+        "company_name": name,
         "user_id": current_user.user_id,
         "phone": phone_obj,
         "email": email,
@@ -199,7 +199,7 @@ async def get_all_company(
         {
             "$project": {
                 "_id": 1,
-                "name": 1,
+                "name": "$company_name",
                 "user_id": 1,
                 "mailing_name": 1,
                 "image": 1,
@@ -234,39 +234,39 @@ async def get_all_company(
         )
 
 
-@user.post(
-    "/create/company/billing",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def create_company_billing(
-    company_id: str = Form(...),
-    state: str = Form(...),
-    address_1: str = Form(...),
-    address_2: str = Form(None),
-    pinCode: str = Form(None),
-    city: str = Form(None),
-    country: str = Form(None),
-    current_user: TokenData = Depends(get_current_user),
-):
-    billing_data = {
-        "user_id": current_user.user_id,
-        # "company_id": company_id,
-        "state": state,
-        "address_1": address_1,
-        "address_2": address_2,
-        "pinCode": pinCode,
-        "city": city,
-        "country": country,
-        "is_deleted": False,
-    }
+# @user.post(
+#     "/create/company/billing",
+#     response_class=ORJSONResponse,
+#     status_code=status.HTTP_200_OK,
+# )
+# async def create_company_billing(
+#     company_id: str = Form(...),
+#     state: str = Form(...),
+#     address_1: str = Form(...),
+#     address_2: str = Form(None),
+#     pinCode: str = Form(None),
+#     city: str = Form(None),
+#     country: str = Form(None),
+#     current_user: TokenData = Depends(get_current_user),
+# ):
+#     billing_data = {
+#         "user_id": current_user.user_id,
+#         # "company_id": company_id,
+#         "state": state,
+#         "address_1": address_1,
+#         "address_2": address_2,
+#         "pinCode": pinCode,
+#         "city": city,
+#         "country": country,
+#         "is_deleted": False,
+#     }
 
-    # response = await billing_repo.new(Billing(**billing_data))
-    await company_repo.update_one(
-        {"_id": company_id, "user_id": current_user.user_id},
-        {"$set": {"billing": response.billing_id}},
-    )
-    return {"success": True, "message": "Billing Address Created", "data": response}
+#     # response = await billing_repo.new(Billing(**billing_data))
+#     await company_repo.update_one(
+#         {"_id": company_id, "user_id": current_user.user_id},
+#         {"$set": {"billing": response.billing_id}},
+#     )
+#     return {"success": True, "message": "Billing Address Created", "data": response}
 
 
 @user.get("/company", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
@@ -312,7 +312,7 @@ async def get_company(
         {
             "$project": {
                 "_id": 1,
-                "name": 1,
+                "name": "$company_name",
                 "user_id": 1,
                 "mailing_name": 1,
                 "image": 1,
@@ -404,7 +404,7 @@ async def updateCompany(
         phone_obj = {"code": code, "number": number}
 
     update_fields = {
-        "name": name,
+        "company_name": name,
         "phone": phone_obj,
         "email": email,
         "gstin": gstin,

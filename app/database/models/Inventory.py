@@ -7,7 +7,7 @@ class InventoryItem(BaseModel):
     vouchar_id: str # Foreign key to trn_voucher._id
     item: str
     _item: str
-    quantity: float # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
+    quantity: int # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
     rate: float
     amount: float # Total amount for the item in the voucher(Sales, purchase), negative for sale or positive for purchase
     
@@ -17,9 +17,9 @@ class InventoryItem(BaseModel):
     discount_amount: Optional[float] = 0.0
     godown: Optional[str] = ""
     _godown: Optional[str] = ""
-    tracking_number: Optional[str] = None
+    # tracking_number: Optional[str] = None
     order_number: Optional[str] = None
-    order_duedate: Optional[datetime.date] = None
+    order_due_date: Optional[str] = None
 
 
 class InventoryItemDB(InventoryItem):
@@ -36,7 +36,7 @@ class InventoryItemCreate(BaseModel):
     vouchar_id: str  # Foreign key to trn_voucher._id
     item: str
     _item: str
-    quantity: float # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
+    quantity: int # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
     rate: float
     amount: float # Total amount for the item in the voucher(Sales, purchase), negative for sale or positive for purchase
     
@@ -46,7 +46,7 @@ class InventoryItemCreate(BaseModel):
     discount_amount: Optional[float] = 0.0
     godown: Optional[str] = ""
     _godown: Optional[str] = ""
-    tracking_number: Optional[str] = None
+    # tracking_number: Optional[str] = None
     order_number: Optional[str] = None
-    order_duedate: Optional[datetime.date] = None
+    order_due_date: Optional[str] = None
 
