@@ -7,7 +7,7 @@ from uuid import uuid4
 
 
 class UOM(BaseModel):
-    name: str = ''
+    unit_name: str
     company_id: str
     user_id: str
     formalname: str = ''
@@ -23,7 +23,7 @@ class UOMDB(UOM):
     updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 class UOMCreate(BaseModel):
-    name: str = ''
+    unit_name: str 
     company_id: str
     user_id: str
     formalname: str = ''
@@ -33,7 +33,7 @@ class UOMCreate(BaseModel):
     conversion: int
 
 class UOMUpdate(BaseModel):
-    name: Optional[str] = None
+    unit_name: Optional[str] = None
     formalname: Optional[str] = None
     is_simple_unit: Optional[int] = None
     base_units: Optional[str] = None

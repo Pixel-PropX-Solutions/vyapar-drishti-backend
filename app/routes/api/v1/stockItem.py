@@ -9,6 +9,8 @@ from app.schema.token import TokenData
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 
 from app.database.models.StockItem import StockItemCreate
+from app.database.models.GST_Rate import GSTRateCreate
+from app.database.repositories.gstRateRepo import gst_rate_repo
 from app.database.repositories.stockItemRepo import stock_item_repo
 from app.database.repositories.voucharRepo import vouchar_repo
 from app.database.repositories.InventoryRepo import inventory_repo
@@ -40,6 +42,7 @@ async def create_product(
     gst_nature_of_goods: str = Form(None),
     gst_hsn_code: str = Form(None),
     gst_taxability: str = Form(None),
+    gst_percentage: str = Form(None),
     low_stock_alert: int = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
@@ -88,6 +91,24 @@ async def create_product(
     }
 
     response = await stock_item_repo.new(StockItem(**product_data))
+
+    if response:
+        gstr_data = {
+            "user_id": current_user.user_id,
+            "company_id": company_id,
+            "item": stock_item_name,
+            "_item": response.stock_item_id,
+            "hsn_code": gst_hsn_code,
+            "nature_of_goods": gst_nature_of_goods,
+            "taxability": gst_taxability,
+            "rate": gst_percentage,
+        }
+        res = await gst_rate_repo.new(GSTRateCreate(**gstr_data))
+        
+        if not res:
+            raise http_exception.ResourceAlreadyExistsException(
+                detail="GST Rate Already Exists for this Product"
+            )
 
     if not response:
         raise http_exception.ResourceAlreadyExistsException(

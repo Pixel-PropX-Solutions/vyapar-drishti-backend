@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, status, Response, Header
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status, Response, Header
 from fastapi.responses import ORJSONResponse
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from app.Config import ENV_PROJECT
@@ -30,6 +30,7 @@ from app.schema.token import TokenData
 from app.utils import generatePassword, hashing
 from app.database.repositories.user import user_repo
 from app.utils.generatePassword import generatePassword
+from app.routes.api.v1.userSettings import initialize_user_settings
 
 # from app.utils.mailer_module import mail, template
 from app.Config import ENV_PROJECT
@@ -87,6 +88,7 @@ async def login(
 
 @auth.post("/register", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
 async def register(
+    request: Request,
     response: Response,
     user: UserCreate,
 ):
@@ -112,6 +114,16 @@ async def register(
         inserted_dict[k] = v
 
     user_res = await user_repo.new(User(**inserted_dict))
+
+    ip_address = request.client.host
+    device_info = request.headers.get("user-agent", "unknown")
+
+    await initialize_user_settings(
+        user_id=user_res.id,
+        last_login_ip=ip_address,
+        last_login_device=device_info,
+        role=user_res.user_type.value,
+    )
 
     token_data = TokenData(
         user_id=user_res.id, user_type=user_res.user_type.value, scope="login"
@@ -155,15 +167,42 @@ async def get_current_user_details(
     user_pipeline = [
         {"$match": {"_id": current_user.user_id}},
         {
+            "$lookup": {
+                "from": "UserSettings",
+                "localField": "_id",
+                "foreignField": "user_id",
+                "as": "user_settings",
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$user_settings",
+                "preserveNullAndEmptyArrays": True,
+            }
+        },
+        {
             "$project": {
                 "password": 0,
                 "updated_at": 0,
+                # 'user_settings._id': 0,
+                "user_settings.user_id": 0,
+                "user_settings.created_at": 0,
+                "user_settings.updated_at": 0,
             }
         },
     ]
 
     company_pipeline = [
         {"$match": {"user_id": current_user.user_id, "is_deleted": False}},
+        {
+            "$lookup": {
+                "from": "CompanySettings",
+                "localField": "_id",
+                "foreignField": "company_id",
+                "as": "company_settings",
+            }
+        },
+        {"$unwind": {"path": "$company_settings", "preserveNullAndEmptyArrays": True}},
         {
             "$project": {
                 "company_id": "$_id",
@@ -178,7 +217,11 @@ async def get_current_user_details(
                 "email": 1,
                 "financial_year_start": 1,
                 "books_begin_from": 1,
-                'is_selected': 1,
+                "is_selected": 1,
+                "company_settings": 1,
+                # "company_settings.company_id": 0,
+                # "company_settings.created_at": 0,
+                # "company_settings.updated_at": 0,
             },
         },
     ]
@@ -190,14 +233,15 @@ async def get_current_user_details(
     company = await company_repo.collection.aggregate(pipeline=company_pipeline).to_list(
         None
     )
-    
+
     data = response[0]
     if company:
         data["company"] = company
     else:
         data["company"] = []
 
-    return {
+    # print("User Profile Data:", data)
+    return { 
         "success": True,
         "message": "User Profile Fetched Successfully",
         "data": response,

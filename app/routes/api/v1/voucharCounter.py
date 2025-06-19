@@ -1,0 +1,136 @@
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+from app.oauth2 import get_current_user
+from app.schema.token import TokenData
+import app.http_exception as http_exception
+from app.database.models.VoucharCounter import VoucherCounter
+from app.database.repositories.voucharCounterRepo import vouchar_counter_repo
+from datetime import datetime
+from uuid import uuid4
+import pytz
+
+counter_router = APIRouter()
+
+
+DEFAULT_VOUCHER_TYPES = {
+    "Sales": {"prefix": "INV-", "suffix": "", "reset_cycle": "yearly"},
+    "Purchase": {"prefix": "PUR-", "suffix": "", "reset_cycle": "yearly"},
+    "Payment": {"prefix": "PAY-", "suffix": "", "reset_cycle": "monthly"},
+    "Receipt": {"prefix": "REC-", "suffix": "", "reset_cycle": "monthly"},
+    "Journal": {"prefix": "JRN-", "suffix": "", "reset_cycle": "yearly"},
+    "Contra": {"prefix": "CON-", "suffix": "", "reset_cycle": "yearly"},
+}
+
+
+class CounterUpdateRequest(BaseModel):
+    voucher_type: str
+    financial_year: str
+    current_number: int
+    prefix: Optional[str] = ""
+    suffix: Optional[str] = ""
+    reset_cycle: Optional[str] = "yearly"
+
+
+async def initialize_voucher_counters(user_id: str, company_id: str):
+    financial_year = calculate_current_financial_year()
+
+    now = datetime.now(tz=pytz.timezone("Asia/Kolkata"))
+    counters = []
+    
+ 
+    for voucher_type, config in DEFAULT_VOUCHER_TYPES.items():
+        counter = {
+            "company_id": company_id,
+            "user_id": user_id,
+            "voucher_type": voucher_type,
+            "financial_year": financial_year,
+            "current_number": 1,
+            "prefix": config["prefix"],
+            "suffix": config["suffix"],
+            "reset_cycle": config["reset_cycle"],
+            "created_at": now,
+            "updated_at": now,
+            "last_reset": now,
+        }
+        counters.append(counter)
+        await vouchar_counter_repo.new(VoucherCounter(**counter))
+
+    return {"message": "Voucher counters initialized", "count": len(counters)}
+
+
+def calculate_current_financial_year() -> str:
+    """Returns financial year in format YYYY-YY (e.g., 2024-25)"""
+    today = datetime.today()
+    year = today.year if today.month >= 4 else today.year - 1
+    return f"{year}-{str((year + 1) % 100).zfill(2)}"
+
+
+@counter_router.put("/update", summary="Create or update a voucher counter")
+async def update_counter(
+    request: CounterUpdateRequest,
+    company_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    query = {
+        "company_id": company_id,
+        'user_id': current_user.user_id,
+        "voucher_type": request.voucher_type,
+        "financial_year": request.financial_year,
+    }
+
+    update = {
+        "$set": {
+            "current_number": request.current_number,
+            "prefix": request.prefix,
+            "suffix": request.suffix,
+            "reset_cycle": request.reset_cycle,
+            "updated_at": datetime.utcnow(),
+        },
+        "$setOnInsert": {"created_at": datetime.utcnow(), "last_reset": None},
+    }
+
+    result = await vouchar_counter_repo.update_one(query, update, upsert=True)
+
+    if result.upserted_id:
+        return {"message": "Counter created", "id": str(result.upserted_id)}
+    return {"message": "Counter updated"}
+
+
+@counter_router.post("/reset", summary="Reset counters manually")
+async def reset_counter(
+    voucher_type: str,
+    financial_year: str,
+    company_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    query = {
+        "company_id": company_id,
+        "voucher_type": voucher_type,
+        "financial_year": financial_year,
+    }
+
+    counter = await vouchar_counter_repo.findOne(query)
+
+    if not counter:
+        raise HTTPException(status_code=404, detail="Counter not found")
+
+    await vouchar_counter_repo.update_one(
+        query,
+        {
+            "$set": {
+                "current_number": 1,
+                "last_reset": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            }
+        },
+    )
+
+    return {"message": "Counter reset to 1"}

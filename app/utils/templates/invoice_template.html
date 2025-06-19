@@ -19,6 +19,7 @@
                 <table style="width: 100%; border-collapse: collapse;" cellpadding="0" cellspacing="0">
                     <tr>
                         <!-- Company Details -->
+                        {% if invoice.voucher_type == 'Purchase' %}
                         <td style="width: 50%; vertical-align: top; padding-right: 15px;">
                             <div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">{{ party.name }}
                             </div>
@@ -40,24 +41,82 @@
 
                         <!-- Invoice Details -->
                         <td style="width: 25%; vertical-align: top; text-align: left;">
-                            <div style="margin-bottom: 3px;"><strong>Invoice No.:</strong> {{ invoice.voucher_number }}
+                            <!-- <div style="margin-bottom: 3px;"><strong>Invoice No.:</strong> {{ invoice.voucher_number }} -->
                             </div>
                             <div style="margin-bottom: 8px;"><strong>Date:</strong> {{ invoice.date }}</div>
-                            <div style="font-weight: bold; margin-bottom: 3px;">{{ customer.name }}</div>
-                            {% if customer.address %}
-                            <div style="margin-bottom: 3px;">{{ customer.address }}</div>
+                            <div style="font-weight: bold; margin-bottom: 3px;">{{ company.company_name }}</div>
+                            {% if company.address_1 %}
+                            <div style="margin-bottom: 3px;">{{ company.address_1 }}</div>
                             {% endif %}
-                            {% if customer.phone.code and customer.phone.number %}
-                            <div style="margin-bottom: 3px;"><strong>Phone:</strong> {{ customer.phone.code }}&nbsp;{{
-                                customer.phone.number }}</div>
+                            {% if company.address_2 %}
+                            <div style="margin-bottom: 3px;">{{ company.address_2 }},&nbsp;{{ company.state }}</div>
                             {% endif %}
-                            {% if customer.gst_no %}
-                            <div style="margin-bottom: 3px;"><strong>GST No.:</strong> {{ customer.gst_no }}</div>
+                            {% if company.phone.code and company.phone.number %}
+                            <div style="margin-bottom: 3px;"><strong>Phone:</strong> {{ company.phone.code }}&nbsp;{{
+                                company.phone.number }}</div>
                             {% endif %}
-                            {% if customer.pan_no %}
-                            <div><strong>PAN No.:</strong> {{ customer.pan_no }}</div>
+                            {% if company.gstin %}
+                            <div style="margin-bottom: 3px;"><strong>GST No.:</strong> {{ company.gstin }}</div>
+                            {% endif %}
+                            {% if company.pan %}
+                            <div><strong>PAN No.:</strong> {{ company.pan }}</div>
                             {% endif %}
                         </td>
+                        {% endif %}
+
+                        {% if invoice.voucher_type == 'Sales' %}
+                        <td style="width: 50%; vertical-align: top; padding-right: 15px;">
+                            <div style="font-size: 18px; font-weight: bold; margin-bottom: 8px;">{{ company.company_name
+                                }}</div>
+                            {% if company.address_1 %}
+                            <div style="margin-bottom: 3px;">{{ company.address_1 }}</div>
+                            {% endif %}
+                            {% if company.address_2 %}
+                            <div style="margin-bottom: 3px;">{{ company.address_2 }},&nbsp;{{ company.state }}</div>
+                            {% endif %}
+                            <!-- {% if company.state %}
+                            <div style="margin-bottom: 3px;">{{ company.state }}</div>
+                            {% endif %} -->
+                            {% if company.phone.code and company.phone.number %}
+                            <div style="margin-bottom: 3px;"><strong>Phone:</strong> {{ company.phone.code }}&nbsp;{{
+                                company.phone.number }}</div>
+                            {% endif %}
+                            {% if company.email %}
+                            <div style="margin-bottom: 3px;"><strong>Email:</strong> {{ company.email }}</div>
+                            {% endif %}
+                            {% if company.gstin %}
+                            <div style="margin-bottom: 3px;"><strong>GST No.:</strong> {{ company.gstin }}</div>
+                            {% endif %}
+                            {% if company.pan %}
+                            <div><strong>PAN No.:</strong> {{ company.pan }}</div>
+                            {% endif %}
+
+                        </td>
+
+                        <!-- Invoice Details -->
+                        <td style="width: 25%; vertical-align: top; text-align: left;">
+                            <!-- <div style="margin-bottom: 3px;"><strong>Invoice No.:</strong> {{ invoice.voucher_number }} -->
+                            </div>
+                            <div style="margin-bottom: 8px;"><strong>Date:</strong> {{ invoice.date }}</div>
+                            <div style="font-weight: bold; margin-bottom: 3px;">{{ party.name }}
+                            </div>
+                            <div style="margin-bottom: 3px;">{{ party.address }}</div>
+                            {% if party.phone.code and party.phone.number %}
+                            <div style="margin-bottom: 3px;"><strong>Phone:</strong> {{ party.phone.code }}&nbsp;{{
+                                party.phone.number }}</div>
+                            {% endif %}
+                            {% if party.email %}
+                            <div style="margin-bottom: 3px;"><strong>Email:</strong> {{ party.email }}</div>
+                            {% endif %}
+                            {% if party.gst_no %}
+                            <div style="margin-bottom: 3px;"><strong>GST No.:</strong> {{ party.gst_no }}</div>
+                            {% endif %}
+                            {% if party.pan_no %}
+                            <div style="margin-bottom: 8px;"><strong>PAN No.:</strong> {{ party.pan_no }}</div>
+                            {% endif %}
+                        </td>
+                        {% endif %}
+
                     </tr>
                 </table>
             </td>
@@ -67,7 +126,8 @@
         <tr>
             <td
                 style="text-align: center; padding: 8px; background-color: #f2f2f2; border-bottom: 1px solid #000; font-size: 16px; font-weight: bold;">
-                {{invoice.voucher_type|default('Sales') }}&nbsp;Invoice
+                {{invoice.voucher_type|default('Sales') }}&nbsp;Invoice &nbsp;<span>&nbsp;{{
+                    invoice.voucher_number }}</span>
             </td>
         </tr>
 

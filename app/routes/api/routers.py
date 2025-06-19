@@ -12,6 +12,7 @@ from app.routes.api.v1.admin import admin as admin_endponits
 from app.routes.api.v1.stockItem import Product as product_endpoints
 from app.routes.api.v1.voucharType import VoucharType as vouchar_type_endpoints
 from app.routes.api.v1.vouchar import Vouchar as vouchar_endpoints
+from app.routes.api.v1.voucharCounter import counter_router as vouchar_counter_endpoints
 
 # from app.routes.api.v1.cloudinary import Cloudinary as cloudinary_endpoints
 from app.routes.api.v1.category import category_router as category_endpoints
@@ -56,6 +57,12 @@ routers.include_router(
     vouchar_endpoints,
     prefix=ENV_PROJECT.BASE_API_V1 + "/user",
     tags=["Vouchars"],
+)
+
+routers.include_router(
+    vouchar_counter_endpoints,
+    prefix=ENV_PROJECT.BASE_API_V1 + "/user/vouchar_counter",
+    tags=["Vouchar Counter"],
 )
 
 routers.include_router(

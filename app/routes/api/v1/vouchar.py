@@ -217,6 +217,98 @@ async def print_invoice(
         raise http_exception.CredentialsInvalidException()
 
     # Fetch invoice/voucher details
+    # invoice_data = await vouchar_repo.collection.aggregate(
+    #     [
+    #         {
+    #             "$match": {
+    #                 "_id": "3a0353cd-e155-4308-b30b-c7928b892e9f",
+    #                 "company_id": "99d0f876-2018-45cd-abf8-076eb5ad3518",
+    #                 "user_id": "c93acd00-6b1b-48e5-965d-41216f8fd641",
+    #             }
+    #         },
+    #         {
+    #             "$lookup": {
+    #                 "from": "Accounting",
+    #                 "localField": "_id",
+    #                 "foreignField": "vouchar_id",
+    #                 "as": "accounting",
+    #             }
+    #         },
+    #         {"$unwind": {"path": "$accounting", "preserveNullAndEmptyArrays": True}},
+    #         {
+    #             "$lookup": {
+    #                 "from": "Inventory",
+    #                 "localField": "_id",
+    #                 "foreignField": "vouchar_id",
+    #                 "as": "inventory",
+    #             }
+    #         },
+    #         {
+    #             "$lookup": {
+    #                 "from": "Ledger",
+    #                 "localField": "party_name",
+    #                 "foreignField": "ledger_name",
+    #                 "as": "party_details",
+    #             }
+    #         },
+    #         {
+    #             "$addFields": {
+    #                 "do_ledger_lookup": {"$ne": ["$accounting.ledger", "$party_name"]}
+    #             }
+    #         },
+    #         {
+    #             "$lookup": {
+    #                 "from": "Ledger",
+    #                 "let": {
+    #                     "customer_name": "$accounting.ledger",
+    #                     "do_lookup": "$do_ledger_lookup",
+    #                 },
+    #                 "pipeline": [
+    #                     {
+    #                         "$match": {
+    #                             "$expr": {
+    #                                 "$and": [
+    #                                     {"$eq": ["$ledger_name", "$$customer_name"]},
+    #                                     {"$eq": ["$$do_lookup", True]},
+    #                                 ]
+    #                             }
+    #                         }
+    #                     }
+    #                 ],
+    #                 "as": "customer",
+    #             }
+    #         },
+    #         {"$unwind": {"path": "$customer"}},
+    #         {"$unwind": {"path": "$party_details"}},
+    #         {"$unwind": {"path": "$accounting"}},
+    #         {
+    #             "$group": {
+    #                 "_id": "$_id",
+    #                 "company_id": {"$first": "$company_id"},
+    #                 "user_id": {"$first": "$user_id"},
+    #                 "date": {"$first": "$date"},
+    #                 "voucher_number": {"$first": "$voucher_number"},
+    #                 "voucher_type": {"$first": "$voucher_type"},
+    #                 "narration": {"$first": "$narration"},
+    #                 "party_name": {"$first": "$party_name"},
+    #                 "reference_date": {"$first": "$reference_date"},
+    #                 "reference_number": {"$first": "$reference_number"},
+    #                 "place_of_supply": {"$first": "$place_of_supply"},
+    #                 "is_invoice": {"$first": "$is_invoice"},
+    #                 "is_accounting_voucher": {"$first": "$is_accounting_voucher"},
+    #                 "is_inventory_voucher": {"$first": "$is_inventory_voucher"},
+    #                 "is_order_voucher": {"$first": "$is_order_voucher"},
+    #                 "created_at": {"$first": "$created_at"},
+    #                 "updated_at": {"$first": "$updated_at"},
+    #                 "party_details": {"$first": "$party_details"},
+    #                 "accounting": {"$first": "$accounting"},
+    #                 "customer": {"$first": "$customer"},
+    #                 "inventory": {"$first": "$inventory"},
+    #             }
+    #         },
+    #     ]
+    # ).to_list(length=1)
+
     invoice_data = await vouchar_repo.collection.aggregate(
         [
             {
@@ -226,14 +318,24 @@ async def print_invoice(
                     "user_id": current_user.user_id,
                 }
             },
+            # Attach all accounting entries
+            {
+                "$lookup": {
+                    "from": "Company",
+                    "localField": "company_id",
+                    "foreignField": "_id",
+                    "as": "company",
+                }
+            },
             {
                 "$lookup": {
                     "from": "Accounting",
                     "localField": "_id",
                     "foreignField": "vouchar_id",
-                    "as": "accounting",
+                    "as": "accounting_entries",
                 }
             },
+            # Attach inventory
             {
                 "$lookup": {
                     "from": "Inventory",
@@ -242,6 +344,7 @@ async def print_invoice(
                     "as": "inventory",
                 }
             },
+            # Attach party ledger details
             {
                 "$lookup": {
                     "from": "Ledger",
@@ -250,75 +353,40 @@ async def print_invoice(
                     "as": "party_details",
                 }
             },
+            {"$unwind": {"path": "$company", "preserveNullAndEmptyArrays": True}},
             {"$unwind": {"path": "$party_details", "preserveNullAndEmptyArrays": True}},
-            {"$unwind": {"path": "$accounting", "preserveNullAndEmptyArrays": True}},
+            # Pick the first non-party accounting record as "accounting"
             {
                 "$addFields": {
-                    "do_ledger_lookup": {"$ne": ["$accounting.ledger", "$party_name"]}
+                    "accounting": {
+                        "$first": {
+                            "$filter": {
+                                "input": "$accounting_entries",
+                                "as": "acc",
+                                "cond": {"$ne": ["$$acc.ledger", "$party_name"]},
+                            }
+                        }
+                    }
                 }
             },
+            # Lookup the customer (i.e., ledger of the accounting entry)
             {
                 "$lookup": {
                     "from": "Ledger",
-                    "let": {
-                        "customer_name": "$accounting.ledger",
-                        "do_lookup": "$do_ledger_lookup",
-                    },
+                    "let": {"ledger_name": "$accounting.ledger"},
                     "pipeline": [
-                        {
-                            "$match": {
-                                "$expr": {
-                                    "$and": [
-                                        {"$eq": ["$ledger_name", "$$customer_name"]},
-                                        {"$eq": ["$$do_lookup", True]},
-                                    ]
-                                }
-                            }
-                        }
+                        {"$match": {"$expr": {"$eq": ["$ledger_name", "$$ledger_name"]}}}
                     ],
-                    "as": "accounting.ledger_details",
+                    "as": "customer",
                 }
             },
-            {
-                "$unwind": {
-                    "path": "$accounting.ledger_details",
-                    "preserveNullAndEmptyArrays": True,
-                }
-            },
-            {
-                "$unwind": {
-                    "path": "$accounting",
-                    "preserveNullAndEmptyArrays": True,
-                }
-            },
-            {
-                "$group": {
-                    "_id": "$_id",
-                    "company_id": {"$first": "$company_id"},
-                    "user_id": {"$first": "$user_id"},
-                    "date": {"$first": "$date"},
-                    "voucher_number": {"$first": "$voucher_number"},
-                    "voucher_type": {"$first": "$voucher_type"},
-                    "narration": {"$first": "$narration"},
-                    "party_name": {"$first": "$party_name"},
-                    "reference_date": {"$first": "$reference_date"},
-                    "reference_number": {"$first": "$reference_number"},
-                    "place_of_supply": {"$first": "$place_of_supply"},
-                    "is_invoice": {"$first": "$is_invoice"},
-                    "is_accounting_voucher": {"$first": "$is_accounting_voucher"},
-                    "is_inventory_voucher": {"$first": "$is_inventory_voucher"},
-                    "is_order_voucher": {"$first": "$is_order_voucher"},
-                    "created_at": {"$first": "$created_at"},
-                    "updated_at": {"$first": "$updated_at"},
-                    "party_details": {"$first": "$party_details"},
-                    "accounting": {"$first": "$accounting"},
-                    "inventory": {"$first": "$inventory"},
-                }
-            },
+            {"$unwind": {"path": "$customer", "preserveNullAndEmptyArrays": True}},
+            # Final clean-up: remove temp accounting_entries
+            {"$project": {"accounting_entries": 0}},
         ]
     ).to_list(length=1)
 
-    print("Fetched invoice data:", invoice_data)
+    # print("Fetched invoice data:", invoice_data)
 
     if not invoice_data:
         raise http_exception.ResourceNotFoundException()
@@ -327,18 +395,15 @@ async def print_invoice(
 
     # Simulate customer info from the ledger party for this template
     customer = {
-        "name": invoice.get("accounting", {})
-        .get("ledger_details", {})
-        .get("ledger_name", ""),
-        "address": invoice.get("accounting", {})
-        .get("ledger_details", {})
-        .get("mailing_address", ""),
-        "phone": invoice.get("accounting", {}).get("ledger_details", {}).get("phone", ""),
+        "name": invoice.get("customer", {}).get("ledger_name", ""),
+        "address": invoice.get("customer", {}).get("mailing_address", ""),
+        "phone": invoice.get("customer", {}).get("phone", ""),
         "gst_no": "08ABIPJ1392D1ZT",
-        # "gst_no": invoice.get("accounting", {}).get("ledger_details", {}).get("gst_no", ""),
+        # "gst_no": invoice.get("customer", {}).get("gst_no", ""),
         "pan_no": "08ABIPJ1392D1ZT",
-        # "pan_no": invoice.get("accounting", {}).get("ledger_details", {}).get("pan_no", ""),
+        # "pan_no": invoice.get("customer", {}).get("pan_no", ""),
     }
+    
 
     # Prepare item rows
     items = []
@@ -372,20 +437,19 @@ async def print_invoice(
             "address": invoice.get("party_details", {}).get("mailing_address", ""),
             "phone": invoice.get("party_details", {}).get("phone", ""),
             "email": invoice.get("party_details", {}).get("email", ""),
-            "gst_no": "08ABIPJ1392D1ZT",
-            # invoice.get("party_details", {}).get("gst_no", ""),
-            "pan_no": "08ABIPJ1392D1ZT",
-            # invoice.get("party_details", {}).get("pan_no", ""),
+            "gst_no":  invoice.get("party_details", {}).get("gst_no", "") or "",
+            "pan_no": invoice.get("party_details", {}).get("pan_no", "") or "",
             # "bank_details": invoice.get("party_details", {}).get("bank_name", ""),
             # "account_no": invoice.get("party_details", {}).get("bank_account_no", ""),
             # "ifsc": invoice.get("party_details", {}).get("bank_ifsc", ""),
             "bank_name": "HDFC BANK",
-            "bank_branch": "BRANCH CHETAK",
+            "bank_branch": "BRANCH CHETAK", 
             "account_no": "01198430000036",
             "ifsc": "HDFC0000119",
         },
         "customer": customer,
-        "company": {"motto": "LIFE'S A JOURNEY, KEEP SMILING"},
+        "company": invoice.get("company", {}),
+        "company.motto": "LIFE'S A JOURNEY, KEEP SMILING",
     }
 
     # print("Template variables prepared:", template_vars)
@@ -426,14 +490,16 @@ async def print_invoice(
                     "user_id": current_user.user_id,
                 }
             },
+            # Attach all accounting entries
             {
                 "$lookup": {
                     "from": "Accounting",
                     "localField": "_id",
                     "foreignField": "vouchar_id",
-                    "as": "accounting",
+                    "as": "accounting_entries",
                 }
             },
+            # Attach inventory
             {
                 "$lookup": {
                     "from": "Inventory",
@@ -442,81 +508,44 @@ async def print_invoice(
                     "as": "inventory",
                 }
             },
+            # Attach party ledger details
             {
                 "$lookup": {
                     "from": "Ledger",
                     "localField": "party_name",
-                    "foreignField": "name",
+                    "foreignField": "ledger_name",
                     "as": "party_details",
                 }
             },
             {"$unwind": {"path": "$party_details", "preserveNullAndEmptyArrays": True}},
-            # Unwind accounting for further processing
-            {"$unwind": {"path": "$accounting", "preserveNullAndEmptyArrays": True}},
-            # Only do the ledger lookup if accounting.ledger != party_name
+            # Pick the first non-party accounting record as "accounting"
             {
                 "$addFields": {
-                    "do_ledger_lookup": {"$ne": ["$accounting.ledger", "$party_name"]}
+                    "accounting": {
+                        "$first": {
+                            "$filter": {
+                                "input": "$accounting_entries",
+                                "as": "acc",
+                                "cond": {"$ne": ["$$acc.ledger", "$party_name"]},
+                            }
+                        }
+                    }
                 }
             },
+            # Lookup the customer (i.e., ledger of the accounting entry)
             {
                 "$lookup": {
                     "from": "Ledger",
-                    "let": {
-                        "ledger_name": "$accounting.ledger",
-                        "do_lookup": "$do_ledger_lookup",
-                    },
+                    "let": {"ledger_name": "$accounting.ledger"},
                     "pipeline": [
-                        {
-                            "$match": {
-                                "$expr": {
-                                    "$and": [
-                                        {"$eq": ["$name", "$$ledger_name"]},
-                                        {"$eq": ["$$do_lookup", True]},
-                                    ]
-                                }
-                            }
-                        }
+                        {"$match": {"$expr": {"$eq": ["$ledger_name", "$$ledger_name"]}}}
                     ],
-                    "as": "accounting.ledger_details",
+                    "as": "customer",
                 }
             },
-            {
-                "$unwind": {
-                    "path": "$accounting.ledger_details",
-                    "preserveNullAndEmptyArrays": True,
-                }
-            },
-            {
-                "$unwind": {
-                    "path": "$accounting",
-                    "preserveNullAndEmptyArrays": True,
-                }
-            },
-            {
-                "$group": {
-                    "_id": "$_id",
-                    "company_id": {"$first": "$company_id"},
-                    "user_id": {"$first": "$user_id"},
-                    "date": {"$first": "$date"},
-                    "voucher_number": {"$first": "$voucher_number"},
-                    "voucher_type": {"$first": "$voucher_type"},
-                    "narration": {"$first": "$narration"},
-                    "party_name": {"$first": "$party_name"},
-                    "reference_date": {"$first": "$reference_date"},
-                    "reference_number": {"$first": "$reference_number"},
-                    "place_of_supply": {"$first": "$place_of_supply"},
-                    "is_invoice": {"$first": "$is_invoice"},
-                    "is_accounting_voucher": {"$first": "$is_accounting_voucher"},
-                    "is_inventory_voucher": {"$first": "$is_inventory_voucher"},
-                    "is_order_voucher": {"$first": "$is_order_voucher"},
-                    "created_at": {"$first": "$created_at"},
-                    "updated_at": {"$first": "$updated_at"},
-                    "party_details": {"$first": "$party_details"},
-                    "accounting": {"$first": "$accounting"},
-                    "inventory": {"$first": "$inventory"},
-                }
-            },
+            {"$unwind": {"path": "$customer", "preserveNullAndEmptyArrays": True}},
+            # Final clean-up: remove temp accounting_entries
+            {"$project": {"accounting_entries": 0}},
         ]
     ).to_list(length=1)
 
@@ -559,9 +588,7 @@ async def print_invoice(
             "amount": total,
             "amount_words": total_words,
             "email": invoice.get("party_details", {}).get("email", ""),
-            "customer": invoice.get("accounting", {})
-            .get("ledger_details", {})
-            .get("name", ""),
+            "customer": invoice.get("customer", {}).get("ledger_name", ""),
             "company": {"motto": "LIFE'S A JOURNEY, KEEP SMILING"},
         },
     }
@@ -604,12 +631,13 @@ async def print_invoice(
                     "user_id": current_user.user_id,
                 }
             },
+            # Attach all accounting entries
             {
                 "$lookup": {
                     "from": "Accounting",
                     "localField": "_id",
                     "foreignField": "vouchar_id",
-                    "as": "accounting",
+                    "as": "accounting_entries",
                 }
             },
             {
@@ -620,80 +648,54 @@ async def print_invoice(
                     "as": "company",
                 }
             },
+            # Attach inventory
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "localField": "_id",
+                    "foreignField": "vouchar_id",
+                    "as": "inventory",
+                }
+            },
+            # Attach party ledger details
             {
                 "$lookup": {
                     "from": "Ledger",
                     "localField": "party_name",
-                    "foreignField": "name",
+                    "foreignField": "ledger_name",
                     "as": "party_details",
                 }
             },
             {"$unwind": {"path": "$party_details", "preserveNullAndEmptyArrays": True}},
-            {"$unwind": {"path": "$accounting", "preserveNullAndEmptyArrays": True}},
             {"$unwind": {"path": "$company", "preserveNullAndEmptyArrays": True}},
+            # Pick the first non-party accounting record as "accounting"
             {
                 "$addFields": {
-                    "do_ledger_lookup": {"$ne": ["$accounting.ledger", "$party_name"]}
+                    "accounting": {
+                        "$first": {
+                            "$filter": {
+                                "input": "$accounting_entries",
+                                "as": "acc",
+                                "cond": {"$ne": ["$$acc.ledger", "$party_name"]},
+                            }
+                        }
+                    }
                 }
             },
+            # Lookup the customer (i.e., ledger of the accounting entry)
             {
                 "$lookup": {
                     "from": "Ledger",
-                    "let": {
-                        "ledger_name": "$accounting.ledger",
-                        "do_lookup": "$do_ledger_lookup",
-                    },
+                    "let": {"ledger_name": "$accounting.ledger"},
                     "pipeline": [
-                        {
-                            "$match": {
-                                "$expr": {
-                                    "$and": [
-                                        {"$eq": ["$name", "$$ledger_name"]},
-                                        {"$eq": ["$$do_lookup", True]},
-                                    ]
-                                }
-                            }
-                        }
+                        {"$match": {"$expr": {"$eq": ["$ledger_name", "$$ledger_name"]}}}
                     ],
-                    "as": "accounting.ledger_details",
+                    "as": "customer",
                 }
             },
-            {
-                "$unwind": {
-                    "path": "$accounting.ledger_details",
-                    "preserveNullAndEmptyArrays": True,
-                }
-            },
-            {
-                "$unwind": {
-                    "path": "$accounting",
-                    "preserveNullAndEmptyArrays": True,
-                }
-            },
-            {
-                "$group": {
-                    "_id": "$_id",
-                    "company_id": {"$first": "$company_id"},
-                    "user_id": {"$first": "$user_id"},
-                    "date": {"$first": "$date"},
-                    "voucher_number": {"$first": "$voucher_number"},
-                    "voucher_type": {"$first": "$voucher_type"},
-                    "narration": {"$first": "$narration"},
-                    "party_name": {"$first": "$party_name"},
-                    "reference_date": {"$first": "$reference_date"},
-                    "reference_number": {"$first": "$reference_number"},
-                    "place_of_supply": {"$first": "$place_of_supply"},
-                    "is_invoice": {"$first": "$is_invoice"},
-                    "is_accounting_voucher": {"$first": "$is_accounting_voucher"},
-                    "is_inventory_voucher": {"$first": "$is_inventory_voucher"},
-                    "is_order_voucher": {"$first": "$is_order_voucher"},
-                    "created_at": {"$first": "$created_at"},
-                    "updated_at": {"$first": "$updated_at"},
-                    "party_details": {"$first": "$party_details"},
-                    "accounting": {"$first": "$accounting"},
-                    "company": {"$first": "$company"},
-                }
-            },
+            {"$unwind": {"path": "$customer", "preserveNullAndEmptyArrays": True}},
+            # Final clean-up: remove temp accounting_entries
+            {"$project": {"accounting_entries": 0}},
         ]
     ).to_list(length=1)
 
@@ -743,9 +745,7 @@ async def print_invoice(
             "amount": total,
             "amount_words": total_words,
             "email": invoice.get("party_details", {}).get("email", ""),
-            "customer": invoice.get("accounting", {})
-            .get("ledger_details", {})
-            .get("name", ""),
+            "customer": invoice.get("customer", {}).get("ledger_name", ""),
             "company_name": invoice.get("company", {}).get("name", ""),
             "year_start": year_val,
             "year_end": str(int(year_val) + 1),
@@ -774,98 +774,98 @@ async def print_invoice(
     }
 
 
-# @Vouchar.get(
-#     "/print/vouchar{vouchar_id}",
-#     response_class=ORJSONResponse,
-#     status_code=status.HTTP_200_OK,
-# )
-# async def view_all_vouchar(
-#     vouchar_id: str = Query(...),
-#     company_id: str = Query(...),
-#     current_user: TokenData = Depends(get_current_user),
-# ):
-#     if current_user.user_type != "user" and current_user.user_type != "admin":
-#         raise http_exception.CredentialsInvalidException()
+@Vouchar.get(
+    "/vouchar/{vouchar_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_vouchar(
+    vouchar_id: str,
+    company_id: str = Query(...),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
 
-#     result = await stock_item_repo.collection.aggregate(
-#         [
-#             {
-#                 "$match": {
-#                     "_id": vouchar_id,
-#                     "company_id": company_id,
-#                     "user_id": current_user.user_id,
-#                     "is_deleted": False,
-#                 }
-#             },
-#             {
-#                 "$lookup": {
-#                     "from": "Ledger",
-#                     "localField": "party_name",
-#                     "foreignField": "name",
-#                     "as": "party",
-#                 }
-#             },
-#             {"$unwind": {"path": "$party", "preserveNullAndEmptyArrays": True}},
-#             {
-#                 "$lookup": {
-#                     "from": "Accounting",
-#                     "localField": "_id",
-#                     "foreignField": "vouchar_id",
-#                     "as": "accounting",
-#                 }
-#             },
-#             {
-#                 "$lookup": {
-#                     "from": "Inventory",
-#                     "localField": "_id",
-#                     "foreignField": "vouchar_id",
-#                     "as": "inventory",
-#                 }
-#             },
-#             {
-#                 "$addFields": {
-#                     "ledger_entries": {
-#                         "$map": {
-#                             "input": {
-#                                 "$filter": {
-#                                     "input": "$accounting",
-#                                     "as": "entry",
-#                                     "cond": {"$eq": ["$$entry.ledger", "$party_name"]},
-#                                 }
-#                             },
-#                             "as": "entry",
-#                             "in": {
-#                                 "ledgername": "$$entry.ledger",
-#                                 "amount": "$$entry.amount",
-#                                 "is_deemed_positive": {
-#                                     "$cond": [{"$lt": ["$$entry.amount", 0]}, True, False]
-#                                 },
-#                                 "amount_absolute": {"$abs": "$$entry.amount"},
-#                             },
-#                         }
-#                     }
-#                 }
-#             },
-#             {"$unwind": {"path": "$ledger_entries", "preserveNullAndEmptyArrays": True}},
-#             {
-#                 "$project": {
-#                     "_id": 1,
-#                     "date": 1,
-#                     "voucher_number": 1,
-#                     "voucher_type": 1,
-#                     "_voucher_type": 1,
-#                     "party_name": 1,
-#                     "_party_name": 1,
-#                     "narration": 1,
-#                     # "amount": "$ledger_entries.amount",
-#                     "balance_type": 1,
-#                     # "ledger_name": "$ledger_entries.ledgername',",
-#                     # "is_deemed_positive": "$ledger_entries.is_deemed_positive",
-#                     "ledger_entries": 1,
-#                     "created_at": 1,
-#                 }
-#             },
-#         ]
-#     ).to_list(None)
+    result = await stock_item_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "_id": vouchar_id,
+                    "company_id": company_id,
+                    "user_id": current_user.user_id,
+                    "is_deleted": False,
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Ledger",
+                    "localField": "party_name",
+                    "foreignField": "name",
+                    "as": "party",
+                }
+            },
+            {"$unwind": {"path": "$party", "preserveNullAndEmptyArrays": True}},
+            {
+                "$lookup": {
+                    "from": "Accounting",
+                    "localField": "_id",
+                    "foreignField": "vouchar_id",
+                    "as": "accounting",
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "localField": "_id",
+                    "foreignField": "vouchar_id",
+                    "as": "inventory",
+                }
+            },
+            {
+                "$addFields": {
+                    "ledger_entries": {
+                        "$map": {
+                            "input": {
+                                "$filter": {
+                                    "input": "$accounting",
+                                    "as": "entry",
+                                    "cond": {"$eq": ["$$entry.ledger", "$party_name"]},
+                                }
+                            },
+                            "as": "entry",
+                            "in": {
+                                "ledgername": "$$entry.ledger",
+                                "amount": "$$entry.amount",
+                                "is_deemed_positive": {
+                                    "$cond": [{"$lt": ["$$entry.amount", 0]}, True, False]
+                                },
+                                "amount_absolute": {"$abs": "$$entry.amount"},
+                            },
+                        }
+                    }
+                }
+            },
+            {"$unwind": {"path": "$ledger_entries", "preserveNullAndEmptyArrays": True}},
+            {
+                "$project": {
+                    "_id": 1,
+                    "date": 1,
+                    "voucher_number": 1,
+                    "voucher_type": 1,
+                    "_voucher_type": 1,
+                    "party_name": 1,
+                    "_party_name": 1,
+                    "narration": 1,
+                    # "amount": "$ledger_entries.amount",
+                    "balance_type": 1,
+                    # "ledger_name": "$ledger_entries.ledgername',",
+                    # "is_deemed_positive": "$ledger_entries.is_deemed_positive",
+                    "ledger_entries": 1,
+                    "created_at": 1,
+                }
+            },
+        ]
+    ).to_list(None)
 
-#     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+    return {"success": True, "message": "Data Fetched Successfully...", "data": result}

@@ -39,7 +39,7 @@ inventory_group_router = APIRouter()
     status_code=status.HTTP_200_OK,
 )
 async def createGroup(
-    name: str = Form(...),  # Name of the group
+    inventory_group_name: str = Form(...),  # Name of the group
     company_id: str = Form(...),  # Company ID to which the group belongs
     description: Optional[str] = Form(None),  # Description of the group
     image: UploadFile = File(None),  # Optional image for the group
@@ -71,7 +71,7 @@ async def createGroup(
         image_url = upload_result["url"]
 
     group_data = {
-        "inventory_group_name": name,
+        "inventory_group_name": inventory_group_name,
         "user_id": current_user.user_id,
         "company_id": company_id,
         "parent": parent,

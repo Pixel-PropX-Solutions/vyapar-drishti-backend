@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import (
     APIRouter,
     Depends,
@@ -10,10 +11,13 @@ from app.database.repositories.user import user_repo
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel
 import app.http_exception as http_exception
+from app.routes.api.v1.voucharCounter import initialize_voucher_counters
+from app.routes.api.v1.companySettings import initialize_company_settings
 from app.schema.token import TokenData
 import app.http_exception as http_exception
 from app.oauth2 import get_current_user
 from app.schema.token import TokenData
+from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.utils.cloudinary_client import cloudinary_client
 from app.database.repositories.companyRepo import company_repo, Company
 from typing import Optional
@@ -161,8 +165,24 @@ async def createCompany(
         "pinCode": pinCode,
         "state": state,
         "country": country,
-        "financial_year_start": financial_year_start,
-        "books_begin_from": books_begin_from,
+        "financial_year_start": (
+            financial_year_start
+            if financial_year_start
+            else (
+                datetime.today().year
+                if datetime.today().month >= 4
+                else datetime.today().year - 1
+            )
+        ),
+        "books_begin_from": (
+            books_begin_from
+            if books_begin_from
+            else (
+                datetime.today().year
+                if datetime.today().month >= 4
+                else datetime.today().year - 1
+            )
+        ),
         "is_deleted": False,
     }
 
@@ -171,6 +191,40 @@ async def createCompany(
     if not response:
         raise http_exception.ResourceAlreadyExistsException(
             detail="Company Already Exists. Please try with different company name."
+        )
+    # print("Company Created Successfully", response)
+    if response:
+        await initialize_voucher_counters(
+            user_id=current_user.user_id, company_id=response.company_id
+        )
+        await initialize_company_settings(
+            user_id=current_user.user_id,
+            company_id=response.company_id,
+            config={
+                "company_name": name,
+                "country": country,
+                "state": state,
+                "enable_gst": bool(gstin),
+                "enable_inventory": True,
+                "currency": "INR",
+                "financial_year": (
+                    books_begin_from
+                    if books_begin_from
+                    else (
+                        datetime.today().year
+                        if datetime.today().month >= 4
+                        else datetime.today().year - 1
+                    )
+                ),
+                "gstin": gstin,
+                "gst_registration_type": "Regular",  # Default or can be passed
+                "place_of_supply": state,  # Default or can be passed
+            },
+        )
+        
+        await user_settings_repo.update_one(
+            {"user_id": current_user.user_id},
+            {"$set": {"current_company_id": response.company_id}},
         )
 
     return {"success": True, "message": "Company Created Successfully"}
@@ -448,10 +502,10 @@ async def updateCurrentCompany(
     companyExists = await company_repo.findOne(
         {"_id": company_id, "user_id": current_user.user_id, "is_deleted": False},
     )
-    
+
     if companyExists is None:
         raise http_exception.ResourceNotFoundException()
-    
+
     await company_repo.update_many(
         {"user_id": current_user.user_id, "is_deleted": False},
         {"$set": {"is_selected": False}},
