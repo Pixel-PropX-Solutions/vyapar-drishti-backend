@@ -9,12 +9,10 @@ from typing import Optional
 
 
 class Accounting(BaseModel):
-    vouchar_id: Optional[str] = ""  # Foreign key to trn_voucher._id
+    vouchar_id: str  # Foreign key to trn_voucher._id
     ledger: str = Field(..., description="Name of the ledger account used")
-    ledger_id: Optional[str] = Field(
-        default=None, description="Internal reference or GUID for the ledger"
-    )
-    amount: float = Field(..., description="Amount debited or credited, negative for credit and positive for debit")
+    ledger_id: str = Field(..., description="Internal reference or GUID for the ledger")
+    amount: float = Field(..., description="Amount debited or credited")
 
 
 # Database Schema
@@ -29,9 +27,7 @@ class AccountingDB(Accounting):
 
 
 class AccountingCreate(BaseModel):
-    vouchar_id: str = ""  
+    vouchar_id: str
     ledger: str = Field(..., description="Name of the ledger account used")
-    ledger_id: Optional[str] = Field(
-        default=None, description="Internal reference or GUID for the ledger"
-    )
+    ledger_id: str = Field(..., description="Internal reference or GUID for the ledger")
     amount: float = Field(..., description="Amount debited or credited")

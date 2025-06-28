@@ -93,7 +93,7 @@ class InventoryGroupRepo(BaseMongoDbCrud[InventoryGroupDB]):
                         "description": 1,
                         "is_deleted": 1,
                         "parent": 1,
-                        "_parent": 1,
+                        "parent_id": 1,
                         "gst_nature_of_goods": 1,
                         "gst_hsn_code": 1,
                         "gst_taxability": 1,

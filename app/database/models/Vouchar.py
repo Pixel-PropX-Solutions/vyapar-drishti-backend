@@ -11,12 +11,12 @@ class Voucher(BaseModel):
     date: str
     voucher_number: str = ""
     voucher_type: str = ""
-    _voucher_type: str = ""
+    voucher_type_id: str = ""
     narration: str = ""
     party_name: str = (
         ""  # This is the name or id of the party( Ledger ) involved in the voucher
     )
-    _party_name: str = (
+    party_name_id: str = (
         ""  # This is the name or id of the party( Ledger ) involved in the voucher
     )
 
@@ -52,10 +52,10 @@ class VoucherCreate(BaseModel):
     company_id: str
     date: str
     voucher_type: str
-    _voucher_type: str
+    voucher_type_id: str
     voucher_number: str
     party_name: str
-    _party_name: str
+    party_name_id: str
     narration: Optional[str] = ""
     reference_number: Optional[str] = None
     reference_date: Optional[str] = None

@@ -13,15 +13,15 @@ class StockItem(BaseModel):
     user_id: str
     company_id: str
     unit: str
-    _unit: str
+    unit_id: str
     is_deleted: bool = False
 
     # optional fields
     alias_name: Optional[str] = ""
     category: Optional[str] = ""
-    _category: Optional[str] = ""
+    category_id: Optional[str] = ""
     group: Optional[str] = ""
-    _group: Optional[str] = ""
+    group_id: Optional[str] = ""
     image: Optional[str] = ""
     description: Optional[str] = ""
 
@@ -55,15 +55,15 @@ class StockItemCreate(BaseModel):
     user_id: str
     company_id: str
     unit: str
-    _unit: str
+    unit_id: str
     is_deleted: bool = False
 
     # optional fields
     alias_name: Optional[str] = ""
     category: Optional[str] = ""
-    _category: Optional[str] = ""
+    category_id: Optional[str] = ""
     group: Optional[str] = ""
-    _group: Optional[str] = ""
+    group_id: Optional[str] = ""
     image: Optional[str] = ""
     description: Optional[str] = ""
 

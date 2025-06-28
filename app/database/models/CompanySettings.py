@@ -16,10 +16,19 @@ class GSTDetails(BaseModel):
 #     deductor_type: Optional[str] = None  # e.g., Company, Individual
 #     default_nature_of_payment: Optional[str] = None
 #     tds_threshold_limit: Optional[float] = None
+    
+class BankDetails(BaseModel):
+    account_holder: Optional[str] = None
+    account_number: Optional[str] = None
+    bank_ifsc: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_branch: Optional[str] = None
+    qr_code_url: Optional[str] = None
 
 
 class FeatureFlags(BaseModel):
     enable_gst: bool = False
+    item_wise_gst: bool = False
     # enable_tds: bool = False
     # enable_vat: bool = False
     # enable_payroll: bool = False
@@ -52,6 +61,7 @@ class CompanySettings(BaseModel):
     country: str = "India"
     state: str
     currency: str = "INR"
+    motto: Optional[str] = 'LIFE\'S A JOURNEY, KEEP SMILING'
 
     # Financial Year Format
     financial_year_format: FinancialYearFormat = Field(default_factory=FinancialYearFormat)
@@ -62,6 +72,7 @@ class CompanySettings(BaseModel):
     # Tax configuration
     gst_details: Optional[GSTDetails] = Field(default_factory=GSTDetails)
     # tds_details: Optional[TDSDetails] = Field(default_factory=TDSDetails)
+    bank_details: Optional[BankDetails] = Field(default_factory=BankDetails)
 
     # Audit/versioning
     # version: int = 1

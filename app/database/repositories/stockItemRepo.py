@@ -96,8 +96,8 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {
                 "$lookup": {
                     "from": "Group",
-                    "localField": "group",
-                    "foreignField": "inventory_group_name",
+                    "localField": "group_id",
+                    "foreignField": "_id",
                     "as": "group",
                 }
             },
@@ -105,8 +105,8 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "name",
-                    "foreignField": "item",
+                    "localField": "_id",
+                    "foreignField": "item_id",
                     "as": "inventory_entries",
                 }
             },

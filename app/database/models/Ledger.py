@@ -10,7 +10,7 @@ class Ledger(BaseModel):
     company_id: str
     user_id: str
     parent: str # Group under which the ledger falls (e.g., "Sales Accounts")
-    _parent: Optional[str] = None  # This is the name or id of the parent Ledger for internal reference
+    parent_id: Optional[str] = None  # This is the name or id of the parent Ledger for internal reference
     alias: Optional[str] = None
     is_revenue: Optional[bool] = False
     is_deemed_positive: Optional[bool] = False # Indicates and Controls Debit/Credit nature
@@ -31,20 +31,20 @@ class Ledger(BaseModel):
     phone: Optional[PhoneNumber] = None 
 
     # Optional tax details
-    # it_pan: Optional[str] = None
-    # gstn: Optional[str] = None
-    # gst_registration_type: Optional[str] = None
-    # gst_supply_type: Optional[str] = None
+    it_pan: Optional[str] = None
+    gstin: Optional[str] = None
+    gst_registration_type: Optional[str] = None
+    gst_supply_type: Optional[str] = None
     # gst_duty_head: Optional[str] = None
     # tax_rate: Optional[float] = 0.0
 
     # # Optional bank details
-    # account_holder: Optional[str] = None
-    # account_number: Optional[str] = None
-    # bank_ifsc: Optional[str] = None
+    account_holder: Optional[str] = None
+    account_number: Optional[str] = None
+    bank_ifsc: Optional[str] = None
     # bank_swift: Optional[str] = None
-    # bank_name: Optional[str] = None
-    # bank_branch: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_branch: Optional[str] = None
 
 
 class LedgerDB(Ledger):
@@ -62,7 +62,7 @@ class LedgerCreate(BaseModel):
     company_id: str
     user_id: str
     parent: str # Group under which the ledger falls (e.g., "Sales Accounts")
-    _parent: Optional[str] = None  # This is the name or id of the parent Ledger for internal reference
+    parent_id: Optional[str] = None  # This is the name or id of the parent Ledger for internal reference
     alias: Optional[str] = None
     is_revenue: Optional[bool] = False
     is_deemed_positive: Optional[bool] = False 
@@ -77,17 +77,17 @@ class LedgerCreate(BaseModel):
     email: Optional[str] = None
 
     # # Optional tax details
-    # it_pan: Optional[str] = None
-    # gstn: Optional[str] = None
-    # gst_registration_type: Optional[str] = None
-    # gst_supply_type: Optional[str] = None
+    it_pan: Optional[str] = None
+    gstin: Optional[str] = None
+    gst_registration_type: Optional[str] = None
+    gst_supply_type: Optional[str] = None
     # gst_duty_head: Optional[str] = None
     # tax_rate: Optional[float] = 0.0
 
     # # Optional bank details
-    # bank_account_holder: Optional[str] = None
-    # bank_account_number: Optional[str] = None
-    # bank_ifsc: Optional[str] = None
+    bank_account_holder: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_ifsc: Optional[str] = None
     # bank_swift: Optional[str] = None
-    # bank_name: Optional[str] = None
-    # bank_branch: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_branch: Optional[str] = None

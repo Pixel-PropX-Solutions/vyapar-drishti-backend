@@ -5,7 +5,6 @@ from app.Config import ENV_PROJECT
 from app.database.models.user import User, UserCreate
 from loguru import logger
 from pydantic import BaseModel
-import app.http_exception as http_exception
 from app.schema.token import TokenData
 import app.http_exception as http_exception
 from app.utils.hashing import verify_hash, hash_password
@@ -95,10 +94,10 @@ async def register(
 
     userExists = await user_repo.findOne({"email": user.email})
     if userExists is not None:
-        raise http_exception.ResourceNotFoundException()
+        raise http_exception.ResourceConflictException()
 
     password = await generatePassword.createPassword()
-
+ 
     mail.send(
         "Welcome to Vyapar Drishti",
         user.email,
@@ -217,7 +216,7 @@ async def get_current_user_details(
                 "email": 1,
                 "financial_year_start": 1,
                 "books_begin_from": 1,
-                "is_selected": 1,
+                # "is_selected": 1,
                 "company_settings": 1,
                 # "company_settings.company_id": 0,
                 # "company_settings.created_at": 0,

@@ -75,7 +75,7 @@ async def createGroup(
         "image": image_url,
         "is_deleted": False,
         "parent": parent,
-        "_parent": parent,  # Assuming _parent is the same as parent for now
+        "parent_id": parent,  # Assuming parent_id is the same as parent for now
     }
 
     response = await accounting_group_repo.new(AccountingGroup(**group_data))
@@ -275,7 +275,7 @@ async def updateCategory(
         "description": description,
         "accounting_group_name": accounting_group_name,
         "parent": parent,
-        "_parent": parent,  # Assuming _parent is the same as parent for now
+        "parent_id": parent,  # Assuming parent_id is the same as parent for now
     }
     if image:
         update_fields["image"] = image_url

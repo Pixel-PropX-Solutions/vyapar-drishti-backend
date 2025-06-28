@@ -122,13 +122,19 @@ async def createCompany(
     country: str = Form(None),
     financial_year_start: str = Form(None),
     books_begin_from: str = Form(None),
+    account_holder: str = Form(None),
+    account_number: str = Form(None),
+    bank_ifsc: str = Form(None),
+    bank_name: str = Form(None),
+    bank_branch: str = Form(None),
+    qr_code_url: UploadFile = File(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
     image_url = None
     if image:
-
         if image.content_type not in [
             "image/jpeg",
             "image/jpg",
@@ -165,24 +171,8 @@ async def createCompany(
         "pinCode": pinCode,
         "state": state,
         "country": country,
-        "financial_year_start": (
-            financial_year_start
-            if financial_year_start
-            else (
-                datetime.today().year
-                if datetime.today().month >= 4
-                else datetime.today().year - 1
-            )
-        ),
-        "books_begin_from": (
-            books_begin_from
-            if books_begin_from
-            else (
-                datetime.today().year
-                if datetime.today().month >= 4
-                else datetime.today().year - 1
-            )
-        ),
+        "financial_year_start": financial_year_start,
+        "books_begin_from": books_begin_from,
         "is_deleted": False,
     }
 
@@ -192,11 +182,32 @@ async def createCompany(
         raise http_exception.ResourceAlreadyExistsException(
             detail="Company Already Exists. Please try with different company name."
         )
+    
     # print("Company Created Successfully", response)
     if response:
+        qr_url = None
+        if qr_code_url:
+            if qr_code_url.content_type not in [
+                "image/jpeg",
+                "image/jpg",
+                "image/png",
+                "image/gif",
+            ]:
+                raise http_exception.BadRequestException(
+                    detail="Invalid image type. Only JPEG, JPG, PNG, and GIF are allowed."
+                )
+            if hasattr(qr_code_url, "size") and qr_code_url.size > 5 * 1024 * 1024:
+                raise http_exception.BadRequestException(
+                    detail="File size exceeds the 5 MB limit."
+                )
+            upload_result = await cloudinary_client.upload_file(qr_code_url)
+            qr_url = upload_result["url"]
+
         await initialize_voucher_counters(
             user_id=current_user.user_id, company_id=response.company_id
         )
+        
+        # Initialize company settings with the provided data
         await initialize_company_settings(
             user_id=current_user.user_id,
             company_id=response.company_id,
@@ -219,9 +230,17 @@ async def createCompany(
                 "gstin": gstin,
                 "gst_registration_type": "Regular",  # Default or can be passed
                 "place_of_supply": state,  # Default or can be passed
+                "bank_details": {
+                    "account_holder": account_holder,
+                    "account_number": account_number,
+                    "bank_ifsc": bank_ifsc,
+                    "bank_name": bank_name,
+                    "bank_branch": bank_branch,
+                    "qr_code_url": qr_url,
+                },
             },
         )
-        
+
         await user_settings_repo.update_one(
             {"user_id": current_user.user_id},
             {"$set": {"current_company_id": response.company_id}},
@@ -268,7 +287,7 @@ async def get_all_company(
                 "books_begin_from": 1,
                 "gstin": 1,
                 "pan": 1,
-                "is_selected": 1,
+                # "is_selected": 1,
                 "website": 1,
                 "created_at": 1,
                 "updated_at": 1,
@@ -288,41 +307,6 @@ async def get_all_company(
         )
 
 
-# @user.post(
-#     "/create/company/billing",
-#     response_class=ORJSONResponse,
-#     status_code=status.HTTP_200_OK,
-# )
-# async def create_company_billing(
-#     company_id: str = Form(...),
-#     state: str = Form(...),
-#     address_1: str = Form(...),
-#     address_2: str = Form(None),
-#     pinCode: str = Form(None),
-#     city: str = Form(None),
-#     country: str = Form(None),
-#     current_user: TokenData = Depends(get_current_user),
-# ):
-#     billing_data = {
-#         "user_id": current_user.user_id,
-#         # "company_id": company_id,
-#         "state": state,
-#         "address_1": address_1,
-#         "address_2": address_2,
-#         "pinCode": pinCode,
-#         "city": city,
-#         "country": country,
-#         "is_deleted": False,
-#     }
-
-#     # response = await billing_repo.new(Billing(**billing_data))
-#     await company_repo.update_one(
-#         {"_id": company_id, "user_id": current_user.user_id},
-#         {"$set": {"billing": response.billing_id}},
-#     )
-#     return {"success": True, "message": "Billing Address Created", "data": response}
-
-
 @user.get("/company", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
 async def get_company(
     # company_id: str,
@@ -337,32 +321,22 @@ async def get_company(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    print("User Settings:", userSettings)
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+    # if not userSettings.current_company_id:
     pipeline = [
         {
             "$match": {
                 "user_id": current_user.user_id,
-                "is_selected": True,
+                "_id": userSettings["current_company_id"],
+                # "is_selected": True,
                 "is_deleted": False,
             }
         },
-        # {
-        #     "$lookup": {
-        #         "from": "Billing",
-        #         "localField": "billing",
-        #         "foreignField": "_id",
-        #         "as": "billing",
-        #     }
-        # },
-        # {"$unwind": {"path": "$billing", "preserveNullAndEmptyArrays": True}},
-        # {
-        #     "$lookup": {
-        #         "from": "Shipping",
-        #         "localField": "shipping",
-        #         "foreignField": "_id",
-        #         "as": "shipping",
-        #     }
-        # },
-        # {"$unwind": {"path": "$shipping", "preserveNullAndEmptyArrays": True}},
         {
             "$project": {
                 "_id": 1,
@@ -381,7 +355,7 @@ async def get_company(
                 "books_begin_from": 1,
                 "gstin": 1,
                 "pan": 1,
-                "is_selected": 1,
+                # "is_selected": 1,
                 "website": 1,
                 "created_at": 1,
                 "updated_at": 1,
@@ -389,7 +363,7 @@ async def get_company(
         },
     ]
     company = await company_repo.collection.aggregate(pipeline=pipeline).to_list(None)
-    if company is not None:
+    if company:
         return {
             "success": True,
             "message": "Company Fetched Successfully",
@@ -397,7 +371,7 @@ async def get_company(
         }
     else:
         raise http_exception.ResourceNotFoundException(
-            detail="Company Not Found. Please create a company first."
+            # detail="Company Not Found. Please create a company first."
         )
 
 
@@ -487,36 +461,36 @@ async def updateCompany(
     }
 
 
-@user.put(
-    "/set/company/{company_id}",
-    response_class=ORJSONResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def updateCurrentCompany(
-    company_id: str,
-    current_user: TokenData = Depends(get_current_user),
-):
-    if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
+# @user.put(
+#     "/set/company/{company_id}",
+#     response_class=ORJSONResponse,
+#     status_code=status.HTTP_200_OK,
+# )
+# async def updateCurrentCompany(
+#     company_id: str,
+#     current_user: TokenData = Depends(get_current_user),
+# ):
+#     if current_user.user_type != "user" and current_user.user_type != "admin":
+#         raise http_exception.CredentialsInvalidException()
 
-    companyExists = await company_repo.findOne(
-        {"_id": company_id, "user_id": current_user.user_id, "is_deleted": False},
-    )
+#     companyExists = await company_repo.findOne(
+#         {"_id": company_id, "user_id": current_user.user_id, "is_deleted": False},
+#     )
 
-    if companyExists is None:
-        raise http_exception.ResourceNotFoundException()
+#     if companyExists is None:
+#         raise http_exception.ResourceNotFoundException()
 
-    await company_repo.update_many(
-        {"user_id": current_user.user_id, "is_deleted": False},
-        {"$set": {"is_selected": False}},
-    )
+#     await company_repo.update_many(
+#         {"user_id": current_user.user_id, "is_deleted": False},
+#         {"$set": {"is_selected": False}},
+#     )
 
-    await company_repo.update_one(
-        {"_id": company_id, "user_id": current_user.user_id},
-        {"$set": {"is_selected": True}},
-    )
+#     await company_repo.update_one(
+#         {"_id": company_id, "user_id": current_user.user_id},
+#         {"$set": {"is_selected": True}},
+#     )
 
-    return {
-        "success": True,
-        "message": "Current Company selected Successfully",
-    }
+#     return {
+#         "success": True,
+#         "message": "Current Company selected Successfully",
+#     }

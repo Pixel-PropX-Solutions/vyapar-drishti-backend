@@ -99,7 +99,7 @@ class VoucherTypeRepo(BaseMongoDbCrud[VoucherTypeDB]):
                     "user_id": 1,
                     "company_id": 1,
                     "parent": 1,
-                    # "_parent": 1,
+                    # "parent_id": 1,
                     "numbering_method": 1,
                     # "is_deemedpositive": 1,
                     # "affects_stock": 1,

@@ -12,7 +12,7 @@ class InventoryGroup(BaseModel):
     description: Optional[str] = ""  # Description of the group
     is_deleted: bool = False  # Soft delete flag
     parent: Optional[str] = "Primary Group"
-    _parent: Optional[str] = "Primary Group"
+    parent_id: Optional[str] = "Primary Group"
     # gst_nature_of_goods: Optional[str] = ""
     # gst_hsn_code: Optional[str] = ""
     # gst_taxability: Optional[str] = ""
@@ -36,7 +36,7 @@ class InventoryGroupCreate(BaseModel):
     description: Optional[str] = ""  # Description of the group
     is_deleted: bool = False  # Soft delete flag
     parent: Optional[str] = ""
-    _parent: Optional[str] = ""
+    parent_id: Optional[str] = ""
     # gst_nature_of_goods: Optional[str] = ""
     # gst_hsn_code: Optional[str] = ""
     # gst_taxability: Optional[str] = ""

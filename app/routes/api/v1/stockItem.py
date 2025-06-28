@@ -9,7 +9,7 @@ from app.schema.token import TokenData
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 
 from app.database.models.StockItem import StockItemCreate
-from app.database.models.GST_Rate import GSTRateCreate
+from app.database.models.GST_Rate import GSTRate
 from app.database.repositories.gstRateRepo import gst_rate_repo
 from app.database.repositories.stockItemRepo import stock_item_repo
 from app.database.repositories.voucharRepo import vouchar_repo
@@ -29,10 +29,13 @@ async def create_product(
     stock_item_name: str = Form(...),
     company_id: str = Form(...),
     unit: str = Form(...),
+    unit_id: str = Form(...),
     # optional fields
     alias_name: str = Form(None),
     category: str = Form(None),
+    category_id: str = Form(None),
     group: str = Form(None),
+    group_id: str = Form(None),
     image: UploadFile = File(None),
     description: str = Form(None),
     # Additonal Optional fields
@@ -72,12 +75,15 @@ async def create_product(
         "stock_item_name": stock_item_name,
         "company_id": company_id,
         "unit": unit,
+        "unit_id": unit_id,
         "is_deleted": False,
         "user_id": current_user.user_id,
         # optional fields
         "alias_name": alias_name,
         "category": category,
+        "category_id": category_id,
         "group": group,
+        "group_id": group_id,
         "image": image_url,
         "description": description,
         # additonal optional fields
@@ -97,14 +103,14 @@ async def create_product(
             "user_id": current_user.user_id,
             "company_id": company_id,
             "item": stock_item_name,
-            "_item": response.stock_item_id,
+            "item_id": response.stock_item_id,
             "hsn_code": gst_hsn_code,
             "nature_of_goods": gst_nature_of_goods,
             "taxability": gst_taxability,
             "rate": gst_percentage,
         }
-        res = await gst_rate_repo.new(GSTRateCreate(**gstr_data))
-        
+        res = await gst_rate_repo.new(GSTRate(**gstr_data))
+
         if not res:
             raise http_exception.ResourceAlreadyExistsException(
                 detail="GST Rate Already Exists for this Product"
@@ -162,7 +168,7 @@ async def get_product(
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "name",
+                    "localField": "stock_item_name",
                     "foreignField": "item",
                     "as": "inventory_entries",
                 }
@@ -194,6 +200,7 @@ async def get_product(
                     "description": {"$first": "$description"},
                     "gst_hsn_code": {"$first": "$gst_hsn_code"},
                     "group": {"$first": "$group"},
+                    "voucher": {"$first": "$voucher"},
                     "purchase_qty": {
                         "$sum": {
                             "$cond": [
@@ -249,12 +256,13 @@ async def get_product(
                     "company_id": 1,
                     "user_id": 1,
                     "unit": 1,
-                    "_unit": 1,
+                    "unit_id": 1,
                     "alias_name": 1,
+                    "voucher": 1,
                     "category": {"$ifNull": ["$category.category_name", None]},
-                    "_category": {"$ifNull": ["$category._id", None]},
+                    "category_id": {"$ifNull": ["$category._id", None]},
                     "group": {"$ifNull": ["$group.inventory_group_name", None]},
-                    "_group": {"$ifNull": ["$group._id", None]},
+                    "group_id": {"$ifNull": ["$group._id", None]},
                     "image": 1,
                     "description": 1,
                     "gst_nature_of_goods": 1,
@@ -335,7 +343,7 @@ async def get_product(
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "name",
+                    "localField": "stock_item_name",
                     "foreignField": "item",
                     "as": "inventory_entries",
                 }
@@ -366,9 +374,9 @@ async def get_product(
                     "image": {"$first": "$image"},
                     "description": {"$first": "$description"},
                     "user_id": {"$first": "$user_id"},
-                    "_unit": {"$first": "$_unit"},
-                    "_category": {"$first": "$_category"},
-                    "_group": {"$first": "$_group"},
+                    "unit_id": {"$first": "$unit_id"},
+                    "category_id": {"$first": "$category_id"},
+                    "group_id": {"$first": "$group_id"},
                     "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
                     "gst_taxability": {"$first": "$gst_taxability"},
                     "low_stock_alert": {"$first": "$low_stock_alert"},
@@ -378,8 +386,6 @@ async def get_product(
                     "opening_balance": {"$first": "$opening_balance"},
                     "opening_rate": {"$first": "$opening_rate"},
                     "opening_value": {"$first": "$opening_value"},
-                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
-                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
                     # "gst_hsn_code": {"$first": "$gst_hsn_code"},
                     # "gst_hsn_code": {"$first": "$gst_hsn_code"},
                     # "gst_hsn_code": {"$first": "$gst_hsn_code"},
@@ -440,12 +446,12 @@ async def get_product(
                     "company_id": 1,
                     "user_id": 1,
                     "unit": 1,
-                    "_unit": 1,
+                    "unit_id": 1,
                     "alias_name": 1,
                     "category": {"$ifNull": ["$category.category_name", None]},
-                    "_category": {"$ifNull": ["$category._id", None]},
+                    "category_id": {"$ifNull": ["$category._id", None]},
                     "group": {"$ifNull": ["$group.inventory_group_name", None]},
-                    "_group": {"$ifNull": ["$group._id", None]},
+                    "group_id": {"$ifNull": ["$group._id", None]},
                     "image": 1,
                     "description": 1,
                     "gst_nature_of_goods": 1,
@@ -479,6 +485,7 @@ async def get_product(
         ]
     ).to_list(None)
 
+    print("Product:", product)
     if product:
         return {"success": True, "data": product}
     else:
@@ -543,17 +550,24 @@ async def get_products(
                 }
             },
             {
+                "$lookup": {
+                    "from": "GSTRate",
+                    "localField": "_id",
+                    "foreignField": "item_id",
+                    "as": "gst_rate",
+                }
+            },
+            {"$unwind": {"path": "$gst_rate", "preserveNullAndEmptyArrays": True}},
+            {
                 "$project": {
                     "_id": 1,
                     "stock_item_name": 1,
-                    # "company_id": 1,
                     "unit": 1,
-                    # "_unit": 1,
-                    # optional fields
-                    # "alias_name": 1,
-                    # "category": {"$ifNull": ["$category.name", None]},
-                    # "group": {"$ifNull": ["$group.name", None]},
-                    # "image": 1,
+                    "hsn_code": '$gst_rate.hsn_code',
+                    "rate": '$gst_rate.rate',
+                    "cgst": '$gst_rate.cgst', # CGST rate
+                    "sgst": '$gst_rate.sgst', # SGST rate
+                    "igst": '$gst_rate.igst', # IGST rate
                 }
             },
         ]

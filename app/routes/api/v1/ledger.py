@@ -20,6 +20,7 @@ ledger = APIRouter()
 async def create_ledger(
     company_id: str = Form(...),
     parent: str = Form(...),  # Group in which the ledger (e.g."Sales Accounts")
+    parent_id: str = Form(...),  # Group ID in which the ledger (e.g."Sales Accounts")
     name: str = Form(...),
     email: str = Form(""),
     number: str = Form(""),
@@ -36,18 +37,18 @@ async def create_ledger(
     mailing_state: str = Form(None),
     mailing_country: str = Form(None),
     mailing_pincode: str = Form(None),
-    # it_pan: str = Form(None),
-    # gstn: str = Form(None),
+    it_pan: str = Form(None),
+    gstin: str = Form(None),
     # gst_registration_type: str = Form(None),
     # gst_supply_type: str = Form(None),
     # gst_duty_head: str = Form(None),
     # tax_rate: float = Form(0.0),
-    # bank_account_holder: str = Form(None),
-    # bank_account_number: str = Form(None),
-    # bank_ifsc: str = Form(None),
+    bank_account_holder: str = Form(None),
+    bank_account_number: str = Form(None),
+    bank_ifsc: str = Form(None),
     # bank_swift:str = Form(None),
-    # bank_name: str = Form(None),
-    # bank_branch: str = Form(None),
+    bank_name: str = Form(None),
+    bank_branch: str = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
@@ -95,8 +96,8 @@ async def create_ledger(
         "is_deleted": False,
         "phone": phone_data,
         "email": email,
-        "parent": parent,  # Assuming _parent is the same as parent for now
-        "_parent": parent,  # This is the name or id of the parent Ledger for internal reference
+        "parent": parent,  # Assuming parent_id is the same as parent for now
+        "parent_id": parent_id,  # This is the name or id of the parent Ledger for internal reference
         "alias": alias,
         "is_revenue": is_revenue,
         "is_deemed_positive": is_deemed_positive,  # Indicates and Controls Debit/Credit nature
@@ -107,18 +108,18 @@ async def create_ledger(
         "mailing_state": mailing_state,
         "mailing_country": mailing_country,
         "mailing_pincode": mailing_pincode,
-        # "it_pan": it_pan,
-        # "gstn": gstn,
+        "it_pan": it_pan,
+        "gstin": gstin,
         # "gst_registration_type": gst_registration_type,
         # "gst_supply_type": gst_supply_type,
         # "gst_duty_head": gst_duty_head,
         # "tax_rate": tax_rate,
-        # "bank_account_holder": bank_account_holder,
-        # "bank_account_number": bank_account_number,
-        # "bank_ifsc": bank_ifsc,
+        "account_holder": bank_account_holder,
+        "account_number": bank_account_number,
+        "bank_ifsc": bank_ifsc,
         # "bank_swift": bank_swift,
-        # "bank_name": bank_name,
-        # "bank_branch": bank_branch,
+        "bank_name": bank_name,
+        "bank_branch": bank_branch,
     }
 
     response = await ledger_repo.new(Ledger(**ledger_data))

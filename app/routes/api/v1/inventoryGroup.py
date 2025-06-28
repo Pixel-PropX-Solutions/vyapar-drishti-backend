@@ -80,7 +80,7 @@ async def createGroup(
         # "gst_nature_of_goods": gst_nature_of_goods,
         # "gst_hsn_code": gst_hsn_code,
         # "gst_taxability": gst_taxability,
-        "_parent": parent,
+        "parent_id": parent,
         "is_deleted": False,
     }
 
@@ -238,7 +238,7 @@ async def updateGroup(
         "description": description,
         "inventory_group_name": inventory_group_name,
         "parent": parent,
-        "_parent": parent,
+        "parent_id": parent,
         # "gst_nature_of_goods": gst_nature_of_goods,
         # "gst_hsn_code": gst_hsn_code,
         # "gst_taxability": gst_taxability,

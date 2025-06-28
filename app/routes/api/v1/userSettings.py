@@ -27,13 +27,14 @@ user_settings_router = APIRouter()
 def extract_device_info(user_agent_str: str):
     ua = parse(user_agent_str)
 
-    return {
-        "device_type": "Mobile" if ua.is_mobile else "Tablet" if ua.is_tablet else "PC",
-        "os": ua.os.family,  # e.g., "Windows"
-        "os_version": ua.os.version_string,  # e.g., "10"
-        "browser": ua.browser.family,  # e.g., "Edge"
-        "browser_version": ua.browser.version_string,  # e.g., "136.0.0.0"
-    }
+    device_type = "Mobile" if ua.is_mobile else "Tablet" if ua.is_tablet else "PC"
+    os = ua.os.family  # e.g., "Windows"
+    os_version = ua.os.version_string  # e.g., "10"
+    browser = ua.browser.family  # e.g., "Edge"
+    
+    browser_version = ua.browser.version_string  # e.g., "136.0.0.0"
+    
+    return f"{device_type} | OS: {os} {os_version} | Browser: {browser} {browser_version}"
 
 
 async def initialize_user_settings(
@@ -47,6 +48,7 @@ async def initialize_user_settings(
     user_settigs = {
         "user_id": user_id,
         "current_company_id": "",
+        "current_company_name": "",
         "role": role,
         "is_deleted": False,
         "created_at": now,
@@ -61,11 +63,11 @@ async def initialize_user_settings(
 
 
 @user_settings_router.put(
-    "/user/settings/update/{settings_id}",
+    "/update/{settings_id}",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def updateCurrentCompany(
+async def updateUserSettings(
     settings_id: str,
     user_settings: Dict[str, Any] = Body(...),
     current_user: TokenData = Depends(get_current_user),
@@ -86,7 +88,7 @@ async def updateCurrentCompany(
         if isinstance(v, str) and v not in ["", None]:
             updated_dict[k] = v
         elif isinstance(v, dict):
-            temp_dict = {}
+            temp_dict = {} 
             for k1, v1 in v.items():
                 if isinstance(v1, str) and v1 not in ["", None]:
                     temp_dict[k1] = v1
@@ -94,26 +96,18 @@ async def updateCurrentCompany(
             if temp_dict:  #
                 updated_dict[k] = temp_dict
 
-    # updated_dict = {}
-
-    # for key, value in user_settings.items():
-    #     if key in ["current_company_id", "role"]:
-    #         updated_dict[key] = value
-    #     elif key == "ui_preferences":
-    #         updated_dict["ui_preferences"] = value
-    #     elif key == "permissions":
-    #         updated_dict["permissions"] = value
-    #     else:
-    #         raise http_exception.InvalidInputException(
-    #             f"Invalid field: {key}. Allowed fields are 'current_company_id', 'role', 'ui_preferences', and 'permissions'."
-    #         )
-
     await user_settings_repo.update_one(
         {"_id": settings_id, "user_id": current_user.user_id},
         {"$set": updated_dict, "$currentDate": {"updated_at": True}},
     )
 
+    # Fetch the updated document after update
+    updatedSettings = await user_settings_repo.findOne(
+        {"_id": settings_id, "user_id": current_user.user_id, "is_deleted": False},
+    )
+
     return {
         "success": True,
         "message": "User Settings Updated Successfully",
+        "data": updatedSettings,
     }

@@ -13,6 +13,8 @@ from app.routes.api.v1.stockItem import Product as product_endpoints
 from app.routes.api.v1.voucharType import VoucharType as vouchar_type_endpoints
 from app.routes.api.v1.vouchar import Vouchar as vouchar_endpoints
 from app.routes.api.v1.voucharCounter import counter_router as vouchar_counter_endpoints
+from app.routes.api.v1.userSettings import user_settings_router as user_settings_endpoints
+from app.routes.api.v1.companySettings import company_settings_router as company_settings_endpoints
 
 # from app.routes.api.v1.cloudinary import Cloudinary as cloudinary_endpoints
 from app.routes.api.v1.category import category_router as category_endpoints
@@ -45,6 +47,18 @@ routers.include_router(
     user_endpoints,
     prefix=ENV_PROJECT.BASE_API_V1 + "/user",
     tags=["User"],
+)
+
+routers.include_router(
+    user_settings_endpoints,
+    prefix=ENV_PROJECT.BASE_API_V1 + "/user/settings",
+    tags=["User Settings"],
+)
+
+routers.include_router(
+    company_settings_endpoints,
+    prefix=ENV_PROJECT.BASE_API_V1 + "/user/company/settings",
+    tags=["User Company Settings"],
 )
 
 routers.include_router(

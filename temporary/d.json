@@ -1,0 +1,68 @@
+[
+    {
+        "item": "Stock Item 1",
+        "item_id": "35335033-3250-435b-ba1f-bb46b0fee355",
+        "hsn_code": "AFJKLDAFHL",
+        "gst_rate": "18",
+        "taxable_value": 1089.0,
+        "cgst": 0.0,
+        "sgst": 0.0,
+        "igst": 196.02,
+        "total_amount": 1285.02
+    },
+    {
+        "item": "Stock Item 2",
+        "item_id": "bda411d5-42b4-4f27-ba6d-5a831c03cace",
+        "hsn_code": "ASD",
+        "gst_rate": "12",
+        "taxable_value": 1089.0,
+        "cgst": 0.0,
+        "sgst": 0.0,
+        "igst": 130.68,
+        "total_amount": 1219.68
+    },
+    {
+        "item": "Stock Item 3",
+        "item_id": "4e6f52ee-55d5-4faa-88ba-4c229c2f18b6",
+        "hsn_code": "LKJ",
+        "gst_rate": "28",
+        "taxable_value": 1089.0,
+        "cgst": 0.0,
+        "sgst": 0.0,
+        "igst": 304.92,
+        "total_amount": 1393.92
+    },
+    {
+        "item": "Stock Item 1",
+        "item_id": "35335033-3250-435b-ba1f-bb46b0fee355",
+        "hsn_code": "AFJKLDAFHL",
+        "gst_rate": "18",
+        "taxable_value": 968.0,
+        "cgst": 0.0,
+        "sgst": 0.0,
+        "igst": 174.24,
+        "total_amount": 1142.24
+    },
+    {
+        "item": "Stock Item 2",
+        "item_id": "bda411d5-42b4-4f27-ba6d-5a831c03cace",
+        "hsn_code": "ASD",
+        "gst_rate": "12",
+        "taxable_value": 847.0,
+        "cgst": 0.0,
+        "sgst": 0.0,
+        "igst": 101.64,
+        "total_amount": 948.64
+    },
+    {
+        "item": "Stock Item 3",
+        "item_id": "4e6f52ee-55d5-4faa-88ba-4c229c2f18b6",
+        "hsn_code": "LKJ",
+        "gst_rate": "28",
+        "taxable_value": 726.0,
+        "cgst": 0.0,
+        "sgst": 0.0,
+        "igst": 203.28,
+        "total_amount": 929.28
+    }
+]

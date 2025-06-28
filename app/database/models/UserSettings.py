@@ -23,6 +23,7 @@ class UIPreferences(BaseModel):
 class UserSettings(BaseModel):
     user_id: str
     current_company_id: str
+    current_company_name: str
     role: str = "User"
 
     permissions: UserPermissions = Field(default_factory=UserPermissions)

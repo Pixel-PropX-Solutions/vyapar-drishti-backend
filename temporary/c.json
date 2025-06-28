@@ -1,0 +1,87 @@
+[
+    {
+        "invoice": {
+            "voucher_type": "Purchase",
+            "voucher_number": "INV-384309",
+            "date": "2025-06-27",
+            "items": [
+                {
+                    "name": "Stock Item 1",
+                    "qty": 11,
+                    "rate": 99.0,
+                    "amount": 1089.0,
+                    "pack": "",
+                    "hsn": "",
+                    "gst_rate": "18",
+                    "taxable_value": 1089.0,
+                    "total_amount": 1285.02
+                }
+            ],
+            "total": "1089.00",
+            "grand_total": 1285.02
+        },
+        "party": {
+            "name": "John",
+            "address": "123 Main Street",
+            "phone": {
+                "code": "+91",
+                "number": "1407983134"
+            },
+            "email": "john@gmail.com",
+            "gst_no": "AUVPK0732E",
+            "pan_no": "AUVPK0732E",
+            "bank_name": "SBI",
+            "bank_branch": "Rajsamand",
+            "account_no": "98765543234",
+            "account_name": "John",
+            "ifsc": "IBKL0000104"
+        },
+        "customer": {
+            "name": "Stock Items",
+            "address": None,
+            "phone": {
+                "code": "",
+                "number": ""
+            },
+            "gst_no": "08ABIPJ1392D1ZT",
+            "pan_no": "08ABIPJ1392D1ZT"
+        },
+        "qr_code_url": "",
+        "company": {
+            "_id": "94e126b7-230c-4922-af04-5a11367f75ea",
+            "company_name": "Pixel Prophet",
+            "user_id": "e1527dcf-d10e-4a16-9815-f645792e1350",
+            "mailing_name": "Pixel Prophet",
+            "address_1": "123 Main Suite",
+            "address_2": "Apt 36B",
+            "pinCode": "313324",
+            "state": "Rajasthan",
+            "country": "India",
+            "phone": {
+                "code": "+91",
+                "number": "6367097548"
+            },
+            "email": "cannon.khan786@gmail.com",
+            "financial_year_start": "Tue Apr 01 2025 00:00:00 GMT+0530 (India Standard Time)",
+            "books_begin_from": "Tue Apr 01 2025 00:00:00 GMT+0530 (India Standard Time)",
+            "image": "https://res.cloudinary.com/dnkp2gm1d/image/upload/hvigsab0b28nrzh3av0m.png",
+            "gstin": "ASDFGHJKL",
+            "pan": "",
+            "website": "https://www.linkedin.com/in/tohid-khan/",
+            "is_deleted": False,
+            "created_at": datetime.datetime(2025,
+            6,
+            27,
+            10,
+            36,
+            18,
+            594000),
+            "updated_at": datetime.datetime(2025,
+            6,
+            27,
+            10,
+            36,
+            18,
+            594000)
+        },
+        "company.motto": "LIFE"S A JOURNEY, KEEP SMILING"}]

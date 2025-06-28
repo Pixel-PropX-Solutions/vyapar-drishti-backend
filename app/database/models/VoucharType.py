@@ -8,7 +8,7 @@ class VoucherType(BaseModel):
     user_id: str
     company_id: str
     parent: Optional[str] = ''
-    _parent: Optional[str] = ''
+    parent_id: Optional[str] = ''
     numbering_method: Optional[str] = ''  # e.g., "Automatic", "Manual"
     is_deemedpositive: Optional[bool] = False  # Credit/Debit direction
     affects_stock: Optional[bool] = False      # If stock is involved
@@ -24,7 +24,7 @@ class VoucherTypeCreate(BaseModel):
     user_id: str
     company_id: str
     parent: Optional[str] = ''
-    _parent: Optional[str] = ''
+    parent_id: Optional[str] = ''
     numbering_method: Optional[str] = ''  # e.g., "Automatic", "Manual"
     is_deemedpositive: Optional[bool] = False  # Credit/Debit direction
     affects_stock: Optional[bool] = False      # If stock is involved

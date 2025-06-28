@@ -31,7 +31,7 @@ class Company(BaseModel):
     pan: Optional[str] = ""
     website: Optional[str] = None
     is_deleted: bool = False
-    is_selected: bool = False
+    # is_selected: bool = False
 
 
 class CompanyDB(Company):
@@ -70,4 +70,4 @@ class CompanyCreate(BaseModel):
     pan: Optional[str] = ""
     website: Optional[str] = None
     is_deleted: bool = False
-    is_selected: bool = False
+    # is_selected: bool = False

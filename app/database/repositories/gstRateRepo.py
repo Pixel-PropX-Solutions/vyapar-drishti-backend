@@ -8,7 +8,7 @@ class GSTRateRepo(BaseMongoDbCrud[GSTRateDB]):
         super().__init__(
             ENV_PROJECT.MONGO_DATABASE,
             "GSTRate",
-            unique_attributes=["item", "_item", "user_id", 'company_id', 'hsn_code'],
+            unique_attributes=["item", "item_id", "user_id", 'company_id', 'hsn_code'],
         )
 
     async def new(self, sub: GSTRate):

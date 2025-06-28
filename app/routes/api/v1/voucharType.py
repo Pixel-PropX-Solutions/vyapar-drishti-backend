@@ -95,7 +95,7 @@ async def createVoucharType(
         "numbering_method": numbering_method,
         "is_deemedpositive": is_deemedpositive,
         "affects_stock": affects_stock,
-        "_parent": parent,  # Assuming _parent is the same as parent for now
+        "parent_id": parent,  # Assuming parent_id is the same as parent for now
         "is_deleted": False,
     }
 
