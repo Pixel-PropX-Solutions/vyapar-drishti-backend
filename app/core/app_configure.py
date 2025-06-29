@@ -32,6 +32,8 @@ def configure_middleware(app: FastAPI):
             "https://dristi-docs.vercel.app",
             "https://dristi-docs.vercel.app/",
             "https://dristi-docs.vercel.app/admin",
+            "https://dristidocs-frontend-git-settings-tohid-khans-projects.vercel.app",
+            "https://dristidocs-frontend-git-settings-tohid-khans-projects.vercel.app/",
             "https://vyapar-drishti.vercel.app",
             "https://vyapar-drishti.vercel.app/",
             "https://vyapar-drishti.vercel.app/admin",
