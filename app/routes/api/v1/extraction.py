@@ -1,12 +1,9 @@
 from fastapi import APIRouter,Depends
 from fastapi import UploadFile, File
 from app.database.repositories.extraction import extraction_tools
-# from app.routes.api.v1.orders import createUserOrders,createOrdersDetails
-# from app.database.models.Order_Details import OrderDetails,Orders
 from app.schema.token import TokenData
 import app.http_exception as http_exception
 from app.oauth2 import get_current_user
-# from app.database.models.Orders import OrdersCreate
 extraction = APIRouter()
 
 @extraction.post("/file/upload")

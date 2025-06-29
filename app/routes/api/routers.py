@@ -3,11 +3,6 @@ from fastapi import APIRouter
 from app.Config import ENV_PROJECT
 from app.routes.api.v1.auth import auth as auth_endpoints
 from app.routes.api.v1.user import user as user_endpoints
-
-# from app.routes.api.v1.billing import billing as billing_endpoints
-# from app.routes.api.v1.shipping import shipping as shipping_endpoints
-# from app.routes.api.v1.creditor import creditor as creditor_endpoints
-# from app.routes.api.v1.debitor import debitor as debitor_endpoints
 from app.routes.api.v1.admin import admin as admin_endponits
 from app.routes.api.v1.stockItem import Product as product_endpoints
 from app.routes.api.v1.voucharType import VoucharType as vouchar_type_endpoints
@@ -15,21 +10,11 @@ from app.routes.api.v1.vouchar import Vouchar as vouchar_endpoints
 from app.routes.api.v1.voucharCounter import counter_router as vouchar_counter_endpoints
 from app.routes.api.v1.userSettings import user_settings_router as user_settings_endpoints
 from app.routes.api.v1.companySettings import company_settings_router as company_settings_endpoints
-
-# from app.routes.api.v1.cloudinary import Cloudinary as cloudinary_endpoints
 from app.routes.api.v1.category import category_router as category_endpoints
-
-# from app.routes.api.v1.inventory import inventory as inventory_endpoints
-# from app.routes.api.v1.orders import OrdersRouter as orders_endpoints
 from app.routes.api.v1.extraction import extraction as extraction_endpoints
-
-# from app.routes.api.v1.product_stock import product_Stock as product_Stock_endpoints
-# from app.routes.api.v1.stock_movement import stock_movement as stock_movement_endpoints
-
 from app.routes.api.v1.accountingGroup import accounting_group_router as accounting_group_endpoints
 from app.routes.api.v1.inventoryGroup import inventory_group_router as inventory_group_endpoints
 from app.routes.api.v1.ledger import ledger as ledger_endpoints
-# from app.routes.api.v1.analytics import Analytics as analytics_endpoints
 
 routers = APIRouter()
 

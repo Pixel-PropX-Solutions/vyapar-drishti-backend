@@ -5,10 +5,11 @@ from fastapi import APIRouter
 from app.schema.token import TokenData
 from app.oauth2 import get_current_user
 import app.http_exception as http_exception
-from app.database.models.Ledger import Ledger, LedgerDB
+from app.database.models.Ledger import Ledger
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 from fastapi import Query
 from app.database.repositories.ledgerRepo import ledger_repo
+from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.utils.cloudinary_client import cloudinary_client
 import sys
 
@@ -53,12 +54,19 @@ async def create_ledger(
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     ledgerExists = await ledger_repo.findOne(
         {
             "ledger_name": name,
             "user_id": current_user.user_id,
-            "company_id": company_id,
+            "company_id": userSettings["current_company_id"],
         }
     )
 
@@ -92,7 +100,7 @@ async def create_ledger(
     ledger_data = {
         "ledger_name": name,
         "user_id": current_user.user_id,
-        "company_id": company_id,
+        "company_id": userSettings["current_company_id"],
         "is_deleted": False,
         "phone": phone_data,
         "email": email,
@@ -148,6 +156,13 @@ async def view_all_ledger(
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     page = Page(page=page_no, limit=limit)
     sort = Sort(sort_field=sortField, sort_order=sortOrder)
@@ -157,7 +172,7 @@ async def view_all_ledger(
         search=search,
         state=state,
         parent=parent,
-        company_id=company_id,
+        company_id= userSettings["current_company_id"],
         is_deleted=is_deleted,
         current_user_id=current_user.user_id,
         pagination=page_request,
@@ -176,13 +191,20 @@ async def view_all_ledgers(
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     result = await ledger_repo.collection.aggregate(
         [
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "is_deleted": False,
                 },
             },
@@ -207,15 +229,20 @@ async def view_ledgers_with_type(
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
         raise http_exception.CredentialsInvalidException()
-
-    print(f"Type: {type}, Company ID: {company_id}")
     
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
     result = await ledger_repo.collection.aggregate(
         [
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "parent": type,
                     "is_deleted": False,
                 },

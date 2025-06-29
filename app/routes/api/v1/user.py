@@ -14,9 +14,7 @@ import app.http_exception as http_exception
 from app.routes.api.v1.voucharCounter import initialize_voucher_counters
 from app.routes.api.v1.companySettings import initialize_company_settings
 from app.schema.token import TokenData
-import app.http_exception as http_exception
 from app.oauth2 import get_current_user
-from app.schema.token import TokenData
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.utils.cloudinary_client import cloudinary_client
 from app.database.repositories.companyRepo import company_repo, Company
@@ -322,7 +320,8 @@ async def get_company(
         raise http_exception.CredentialsInvalidException()
 
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    print("User Settings:", userSettings)
+    # print("User Settings:", userSettings)
+    
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."

@@ -17,7 +17,6 @@ import app.http_exception as http_exception
 from app.database.models.UserSettings import UserSettings
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from datetime import datetime
-from uuid import uuid4
 import pytz
 from user_agents import parse
 

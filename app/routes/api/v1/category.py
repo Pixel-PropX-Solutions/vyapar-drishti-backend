@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from fastapi.responses import ORJSONResponse
 import app.http_exception as http_exception
-from app.schema.token import TokenData
-import app.http_exception as http_exception
 from app.oauth2 import get_current_user
 from fastapi import Query
 from app.schema.token import TokenData
@@ -10,8 +8,8 @@ from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRe
 
 from app.database.models.Category import CategoryCreate
 from app.database.repositories.categoryRepo import category_repo
+from app.database.repositories.UserSettingsRepo import user_settings_repo
 
-# from app.database.models.Category import Category
 from app.utils.cloudinary_client import cloudinary_client
 
 
@@ -31,6 +29,15 @@ async def createCategory(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+        
+        
     image_url = None
     if image:
 
@@ -54,7 +61,7 @@ async def createCategory(
         "category_name": category_name,
         "user_id": current_user.user_id,
         "under": under,
-        "company_id": company_id,
+        "company_id": userSettings["current_company_id"],
         "is_deleted": False,
         "image": image_url,
         "description": description,
@@ -82,12 +89,19 @@ async def getCategory(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     categories = await category_repo.findOne(
         {
             "_id": category_id,
             "user_id": current_user.user_id,
-            "company_id": company_id,
+            "company_id": userSettings["current_company_id"],
             "is_deleted": False,
         },
     )
@@ -116,6 +130,13 @@ async def view_all_category(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     page = Page(page=page_no, limit=limit)
     sort = Sort(sort_field=sortField, sort_order=sortOrder)
@@ -124,7 +145,7 @@ async def view_all_category(
     result = await category_repo.viewAllCategories(
         search=search,
         pagination=page_request,
-        company_id=company_id,
+        company_id=userSettings["current_company_id"],
         sort=sort,
         parent=parent,
         current_user=current_user,
@@ -142,12 +163,19 @@ async def view_all_categories(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     categories = await category_repo.collection.aggregate(
         [
             {
                 "$match": {
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 }
@@ -184,12 +212,19 @@ async def view_default_category(
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     result = await category_repo.collection.aggregate(
         [
             {
                 "$match": {
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 },
             },
@@ -225,12 +260,19 @@ async def updateCategory(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     categoryExists = await category_repo.findOne(
         {
             "_id": category_id,
             "user_id": current_user.user_id,
-            "company_id": company_id,
+            "company_id": userSettings["current_company_id"],
             "is_deleted": False,
         },
     )
@@ -268,7 +310,7 @@ async def updateCategory(
         {
             "_id": category_id,
             "user_id": current_user.user_id,
-            "company_id": company_id,
+            "company_id": userSettings["current_company_id"],
             "is_deleted": False,
         },
         {"$set": update_fields},

@@ -6,28 +6,17 @@ from fastapi import (
     UploadFile,
     status,
 )
-from app.database.repositories.user import user_repo
 from fastapi.responses import ORJSONResponse
-from pydantic import BaseModel
 import app.http_exception as http_exception
 from app.schema.token import TokenData
-import app.http_exception as http_exception
 from app.oauth2 import get_current_user
-from app.schema.token import TokenData
 from app.utils.cloudinary_client import cloudinary_client
 from app.database.repositories.inventoryGroupRepo import inventory_group_repo
-from app.database.models.InventoryGroup import InventoryGroup, InventoryGroupDB
+from app.database.repositories.UserSettingsRepo import user_settings_repo
+from app.database.models.InventoryGroup import InventoryGroup
 from typing import Optional
-from typing import Optional
-from fastapi import FastAPI, status, Depends, File, UploadFile, Form
-from fastapi.responses import ORJSONResponse
-from fastapi import APIRouter
-from app.schema.token import TokenData
-from app.oauth2 import get_current_user
-import app.http_exception as http_exception
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 from fastapi import Query
-from app.utils.cloudinary_client import cloudinary_client
 
 
 inventory_group_router = APIRouter()
@@ -52,6 +41,13 @@ async def createGroup(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
     image_url = None
     if image:
         if image.content_type not in [
@@ -73,7 +69,7 @@ async def createGroup(
     group_data = {
         "inventory_group_name": inventory_group_name,
         "user_id": current_user.user_id,
-        "company_id": company_id,
+        "company_id": userSettings["current_company_id"],
         "parent": parent,
         "description": description,
         "image": image_url,
@@ -112,6 +108,13 @@ async def view_all_group(
     if current_user.user_type != "admin" and current_user.user_type != "user":
         raise http_exception.CredentialsInvalidException()
 
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
     page = Page(page=page_no, limit=limit)
     sort = Sort(sort_field=sortField, sort_order=sortOrder)
     page_request = PageRequest(paging=page, sorting=sort)
@@ -119,7 +122,7 @@ async def view_all_group(
     result = await inventory_group_repo.viewAllGroup(
         search=search,
         parent=parent,
-        company_id=company_id,
+        company_id=userSettings["current_company_id"],
         current_user_id=current_user.user_id,
         pagination=page_request,
         sort=sort,
@@ -140,8 +143,19 @@ async def view_group(
     if current_user.user_type != "admin" and current_user.user_type != "user":
         raise http_exception.CredentialsInvalidException()
 
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
     result = await inventory_group_repo.findOne(
-        {"_id": group_id, "user_id": current_user.user_id}
+        {
+            "_id": group_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+        }
     )
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
@@ -158,12 +172,19 @@ async def view_all_groups(
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     result = await inventory_group_repo.collection.aggregate(
         [
             {
                 "$match": {
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 },
@@ -203,12 +224,19 @@ async def updateGroup(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     groupExists = await inventory_group_repo.findOne(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": company_id,
+            "company_id": userSettings["current_company_id"],
             "is_deleted": False,
         },
     )
@@ -250,7 +278,7 @@ async def updateGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": company_id,
+            "company_id": userSettings["current_company_id"],
             "is_deleted": False,
         },
         {"$set": update_fields},

@@ -11,10 +11,8 @@ from app.utils.hashing import verify_hash, hash_password
 from app.oauth2 import get_current_user
 from app.database.repositories.token import refresh_token_repo
 
-# from app.database.connections.mongo import conn
 from app.database import mongodb
 
-# from app.database.repositories.token import refresh_token_repo
 from app.oauth2 import (
     create_access_token,
     # create_forgot_password_access_token,
@@ -25,19 +23,15 @@ from app.oauth2 import (
     get_refresh_token,
     set_cookies,
 )
-from app.schema.token import TokenData
 from app.utils import generatePassword, hashing
 from app.database.repositories.user import user_repo
 from app.utils.generatePassword import generatePassword
 from app.routes.api.v1.userSettings import initialize_user_settings
 
-# from app.utils.mailer_module import mail, template
 from app.Config import ENV_PROJECT
 from app.utils.mailer_module import template
 from app.utils.mailer_module import mail
-from app.database.repositories.companyRepo import company_repo, Company
-
-# from app.schema.password import SetPassword
+from app.database.repositories.companyRepo import company_repo
 from typing import Optional
 from app.schema.enums import UserTypeEnum
 
@@ -80,7 +74,7 @@ async def login(
         )
         token_generated = await create_access_token(token_data)
         set_cookies(response, token_generated.access_token, token_generated.refresh_token)
-        return {"ok": True, "accessToken": token_generated.access_token}
+        return {"ok": True, "accessToken": token_generated.access_token, "refreshToken": token_generated.refresh_token}
 
     raise http_exception.CredentialsInvalidException()
 
@@ -129,7 +123,7 @@ async def register(
     )
     token_generated = await create_access_token(token_data)
     set_cookies(response, token_generated.access_token, token_generated.refresh_token)
-    return {"ok": True, "accessToken": token_generated.access_token}
+    return {"ok": True, "accessToken": token_generated.access_token, "refreshToken": token_generated.refresh_token}
 
 
 @auth.get("/current/user", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)

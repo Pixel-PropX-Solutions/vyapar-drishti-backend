@@ -14,8 +14,8 @@ class Company(BaseModel):
     address_1: Optional[str] = None
     address_2: Optional[str] = None
     pinCode: Optional[str] = None
-    state: str
-    country: str
+    state: Optional[str] = None
+    country: Optional[str] = None
 
     # Contact Details
     phone: Optional[PhoneNumber] = None
@@ -53,8 +53,8 @@ class CompanyCreate(BaseModel):
     address_1: Optional[str] = None
     address_2: Optional[str] = None
     pinCode: Optional[str] = None
-    state: str
-    country: str
+    state: Optional[str] = None
+    country: Optional[str] = None
 
     # Contact Details
     phone: Optional[PhoneNumber] = None

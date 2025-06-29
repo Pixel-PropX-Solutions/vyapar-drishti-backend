@@ -2,21 +2,17 @@ from fastapi import APIRouter, Depends, status, File, UploadFile, Form
 from fastapi.responses import ORJSONResponse
 import app.http_exception as http_exception
 from app.schema.token import TokenData
-import app.http_exception as http_exception
 from app.oauth2 import get_current_user
 from fastapi import Query
-from app.schema.token import TokenData
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
-
-from app.database.models.StockItem import StockItemCreate
 from app.database.models.GST_Rate import GSTRate
 from app.database.repositories.gstRateRepo import gst_rate_repo
+from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.database.repositories.stockItemRepo import stock_item_repo
 from app.database.repositories.voucharRepo import vouchar_repo
 from app.database.repositories.InventoryRepo import inventory_repo
 from app.database.models.StockItem import StockItem
 from app.utils.cloudinary_client import cloudinary_client
-from typing import Optional, Union
 
 
 Product = APIRouter()
@@ -51,6 +47,14 @@ async def create_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+        
     image_url = None
     if image:
 
@@ -73,7 +77,7 @@ async def create_product(
     product_data = {
         # required fields
         "stock_item_name": stock_item_name,
-        "company_id": company_id,
+        "company_id": userSettings["current_company_id"],
         "unit": unit,
         "unit_id": unit_id,
         "is_deleted": False,
@@ -101,7 +105,7 @@ async def create_product(
     if response:
         gstr_data = {
             "user_id": current_user.user_id,
-            "company_id": company_id,
+            "company_id": userSettings["current_company_id"],
             "item": stock_item_name,
             "item_id": response.stock_item_id,
             "hsn_code": gst_hsn_code,
@@ -136,6 +140,13 @@ async def get_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     product = await stock_item_repo.collection.aggregate(
         [
@@ -143,7 +154,7 @@ async def get_product(
                 "$match": {
                     "_id": product_id,
                     "user_id": current_user.user_id,
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "is_deleted": False,
                 }
             },
@@ -311,6 +322,13 @@ async def get_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     product = await stock_item_repo.collection.aggregate(
         [
@@ -318,7 +336,7 @@ async def get_product(
                 "$match": {
                     "_id": product_id,
                     "user_id": current_user.user_id,
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "is_deleted": False,
                 }
             },
@@ -509,6 +527,13 @@ async def view_all_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     page = Page(page=page_no, limit=limit)
     sort = Sort(sort_field=sortField, sort_order=sortOrder)
@@ -516,7 +541,7 @@ async def view_all_product(
 
     result = await stock_item_repo.viewAllProduct(
         search=search,
-        company_id=company_id,
+        company_id=userSettings["current_company_id"],
         category=category,
         pagination=page_request,
         group=group,
@@ -539,12 +564,19 @@ async def get_products(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     products = await stock_item_repo.collection.aggregate(
         [
             {
                 "$match": {
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 }
@@ -603,13 +635,20 @@ async def update_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     productExists = await stock_item_repo.findOne(
         {
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": company_id,
+            "company_id": userSettings["current_company_id"],
         },
     )
     if productExists is None:
@@ -658,7 +697,7 @@ async def update_product(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": company_id,
+            "company_id": userSettings["current_company_id"],
         },
         {"$set": update_fields},
     )
@@ -681,13 +720,20 @@ async def delete_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     product = await stock_item_repo.findOne(
         {
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": company_id,
+            "company_id": userSettings["current_company_id"],
         }
     )
 
@@ -698,6 +744,7 @@ async def delete_product(
         vouchar_id_list = await inventory_repo.findAll(
             {
                 "item": product.name,
+                "item_id": product_id,
             },
             {"project": {"vouchar_id": 1, "_id": 1}},
         )
@@ -710,7 +757,7 @@ async def delete_product(
                 is_vouchar_present = await vouchar_repo.findAll(
                     {
                         "_id": vouchar_id,
-                        "company_id": company_id,
+                        "company_id": userSettings["current_company_id"],
                         "user_id": current_user.user_id,
                     }
                 )
@@ -730,7 +777,7 @@ async def delete_product(
                     "_id": product_id,
                     "user_id": current_user.user_id,
                     "is_deleted": False,
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                 },
             )
 

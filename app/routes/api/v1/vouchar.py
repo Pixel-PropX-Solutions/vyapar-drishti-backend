@@ -6,17 +6,15 @@ from fastapi import (
     UploadFile,
     status,
 )
-from app.database.repositories.user import user_repo
 from app.database.repositories.CompanySettingsRepo import company_settings_repo
 from app.database.repositories.companyRepo import company_repo
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel
 import app.http_exception as http_exception
 from app.schema.token import TokenData
-import app.http_exception as http_exception
 from app.oauth2 import get_current_user
-from app.schema.token import TokenData
 from app.database.repositories.voucharRepo import vouchar_repo
+from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.database.repositories.ledgerRepo import ledger_repo
 from app.database.repositories.voucharGSTRepo import vouchar_gst_repo
 from app.database.repositories.accountingRepo import accounting_repo
@@ -26,17 +24,9 @@ from app.database.models.VoucharGST import VoucherGST
 from app.database.models.Accounting import Accounting
 from typing import Optional, List
 from app.database.models.Inventory import InventoryItem
-from pydantic import BaseModel
-from fastapi.responses import ORJSONResponse
-import app.http_exception as http_exception
-from app.schema.token import TokenData
-import app.http_exception as http_exception
-from app.oauth2 import get_current_user
 from fastapi import Query
-from app.schema.token import TokenData
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 from app.database.repositories.stockItemRepo import stock_item_repo
-from app.database.repositories.InventoryRepo import inventory_repo
 from jinja2 import Template
 import aiofiles
 from num2words import num2words
@@ -95,10 +85,17 @@ async def createVouchar(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     vouchar_data = {
         "user_id": current_user.user_id,
-        "company_id": vouchar.company_id,
+        "company_id": userSettings["current_company_id"],
         "date": vouchar.date,
         "voucher_number": vouchar.voucher_number,
         "voucher_type": vouchar.voucher_type,
@@ -203,9 +200,16 @@ async def createVoucharWithGST(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     companyExists = await company_repo.findOne(
-        {"_id": vouchar.company_id, "user_id": current_user.user_id}
+        {"_id": userSettings["current_company_id"], "user_id": current_user.user_id}
     )
 
     if not companyExists:
@@ -214,7 +218,7 @@ async def createVoucharWithGST(
         )
 
     companySettings = await company_settings_repo.findOne(
-        {"company_id": vouchar.company_id, "user_id": current_user.user_id}
+        {"company_id": userSettings["current_company_id"], "user_id": current_user.user_id}
     )
 
     if not companySettings:
@@ -224,7 +228,7 @@ async def createVoucharWithGST(
 
     vouchar_data = {
         "user_id": current_user.user_id,
-        "company_id": vouchar.company_id,
+        "company_id": userSettings["current_company_id"],
         "date": vouchar.date,
         "voucher_number": vouchar.voucher_number,
         "voucher_type": vouchar.voucher_type,
@@ -269,7 +273,7 @@ async def createVoucharWithGST(
 
     party_ledger = await ledger_repo.findOne(
         {
-            "company_id": vouchar.company_id,
+            "company_id": userSettings["current_company_id"],
             "ledger_name": vouchar.party_name,
             "user_id": current_user.user_id,
         }
@@ -319,7 +323,7 @@ async def createVoucharWithGST(
                 # If GST is enabled, ensure vouchar created with GST details
                 vouchar_gst_data = {
                     "voucher_id": response.vouchar_id,
-                    "company_id": vouchar.company_id,
+                    "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                     "is_gst_applicable": True,
                     "place_of_supply": (
@@ -391,6 +395,12 @@ async def view_all_vouchar(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     page = Page(page=page_no, limit=limit)
     sort = Sort(sort_field=sortField, sort_order=sortOrder)
@@ -398,7 +408,7 @@ async def view_all_vouchar(
 
     result = await vouchar_repo.viewAllVouchar(
         search=search,
-        company_id=company_id,
+        company_id= userSettings["current_company_id"],
         type=type,
         pagination=page_request,
         start_date=start_date,
@@ -423,6 +433,13 @@ async def print_invoice(
 ):
     if current_user.user_type not in {"user", "admin"}:
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     # Fetch invoice/voucher details
     invoice_data = await vouchar_repo.collection.aggregate(
@@ -430,7 +447,7 @@ async def print_invoice(
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 }
             },
@@ -593,6 +610,13 @@ async def print_invoice_gst(
 ):
     if current_user.user_type not in {"user", "admin"}:
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     # Fetch invoice/voucher details
     invoice_data = await vouchar_repo.collection.aggregate(
@@ -600,7 +624,7 @@ async def print_invoice_gst(
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 }
             },
@@ -818,6 +842,13 @@ async def print_invoice(
 ):
     if current_user.user_type not in {"user", "admin"}:
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     # Fetch invoice/voucher details
     invoice_data = await vouchar_repo.collection.aggregate(
@@ -825,7 +856,7 @@ async def print_invoice(
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 }
             },
@@ -959,6 +990,13 @@ async def print_invoice(
 ):
     if current_user.user_type not in {"user", "admin"}:
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     # Fetch invoice/voucher details
     invoice_data = await vouchar_repo.collection.aggregate(
@@ -966,7 +1004,7 @@ async def print_invoice(
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 }
             },
@@ -1125,13 +1163,20 @@ async def get_vouchar(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     result = await stock_item_repo.collection.aggregate(
         [
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": company_id,
+                    "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 }

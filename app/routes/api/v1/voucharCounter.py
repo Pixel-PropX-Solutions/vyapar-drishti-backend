@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
 from app.oauth2 import get_current_user
 from app.schema.token import TokenData
 import app.http_exception as http_exception
 from app.database.models.VoucharCounter import VoucherCounter
 from app.database.repositories.voucharCounterRepo import vouchar_counter_repo
+from app.database.repositories.UserSettingsRepo import user_settings_repo
 from datetime import datetime
-from uuid import uuid4
 import pytz
 
 counter_router = APIRouter()
@@ -75,9 +74,16 @@ async def update_counter(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     query = {
-        "company_id": company_id,
+        "company_id": userSettings["current_company_id"],
         'user_id': current_user.user_id,
         "voucher_type": request.voucher_type,
         "financial_year": request.financial_year,
@@ -110,9 +116,17 @@ async def reset_counter(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
 
     query = {
-        "company_id": company_id,
+        "company_id": userSettings["current_company_id"],
+        "user_id": current_user.user_id,
         "voucher_type": voucher_type,
         "financial_year": financial_year,
     }

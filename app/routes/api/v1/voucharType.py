@@ -6,70 +6,20 @@ from fastapi import (
     UploadFile,
     status,
 )
-from app.database.repositories.user import user_repo
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel
 import app.http_exception as http_exception
 from app.schema.token import TokenData
-import app.http_exception as http_exception
 from app.oauth2 import get_current_user
-from app.schema.token import TokenData
-from app.utils.cloudinary_client import cloudinary_client
 from app.database.repositories.VoucharTypeRepo import vouchar_type_repo
-from app.database.models.VoucharType import VoucherType, VoucherTypeDB
+from app.database.models.VoucharType import VoucherType
 from typing import Optional
-from fastapi import (
-    APIRouter,
-    Depends,
-    File,
-    Form,
-    UploadFile,
-    status,
-)
-from app.database.repositories.user import user_repo
-from fastapi.responses import ORJSONResponse
-from pydantic import BaseModel
-import app.http_exception as http_exception
-from app.schema.token import TokenData
-import app.http_exception as http_exception
-from app.oauth2 import get_current_user
-from app.schema.token import TokenData
-from app.utils.cloudinary_client import cloudinary_client
-from app.database.repositories.voucharRepo import vouchar_repo
-from app.database.repositories.accountingRepo import accounting_repo
-from app.database.repositories.InventoryRepo import inventory_repo
-from app.database.models.Vouchar import Voucher, VoucherDB, VoucherCreate
-from app.database.models.Accounting import Accounting
-from typing import Optional, List
-from app.database.models.Inventory import InventoryItem
-from pydantic import BaseModel
-from fastapi import APIRouter, Depends, status, File, UploadFile, Form
-from fastapi.responses import ORJSONResponse
-import app.http_exception as http_exception
-from app.schema.token import TokenData
-import app.http_exception as http_exception
-from app.oauth2 import get_current_user
+from app.database.repositories.UserSettingsRepo import user_settings_repo
 from fastapi import Query
-from app.schema.token import TokenData
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
-
-from app.database.models.StockItem import StockItemCreate
-from app.database.repositories.stockItemRepo import stock_item_repo
-from app.database.models.StockItem import StockItem
-from app.utils.cloudinary_client import cloudinary_client
-from typing import Optional, Union
 
 
 VoucharType = APIRouter()
-
-
-class TenantID(BaseModel):
-    tenant_id: Optional[str] = None
-    tenant_email: Optional[str] = None
-
-
-class Email_Body(BaseModel):
-    email: str
 
 
 @VoucharType.post(
@@ -87,10 +37,17 @@ async def createVoucharType(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
     vouchar_type_data = {
         "vouchar_type_name": name,
         "user_id": current_user.user_id,
-        "company_id": company_id,
+        "company_id": userSettings["current_company_id"],
         "parent": parent,
         "numbering_method": numbering_method,
         "is_deemedpositive": is_deemedpositive,
@@ -126,13 +83,20 @@ async def view_all_vouchar_type(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
     page = Page(page=page_no, limit=limit)
     sort = Sort(sort_field=sortField, sort_order=sortOrder)
     page_request = PageRequest(paging=page, sorting=sort)
 
     result = await vouchar_type_repo.viewAllVoucharType(
         search=search,
-        company_id=company_id,
+        company_id=userSettings["current_company_id"],
         pagination=page_request,
         sort=sort,
         current_user=current_user,
@@ -151,6 +115,13 @@ async def get_all_vouchar_type(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+        
     result = await vouchar_type_repo.collection.aggregate(
         [
             {
@@ -158,7 +129,7 @@ async def get_all_vouchar_type(
                     "is_deleted": False,
                     "$or": [
                         {
-                            "company_id": company_id,
+                            "company_id": userSettings["current_company_id"],
                             "user_id": current_user.user_id,
                         },
                         {
@@ -171,7 +142,7 @@ async def get_all_vouchar_type(
             {
                 "$project": {
                     "_id": 1,
-                    "name": '$vouchar_type_name',
+                    "name": "$vouchar_type_name",
                 }
             },
         ]
