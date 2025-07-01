@@ -2,8 +2,8 @@ from pydantic import BaseModel, Field
 import datetime
 from uuid import uuid4
 from typing import Optional, List
-from app.database.models.Inventory import InventoryItem
-from app.database.models.Accounting import Accounting
+from app.database.models.Inventory import InventoryItem,InventoryItemUpdate
+from app.database.models.Accounting import Accounting, AccountingUpdate
 
 class Voucher(BaseModel):
     company_id: str
@@ -66,6 +66,19 @@ class VoucherCreate(BaseModel):
 
 
 class VoucherUpdate(BaseModel):
+    vouchar_id: str
+    user_id: str
+    company_id: str
+    date: str
+    voucher_type: str
+    voucher_type_id: str
+    voucher_number: str
+    party_name: str
+    party_name_id: str
     narration: Optional[str]
-    place_of_supply: Optional[str]
-    items: Optional[List[InventoryItem]]
+    reference_number: Optional[str]
+    reference_date: Optional[str]
+    place_of_supply: Optional[str] 
+    
+    accounting: List[AccountingUpdate]
+    items: Optional[List[InventoryItemUpdate]]

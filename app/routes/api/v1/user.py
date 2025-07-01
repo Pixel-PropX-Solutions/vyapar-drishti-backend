@@ -130,7 +130,7 @@ async def createCompany(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     image_url = None
     if image:
         if image.content_type not in [
@@ -169,8 +169,24 @@ async def createCompany(
         "pinCode": pinCode,
         "state": state,
         "country": country,
-        "financial_year_start": financial_year_start,
-        "books_begin_from": books_begin_from,
+        "financial_year_start": (
+            financial_year_start
+            if financial_year_start
+            else (
+                str(datetime.today().year)
+                if datetime.today().month >= 4
+                else str(datetime.today().year - 1)
+            )
+        ),
+        "books_begin_from": (
+            books_begin_from
+            if books_begin_from
+            else (
+                str(datetime.today().year)
+                if datetime.today().month >= 4
+                else str(datetime.today().year - 1)
+            )
+        ),
         "is_deleted": False,
     }
 
@@ -180,7 +196,7 @@ async def createCompany(
         raise http_exception.ResourceAlreadyExistsException(
             detail="Company Already Exists. Please try with different company name."
         )
-    
+
     # print("Company Created Successfully", response)
     if response:
         qr_url = None
@@ -204,7 +220,7 @@ async def createCompany(
         await initialize_voucher_counters(
             user_id=current_user.user_id, company_id=response.company_id
         )
-        
+
         # Initialize company settings with the provided data
         await initialize_company_settings(
             user_id=current_user.user_id,
@@ -268,6 +284,15 @@ async def get_all_company(
             }
         },
         {
+            "$lookup": {
+                "from": "CompanySettings",
+                "localField": "_id",
+                "foreignField": "company_id",
+                "as": "company_settings",
+            }
+        },
+        {"$unwind": {"path": "$company_settings", "preserveNullAndEmptyArrays": True}},
+        {
             "$project": {
                 "_id": 1,
                 "name": "$company_name",
@@ -289,6 +314,12 @@ async def get_all_company(
                 "website": 1,
                 "created_at": 1,
                 "updated_at": 1,
+                "bank_name": "$company_settings.bank_details.bank_name",
+                "bank_ifsc": "$company_settings.bank_details.bank_ifsc",
+                "bank_branch": "$company_settings.bank_details.bank_branch",
+                "account_holder": "$company_settings.bank_details.account_holder",
+                "account_number": "$company_settings.bank_details.account_number",
+                "qr_code_url": "$company_settings.bank_details.qr_code_url",
             }
         },
     ]
@@ -321,7 +352,7 @@ async def get_company(
 
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
     # print("User Settings:", userSettings)
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -336,6 +367,15 @@ async def get_company(
                 "is_deleted": False,
             }
         },
+        {
+            "$lookup": {
+                "from": "CompanySettings",
+                "localField": "_id",
+                "foreignField": "company_id",
+                "as": "company_settings",
+            }
+        },
+        {"$unwind": {"path": "$company_settings", "preserveNullAndEmptyArrays": True}},
         {
             "$project": {
                 "_id": 1,
@@ -358,6 +398,12 @@ async def get_company(
                 "website": 1,
                 "created_at": 1,
                 "updated_at": 1,
+                "bank_name": "$company_settings.bank_details.bank_name",
+                "bank_ifsc": "$company_settings.bank_details.bank_ifsc",
+                "bank_branch": "$company_settings.bank_details.bank_branch",
+                "account_holder": "$company_settings.bank_details.account_holder",
+                "account_number": "$company_settings.bank_details.account_number",
+                "qr_code_url": "$company_settings.bank_details.qr_code_url",
             }
         },
     ]

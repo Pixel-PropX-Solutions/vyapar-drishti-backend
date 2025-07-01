@@ -19,7 +19,7 @@ from app.database.repositories.ledgerRepo import ledger_repo
 from app.database.repositories.voucharGSTRepo import vouchar_gst_repo
 from app.database.repositories.accountingRepo import accounting_repo
 from app.database.repositories.InventoryRepo import inventory_repo
-from app.database.models.Vouchar import Voucher, VoucherCreate
+from app.database.models.Vouchar import Voucher, VoucherCreate, VoucherUpdate
 from app.database.models.VoucharGST import VoucherGST
 from app.database.models.Accounting import Accounting
 from typing import Optional, List
@@ -85,9 +85,9 @@ async def createVouchar(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -138,12 +138,12 @@ async def createVouchar(
 
     if response:
         try:
-            # Create all accounting entries
+
             for entry in accounting_data:
                 entry_data = {
                     "vouchar_id": response.vouchar_id,
                     "ledger": entry.ledger,
-                    "_ledger": entry.ledger,
+                    "ledger_id": entry.ledger_id,
                     "amount": entry.amount,
                 }
                 await accounting_repo.new(Accounting(**entry_data))
@@ -153,7 +153,7 @@ async def createVouchar(
                 item_data = {
                     "vouchar_id": response.vouchar_id,
                     "item": item.item,
-                    "item_id": item.item,
+                    "item_id": item.item_id,
                     "quantity": item.quantity,
                     "rate": item.rate,
                     "amount": item.amount,
@@ -178,12 +178,194 @@ async def createVouchar(
 
         except Exception as e:
             # Rollback vouchar creation if any error occurs
+            print("Error during vouchar creation:", str(e))
+            await accounting_repo.deleteAll({"vouchar_id": response.vouchar_id})
+            await inventory_repo.deleteAll({"vouchar_id": response.vouchar_id})
             await vouchar_repo.deleteById(response.vouchar_id)
-            raise http_exception.DatabaseException(
-                detail=f"Failed to create vouchar details: {str(e)}"
-            )
+
+            raise http_exception.BadRequestException()
 
         return {"success": True, "message": "Vouchar Created Successfully"}
+
+    if not response:
+        raise http_exception.ResourceAlreadyExistsException(
+            detail="Vouchar Already Exists. Please try with different vouchar name."
+        )
+
+
+@Vouchar.put(
+    "/update/vouchar/{vouchar_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def updateVouchar(
+    vouchar_id: str,
+    vouchar: VoucherUpdate,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    vouchar_exists = await vouchar_repo.findOne(
+        {"_id": vouchar_id, "user_id": current_user.user_id}
+    )
+
+    # print("Vouchar exists:", vouchar_exists)
+
+    if not vouchar_exists:
+        raise http_exception.ResourceNotFoundException(
+            detail="Vouchar not found. Please check the vouchar ID."
+        )
+
+    vouchar_data = {
+        "date": vouchar.date,
+        "narration": vouchar.narration,
+        "party_name": vouchar.party_name,
+        "party_name_id": vouchar.party_name,
+        # Conditional fields
+        "reference_number": (
+            vouchar.reference_number if hasattr(vouchar, "reference_number") else ""
+        ),
+        "reference_date": (
+            vouchar.reference_date if hasattr(vouchar, "reference_date") else ""
+        ),
+        "place_of_supply": (
+            vouchar.place_of_supply if hasattr(vouchar, "place_of_supply") else ""
+        ),
+        "is_deleted": False,
+        # Conditional fields for voucher types
+        "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
+        "is_accounting_voucher": (
+            1
+            if vouchar.voucher_type in ["sales", "purchase", "payment", "receipt"]
+            else 0
+        ),
+        "is_inventory_voucher": (
+            1
+            if vouchar.voucher_type in ["sales", "purchase"] and len(vouchar.items) > 0
+            else 0
+        ),
+        "is_order_voucher": (
+            1 if vouchar.voucher_type.lower() in ["sales order", "purchase order"] else 0
+        ),
+    }
+
+    accounting_data = vouchar.accounting
+    inventory_data = vouchar.items
+
+    response = await vouchar_repo.update_one(
+        {
+            "_id": vouchar_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+        },
+        {"$set": vouchar_data},
+    )
+
+    if response:
+        try:
+            # Create all accounting entries
+            for entry in accounting_data:
+                # Check if entry already exists
+                existing_entry = await accounting_repo.findOne(
+                    {"_id": entry.entry_id, "vouchar_id": vouchar_id}
+                )
+                if existing_entry:
+                    entry_data = {
+                        "ledger": entry.ledger,
+                        "ledger_id": entry.ledger_id,
+                        "amount": entry.amount,
+                    }
+                    await accounting_repo.update_one(
+                        {"_id": entry.entry_id, "vouchar_id": vouchar_id},
+                        {"$set": entry_data},
+                    )
+
+            # Create all inventory items
+            for item in inventory_data:
+                # Check if item already exists
+                existing_item = await inventory_repo.findOne(
+                    {
+                        "_id": item.entry_id,
+                        "vouchar_id": vouchar_id,
+                        "item_id": item.item_id,
+                    }
+                )
+                if existing_item:
+                    item_data = {
+                        "quantity": item.quantity,
+                        "rate": item.rate,
+                        "amount": item.amount,
+                        "additional_amount": (
+                            item.additional_amount
+                            if hasattr(item, "additional_amount")
+                            else 0.0
+                        ),
+                        "discount_amount": (
+                            item.discount_amount
+                            if hasattr(item, "discount_amount")
+                            else 0.0
+                        ),
+                        "godown": item.godown if hasattr(item, "godown") else "",
+                        "godown_id": item.godown_id if hasattr(item, "godown_id") else "",
+                        "order_number": (
+                            item.order_number if hasattr(item, "order_number") else None
+                        ),
+                        "order_due_date": (
+                            item.order_due_date
+                            if hasattr(item, "order_due_date")
+                            else None
+                        ),
+                    }
+                    await inventory_repo.update_one(
+                        {
+                            "_id": item.entry_id,
+                            "vouchar_id": vouchar_id,
+                            "item_id": item.item_id,
+                        },
+                        {"$set": item_data},
+                    )
+                else:
+                    item_data = {
+                        "vouchar_id": vouchar_id,
+                        "item": item.item,
+                        "item_id": item.item_id,
+                        "quantity": item.quantity,
+                        "rate": item.rate,
+                        "amount": item.amount,
+                        "additional_amount": (
+                            item.additional_amount
+                            if hasattr(item, "additional_amount")
+                            else 0.0
+                        ),
+                        "discount_amount": (
+                            item.discount_amount
+                            if hasattr(item, "discount_amount")
+                            else 0.0
+                        ),
+                        "godown": item.godown if hasattr(item, "godown") else "",
+                        "godown_id": item.godown_id if hasattr(item, "godown_id") else "",
+                        "order_number": (
+                            item.order_number if hasattr(item, "order_number") else None
+                        ),
+                        "order_due_date": (
+                            item.order_due_date if hasattr(item, "order_due_date") else None
+                        ),
+                    }
+                    await inventory_repo.new(InventoryItem(**item_data))
+
+        except Exception as e:
+            print("Error during vouchar update:", str(e))
+            raise http_exception.BadRequestException()
+
+        return {"success": True, "message": "Vouchar Updated Successfully"}
 
     if not response:
         raise http_exception.ResourceAlreadyExistsException(
@@ -200,9 +382,9 @@ async def createVoucharWithGST(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -218,7 +400,10 @@ async def createVoucharWithGST(
         )
 
     companySettings = await company_settings_repo.findOne(
-        {"company_id": userSettings["current_company_id"], "user_id": current_user.user_id}
+        {
+            "company_id": userSettings["current_company_id"],
+            "user_id": current_user.user_id,
+        }
     )
 
     if not companySettings:
@@ -396,7 +581,7 @@ async def view_all_vouchar(
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -408,7 +593,7 @@ async def view_all_vouchar(
 
     result = await vouchar_repo.viewAllVouchar(
         search=search,
-        company_id= userSettings["current_company_id"],
+        company_id=userSettings["current_company_id"],
         type=type,
         pagination=page_request,
         start_date=start_date,
@@ -419,6 +604,153 @@ async def view_all_vouchar(
     )
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+
+
+@Vouchar.get(
+    "/get/vouchar/{vouchar_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getVouchar(
+    vouchar_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(""),
+):
+    if current_user.user_type not in {"user", "admin"}:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    data = await vouchar_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "_id": vouchar_id,
+                    "company_id": userSettings["current_company_id"],
+                    "user_id": current_user.user_id,
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "localField": "_id",
+                    "foreignField": "vouchar_id",
+                    "as": "inventory",
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Accounting",
+                    "localField": "_id",
+                    "foreignField": "vouchar_id",
+                    "as": "accounting_entries",
+                }
+            },
+        ]
+    ).to_list(length=1)
+
+    if not data:
+        raise http_exception.ResourceNotFoundException(
+            detail="Vouchar not found. Please check the vouchar ID."
+        )
+
+    return {
+        "success": True,
+        "message": "Vouchar Fetched Successfully",
+        "data": data[0],
+    }
+
+
+@Vouchar.get(
+    "/get/timeline",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getTimeline(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(""),
+    search: str = "",
+    type: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(10, le=60),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type not in {"user", "admin"}:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await vouchar_repo.viewTimeline(
+        search=search,
+        company_id=userSettings["current_company_id"],
+        type=type,
+        pagination=page_request,
+        start_date=start_date,
+        end_date=end_date,
+        sort=sort,
+        current_user=current_user,
+        # is_deleted=is_deleted,
+    )
+
+    # # Fetch invoice/voucher details, flattening inventory and merging vouchar fields
+    # timeline_data = await vouchar_repo.collection.aggregate(
+    #     [
+    #         {
+    #             "$match": {
+    #                 "company_id": userSettings["current_company_id"],
+    #                 "user_id": current_user.user_id,
+    #             }
+    #         },
+    #         {
+    #             "$lookup": {
+    #                 "from": "Inventory",
+    #                 "localField": "_id",
+    #                 "foreignField": "vouchar_id",
+    #                 "as": "inventory",
+    #             }
+    #         },
+    #         {"$unwind": "$inventory"},
+    #         {
+    #             "$addFields": {
+    #                 "inventory.company_id": "$company_id",
+    #                 "inventory.user_id": "$user_id",
+    #                 "inventory.date": "$date",
+    #                 "inventory.voucher_number": "$voucher_number",
+    #                 "inventory.voucher_type": "$voucher_type",
+    #                 "inventory.narration": "$narration",
+    #                 "inventory.party_name": "$party_name",
+    #                 "inventory.place_of_supply": "$place_of_supply",
+    #                 "inventory.created_at": "$created_at",
+    #                 "inventory.updated_at": "$updated_at",
+    #             }
+    #         },
+    #         {"$replaceRoot": {"newRoot": "$inventory"}},
+    #         {"$sort": {"date": -1, "created_at": -1}},
+    #     ]
+    # ).to_list(length=None)
+
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": result,
+    }
 
 
 @Vouchar.get(
@@ -433,9 +765,9 @@ async def print_invoice(
 ):
     if current_user.user_type not in {"user", "admin"}:
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -583,18 +915,10 @@ async def print_invoice(
         "company.motto": "LIFE'S A JOURNEY, KEEP SMILING",
     }
 
-    # print("Template variables prepared:", template_vars)
-
-    # Load HTML template (assuming you have it in a file)
-    async with aiofiles.open("app/utils/templates/invoice_template.html", "r") as f:
-        template_str = await f.read()
-
-    template = Template(template_str)
-    rendered_html = template.render(**template_vars)
     return {
         "success": True,
         "message": "Data Fetched Successfully...",
-        "data": rendered_html,
+        # "data": rendered_html,
     }
 
 
@@ -610,9 +934,9 @@ async def print_invoice_gst(
 ):
     if current_user.user_type not in {"user", "admin"}:
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -681,7 +1005,7 @@ async def print_invoice_gst(
             },
             {"$unwind": {"path": "$company", "preserveNullAndEmptyArrays": True}},
             {"$unwind": {"path": "$party_details", "preserveNullAndEmptyArrays": True}},
-             {
+            {
                 "$lookup": {
                     "from": "CompanySettings",
                     "localField": "company._id",
@@ -689,7 +1013,12 @@ async def print_invoice_gst(
                     "as": "company_settings",
                 }
             },
-            {"$unwind": {"path": "$company_settings", "preserveNullAndEmptyArrays": True}},
+            {
+                "$unwind": {
+                    "path": "$company_settings",
+                    "preserveNullAndEmptyArrays": True,
+                }
+            },
         ]
     ).to_list(length=1)
 
@@ -723,7 +1052,7 @@ async def print_invoice_gst(
                 "total_amount": item_gst.get("total_amount", 0),
             }
         )
-   
+
     stock_items = invoice.get("stockItems", [])
     for item in items:
         for si in stock_items:
@@ -739,7 +1068,13 @@ async def print_invoice_gst(
     from collections import defaultdict
 
     tax_summary = defaultdict(
-        lambda: {"igst": 0.0, "sgst": 0.0, "cgst": 0.0, "gst_amt": 0.0, 'taxable_value': 0.0}
+        lambda: {
+            "igst": 0.0,
+            "sgst": 0.0,
+            "cgst": 0.0,
+            "gst_amt": 0.0,
+            "taxable_value": 0.0,
+        }
     )
     for detail in item_gst_details:
         try:
@@ -756,20 +1091,20 @@ async def print_invoice_gst(
             + float(detail.get("cgst", 0.0))
         )
     invoice_taxes = []
-    totals = {"igst": 0.0, "sgst": 0.0, "cgst": 0.0, "gst_amt": 0.0, "taxable_value": 0.0}
+    totals = {"igst": 0.0, "sgt": 0.0, "cgst": 0.0, "gst_amt": 0.0, "taxable_value": 0.0}
     for rate, vals in tax_summary.items():
         invoice_taxes.append(
             {
                 "percent": rate,
                 "igst": round(vals["igst"], 2),
-                "sgst": round(vals["sgst"], 2),
+                "sgt": round(vals["sgt"], 2),
                 "cgst": round(vals["cgst"], 2),
                 "taxable_value": round(vals["taxable_value"], 2),
                 "gst_amt": round(vals["gst_amt"], 2),
             }
         )
         totals["igst"] += vals["igst"]
-        totals["sgst"] += vals["sgst"]
+        totals["sgt"] += vals["sgt"]
         totals["cgst"] += vals["cgst"]
         totals["taxable_value"] += vals["taxable_value"]
         totals["gst_amt"] += vals["gst_amt"]
@@ -806,13 +1141,27 @@ async def print_invoice_gst(
             "ifsc": invoice.get("party_details", {}).get("bank_ifsc", ""),
         },
         "company": invoice.get("company", {}),
-        "company.bank_name": invoice.get("company_settings", {}).get("bank_details", {}).get("bank_name", "SBI"),
-        "company.bank_branch": invoice.get("company_settings", {}).get("bank_details", {}).get("bank_branch", "Rajkot"),
-        "company.account_no": invoice.get("company_settings", {}).get("bank_details", {}).get("account_number", "000 000 000 000"),
-        "company.account_name": invoice.get("company_settings", {}).get("bank_details", {}).get("account_holder", "ABC Pvt Ltd"),
-        "company.ifsc": invoice.get("company_settings", {}).get("bank_details", {}).get("bank_ifsc", "IFSCCODE1234"),
-        "company.qr_code_url": invoice.get("company_settings", {}).get("bank_details", {}).get("qr_code_url", ""),
-        "company.motto": invoice.get("company_settings", {}).get("motto", "LIFE'S A JOURNEY, KEEP SMILING"),
+        "company.bank_name": invoice.get("company_settings", {})
+        .get("bank_details", {})
+        .get("bank_name", "SBI"),
+        "company.bank_branch": invoice.get("company_settings", {})
+        .get("bank_details", {})
+        .get("bank_branch", "Rajkot"),
+        "company.account_no": invoice.get("company_settings", {})
+        .get("bank_details", {})
+        .get("account_number", "000 000 000 000"),
+        "company.account_name": invoice.get("company_settings", {})
+        .get("bank_details", {})
+        .get("account_holder", "ABC Pvt Ltd"),
+        "company.ifsc": invoice.get("company_settings", {})
+        .get("bank_details", {})
+        .get("bank_ifsc", "IFSCCODE1234"),
+        "company.qr_code_url": invoice.get("company_settings", {})
+        .get("bank_details", {})
+        .get("qr_code_url", ""),
+        "company.motto": invoice.get("company_settings", {}).get(
+            "motto", "LIFE'S A JOURNEY, KEEP SMILING"
+        ),
     }
 
     print("Template variables prepared:", template_vars)
@@ -842,9 +1191,9 @@ async def print_invoice(
 ):
     if current_user.user_type not in {"user", "admin"}:
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -990,9 +1339,9 @@ async def print_invoice(
 ):
     if current_user.user_type not in {"user", "admin"}:
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -1115,7 +1464,7 @@ async def print_invoice(
     template_vars = {
         "invoice": {
             "vouchar_type": invoice.get("voucher_type", ""),
-            "voucher_number": invoice.get("voucher_number", ""),
+            "vouchar_number": invoice.get("voucher_number", ""),
             "party_name": invoice.get("party_name", ""),
             "narration": invoice.get("narration", ""),
             "date": formatted_date,
@@ -1163,9 +1512,9 @@ async def get_vouchar(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."

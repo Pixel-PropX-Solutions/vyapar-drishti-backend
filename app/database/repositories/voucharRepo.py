@@ -65,30 +65,29 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
 
         if type not in ["", None]:
             filter_params["voucher_type"] = type
-            
-            
+
         if start_date not in ["", None] and end_date not in ["", None]:
             print("Start Date", start_date)
             print("End Date", end_date)
             filter_params["date"] = {"$gte": start_date, "$lte": end_date}
-            
-            # try:
-                # start_date = (
-                #     datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-                #     if "T" in start_date
-                #     else datetime.strptime(start_date, "%Y-%m-%d")
-                # )
-                # end_date = (
-                #     datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-                #     if "T" in end_date
-                #     else datetime.strptime(end_date, "%Y-%m-%d")
-                # )
-                # # Always set end_date to end of day to include all entries for that date
-                # end_date = end_date.replace(
-                #     hour=23, minute=59, second=59, microsecond=999999
-                # )
 
-                # filter_params["date"] = {"$gte": start_date, "$lte": end_date}
+            # try:
+            # start_date = (
+            #     datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            #     if "T" in start_date
+            #     else datetime.strptime(start_date, "%Y-%m-%d")
+            # )
+            # end_date = (
+            #     datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            #     if "T" in end_date
+            #     else datetime.strptime(end_date, "%Y-%m-%d")
+            # )
+            # # Always set end_date to end of day to include all entries for that date
+            # end_date = end_date.replace(
+            #     hour=23, minute=59, second=59, microsecond=999999
+            # )
+
+            # filter_params["date"] = {"$gte": start_date, "$lte": end_date}
             # except ValueError:
             #     # If parsing fails, still try to set end_date to end of day if possible
             #     # try:
@@ -98,8 +97,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             #     # except Exception:
             #     #     pass
             #     filter_params["date"] = {"$gte": start_date, "$lte": end_date}
-                
-                
+
         sort_options = {
             "voucher_number_asc": {"voucher_number": 1},
             "voucher_number_desc": {"voucher_number": -1},
@@ -328,12 +326,114 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     # "credit": 1,
                     "amount": "$ledger_entries.amount",
                     "balance_type": 1,
-                    "ledger_name": "$ledger_entries.ledgername',",
+                    "ledger_name": "$ledger_entries.ledgername",
                     "is_deemed_positive": "$ledger_entries.is_deemed_positive",
                     # "ledger_entries": 1,
                     "created_at": 1,
                 }
             },
+            {
+                "$facet": {
+                    "docs": [
+                        {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
+                        {"$limit": pagination.paging.limit},
+                    ],
+                    "count": [{"$count": "count"}],
+                }
+            },
+        ]
+
+        res = [doc async for doc in self.collection.aggregate(pipeline)]
+        docs = res[0]["docs"]
+        print("Docs", docs)
+        count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
+
+        return PaginatedResponse(
+            docs=docs,
+            meta=Meta(
+                page=pagination.paging.page,
+                limit=pagination.paging.limit,
+                total=count,
+                unique=[],
+            ),
+        )
+
+    async def viewTimeline(
+        self,
+        search: str,
+        type: str,
+        company_id: str,
+        pagination: PageRequest,
+        sort: Sort,
+        current_user: TokenData = Depends(get_current_user),
+        # is_deleted: bool = False,
+        start_date: datetime = None,
+        end_date: datetime = None,
+    ):
+        filter_params = {
+            "user_id": current_user.user_id,
+            "company_id": company_id,
+        }
+
+        if search not in ["", None]:
+            try:
+                safe_search = re.escape(search)
+                filter_params["$or"] = [
+                    {"voucher_number": {"$regex": safe_search, "$options": "i"}},
+                    {"voucher_type": {"$regex": safe_search, "$options": "i"}},
+                    {"item": {"$regex": safe_search, "$options": "i"}},
+                    {"place_of_supply": {"$regex": safe_search, "$options": "i"}},
+                    {"party_name": {"$regex": safe_search, "$options": "i"}},
+                ]
+            except re.error:
+                pass
+
+        if type not in ["", None]:
+            filter_params["voucher_type"] = type
+
+        if start_date not in ["", None] and end_date not in ["", None]:
+            filter_params["date"] = {"$gte": start_date, "$lte": end_date}
+
+            
+        sort_options = {
+            "voucher_number_asc": {"voucher_number": 1},
+            "voucher_number_desc": {"voucher_number": -1},
+            "created_at_asc": {"created_at": 1},
+            "created_at_desc": {"created_at": -1},
+            "date_asc": {"date": 1},
+            "date_desc": {"date": -1},
+        }
+
+        sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
+        sort_stage = sort_options.get(sort_key, {"date": -1, "created_at": -1})
+
+        pipeline = [
+            {"$match": filter_params},
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "localField": "_id",
+                    "foreignField": "vouchar_id",
+                    "as": "inventory",
+                }
+            },
+            {"$unwind": "$inventory"},
+            {
+                "$addFields": {
+                    "inventory.company_id": "$company_id",
+                    "inventory.user_id": "$user_id",
+                    "inventory.date": "$date",
+                    "inventory.voucher_number": "$voucher_number",
+                    "inventory.voucher_type": "$voucher_type",
+                    "inventory.narration": "$narration",
+                    "inventory.party_name": "$party_name",
+                    "inventory.place_of_supply": "$place_of_supply",
+                    "inventory.created_at": "$created_at",
+                    "inventory.updated_at": "$updated_at",
+                }
+            },
+            {"$replaceRoot": {"newRoot": "$inventory"}},
+            {"$sort": sort_stage},
             {
                 "$facet": {
                     "docs": [

@@ -31,3 +31,10 @@ class AccountingCreate(BaseModel):
     ledger: str = Field(..., description="Name of the ledger account used")
     ledger_id: str = Field(..., description="Internal reference or GUID for the ledger")
     amount: float = Field(..., description="Amount debited or credited")
+
+class AccountingUpdate(BaseModel):
+    entry_id: str
+    vouchar_id: str
+    ledger: str = Field(..., description="Name of the ledger account used")
+    ledger_id: str = Field(..., description="Internal reference or GUID for the ledger")
+    amount: float = Field(..., description="Amount debited or credited")
