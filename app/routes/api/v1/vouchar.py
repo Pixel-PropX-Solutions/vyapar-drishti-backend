@@ -287,79 +287,76 @@ async def updateVouchar(
                         {"_id": entry.entry_id, "vouchar_id": vouchar_id},
                         {"$set": entry_data},
                     )
+                    
+                    # First, get all existing inventory items for this vouchar
+                    existing_items = await inventory_repo.collection.find(
+                        {"vouchar_id": vouchar_id}
+                    ).to_list(None)
+                    
+                    existing_item_ids = {str(item.get("_id")) for item in existing_items}
 
-            # Create all inventory items
-            for item in inventory_data:
-                # Check if item already exists
-                existing_item = await inventory_repo.findOne(
-                    {
-                        "_id": item.entry_id,
-                        "vouchar_id": vouchar_id,
-                        "item_id": item.item_id,
-                    }
-                )
-                if existing_item:
-                    item_data = {
-                        "quantity": item.quantity,
-                        "rate": item.rate,
-                        "amount": item.amount,
-                        "additional_amount": (
-                            item.additional_amount
-                            if hasattr(item, "additional_amount")
-                            else 0.0
-                        ),
-                        "discount_amount": (
-                            item.discount_amount
-                            if hasattr(item, "discount_amount")
-                            else 0.0
-                        ),
-                        "godown": item.godown if hasattr(item, "godown") else "",
-                        "godown_id": item.godown_id if hasattr(item, "godown_id") else "",
-                        "order_number": (
-                            item.order_number if hasattr(item, "order_number") else None
-                        ),
-                        "order_due_date": (
-                            item.order_due_date
-                            if hasattr(item, "order_due_date")
-                            else None
-                        ),
-                    }
-                    await inventory_repo.update_one(
-                        {
-                            "_id": item.entry_id,
-                            "vouchar_id": vouchar_id,
-                            "item_id": item.item_id,
-                        },
-                        {"$set": item_data},
-                    )
-                else:
-                    item_data = {
-                        "vouchar_id": vouchar_id,
-                        "item": item.item,
-                        "item_id": item.item_id,
-                        "quantity": item.quantity,
-                        "rate": item.rate,
-                        "amount": item.amount,
-                        "additional_amount": (
-                            item.additional_amount
-                            if hasattr(item, "additional_amount")
-                            else 0.0
-                        ),
-                        "discount_amount": (
-                            item.discount_amount
-                            if hasattr(item, "discount_amount")
-                            else 0.0
-                        ),
-                        "godown": item.godown if hasattr(item, "godown") else "",
-                        "godown_id": item.godown_id if hasattr(item, "godown_id") else "",
-                        "order_number": (
-                            item.order_number if hasattr(item, "order_number") else None
-                        ),
-                        "order_due_date": (
-                            item.order_due_date if hasattr(item, "order_due_date") else None
-                        ),
-                    }
-                    await inventory_repo.new(InventoryItem(**item_data))
+                    # Track the item entry_ids received in the update
+                    received_entry_ids = set()
+                    for item in inventory_data:
+                        entry_id = getattr(item, "entry_id", None)
+                        received_entry_ids.add(str(entry_id))
+                        # Check if item already exists
+                        existing_item = await inventory_repo.findOne(
+                            {
+                                "_id": entry_id,
+                                "vouchar_id": vouchar_id,
+                                "item_id": item.item_id,
+                            }
+                        )
+                        item_data = {
+                            "quantity": item.quantity,
+                            "rate": item.rate,
+                            "amount": item.amount,
+                            "additional_amount": (
+                                item.additional_amount
+                                if hasattr(item, "additional_amount")
+                                else 0.0
+                            ),
+                            "discount_amount": (
+                                item.discount_amount
+                                if hasattr(item, "discount_amount")
+                                else 0.0
+                            ),
+                            "godown": item.godown if hasattr(item, "godown") else "",
+                            "godown_id": item.godown_id if hasattr(item, "godown_id") else "",
+                            "order_number": (
+                                item.order_number if hasattr(item, "order_number") else None
+                            ),
+                            "order_due_date": (
+                                item.order_due_date
+                                if hasattr(item, "order_due_date")
+                                else None
+                            ),
+                        }
+                        if existing_item:
+                            await inventory_repo.update_one(
+                                {
+                                    "_id": entry_id,
+                                    "vouchar_id": vouchar_id,
+                                    "item_id": item.item_id,
+                                },
+                                {"$set": item_data},
+                            )
+                        else:
+                            item_data.update({
+                                "vouchar_id": vouchar_id,
+                                "item": item.item,
+                                "item_id": item.item_id,
+                            })
+                            await inventory_repo.new(InventoryItem(**item_data))
+
+                    # Delete inventory items that are in DB but not in the received update
+                    items_to_delete = existing_item_ids - received_entry_ids
+                    if items_to_delete:
+                        await inventory_repo.collection.delete_many({
+                            "_id": {"$in": list(items_to_delete)},
+                            "vouchar_id": vouchar_id
+                        })
 
         except Exception as e:
             print("Error during vouchar update:", str(e))
