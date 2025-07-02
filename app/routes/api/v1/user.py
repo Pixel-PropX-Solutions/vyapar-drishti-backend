@@ -1,6 +1,7 @@
 from datetime import datetime
 from fastapi import (
     APIRouter,
+    Body,
     Depends,
     File,
     Form,
@@ -18,7 +19,7 @@ from app.oauth2 import get_current_user
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.utils.cloudinary_client import cloudinary_client
 from app.database.repositories.companyRepo import company_repo, Company
-from typing import Optional
+from typing import Any, Dict, Optional
 
 
 user = APIRouter()
@@ -503,6 +504,57 @@ async def updateCompany(
     return {
         "success": True,
         "message": "Company Updated Successfully",
+    }
+
+
+@user.put(
+    "/update/company/details/{company_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def updateCompanyDetails(
+    company_id: str,
+    company_details: Dict[str, Any] = Body(...),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    company = await company_repo.findOne(
+        {"_id": company_id, "user_id": current_user.user_id, "is_deleted": False},
+    )
+
+    if company is None:
+        raise http_exception.ResourceNotFoundException()
+
+    updated_dict = {}
+
+    for k, v in dict(company_details).items():
+        if isinstance(v, str) and v not in ["", None]:
+            updated_dict[k] = v
+        elif isinstance(v, dict):
+            temp_dict = {}
+            for k1, v1 in v.items():
+                if isinstance(v1, str) and v1 not in ["", None]:
+                    temp_dict[k1] = v1
+
+            if temp_dict:  #
+                updated_dict[k] = temp_dict
+
+    await company_repo.update_one(
+        {"_id": company_id, "user_id": current_user.user_id},
+        {"$set": updated_dict, "$currentDate": {"updated_at": True}},
+    )
+
+    # Fetch the updated document after update
+    updatedCompany = await company_repo.findOne(
+        {"_id": company_id, "user_id": current_user.user_id, "is_deleted": False},
+    )
+
+    return {
+        "success": True,
+        "message": "Company Details Updated Successfully",
+        "data": updatedCompany,
     }
 
 

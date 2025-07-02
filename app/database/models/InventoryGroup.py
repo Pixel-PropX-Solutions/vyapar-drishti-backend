@@ -20,12 +20,8 @@ class InventoryGroup(BaseModel):
 
 class InventoryGroupDB(InventoryGroup):
     inventory_group_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
-    created_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
-    updated_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
+    created_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
+    updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
 
 
 class InventoryGroupCreate(BaseModel):

@@ -25,8 +25,9 @@ from app.oauth2 import (
 )
 from app.utils import generatePassword, hashing
 from app.database.repositories.user import user_repo
+from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.utils.generatePassword import generatePassword
-from app.routes.api.v1.userSettings import initialize_user_settings
+from app.routes.api.v1.userSettings import extract_device_info, initialize_user_settings
 
 from app.Config import ENV_PROJECT
 from app.utils.mailer_module import template
@@ -34,6 +35,7 @@ from app.utils.mailer_module import mail
 from app.database.repositories.companyRepo import company_repo
 from typing import Optional
 from app.schema.enums import UserTypeEnum
+from datetime import datetime
 
 
 auth = APIRouter()
@@ -50,6 +52,7 @@ class Email_Body(BaseModel):
 
 @auth.post("/login", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
 async def login(
+    request: Request,
     response: Response,
     user_type: UserTypeEnum,
     creds: OAuth2PasswordRequestForm = Depends(),
@@ -74,7 +77,21 @@ async def login(
         )
         token_generated = await create_access_token(token_data)
         set_cookies(response, token_generated.access_token, token_generated.refresh_token)
-        return {"ok": True, "accessToken": token_generated.access_token, "refreshToken": token_generated.refresh_token}
+        await user_settings_repo.update_one(
+            {"user_id": user["_id"]},
+            {
+                "$set": {
+                    "last_login": datetime.now(),
+                    "last_login_ip": request.client.host,
+                    "last_login_device": extract_device_info(request.headers.get("user-agent", "unknown")),
+                }
+            },
+        )
+        return {
+            "ok": True,
+            "accessToken": token_generated.access_token,
+            "refreshToken": token_generated.refresh_token,
+        }
 
     raise http_exception.CredentialsInvalidException()
 
@@ -91,7 +108,7 @@ async def register(
         raise http_exception.ResourceConflictException()
 
     password = await generatePassword.createPassword()
- 
+
     mail.send(
         "Welcome to Vyapar Drishti",
         user.email,
@@ -123,7 +140,11 @@ async def register(
     )
     token_generated = await create_access_token(token_data)
     set_cookies(response, token_generated.access_token, token_generated.refresh_token)
-    return {"ok": True, "accessToken": token_generated.access_token, "refreshToken": token_generated.refresh_token}
+    return {
+        "ok": True,
+        "accessToken": token_generated.access_token,
+        "refreshToken": token_generated.refresh_token,
+    }
 
 
 @auth.get("/current/user", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
@@ -234,7 +255,7 @@ async def get_current_user_details(
         data["company"] = []
 
     # print("User Profile Data:", data)
-    return { 
+    return {
         "success": True,
         "message": "User Profile Fetched Successfully",
         "data": response,

@@ -47,9 +47,5 @@ class GSTRate(BaseModel):
 
 class GSTRateDB(GSTRate):
     gst_rate_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
-    created_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
-    updated_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
+    created_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
+    updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())

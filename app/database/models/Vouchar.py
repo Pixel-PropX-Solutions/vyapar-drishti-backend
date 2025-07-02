@@ -2,8 +2,9 @@ from pydantic import BaseModel, Field
 import datetime
 from uuid import uuid4
 from typing import Optional, List
-from app.database.models.Inventory import InventoryItem,InventoryItemUpdate
+from app.database.models.Inventory import InventoryItem, InventoryItemUpdate
 from app.database.models.Accounting import Accounting, AccountingUpdate
+
 
 class Voucher(BaseModel):
     company_id: str
@@ -20,7 +21,7 @@ class Voucher(BaseModel):
         ""  # This is the name or id of the party( Ledger ) involved in the voucher
     )
 
-    # Conditional fields 
+    # Conditional fields
     reference_date: Optional[str] = (
         None  # Required if using bill-wise accounting or tracking references(e.g. bills in sales/purchase).
     )
@@ -40,12 +41,8 @@ class Voucher(BaseModel):
 
 class VoucherDB(Voucher):
     vouchar_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
-    created_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
-    updated_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
+    created_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
+    updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
 
 
 class VoucherCreate(BaseModel):
@@ -60,7 +57,7 @@ class VoucherCreate(BaseModel):
     reference_number: Optional[str] = None
     reference_date: Optional[str] = None
     place_of_supply: Optional[str] = None
-    
+
     accounting: List[Accounting]
     items: List[InventoryItem] = []
 
@@ -78,7 +75,7 @@ class VoucherUpdate(BaseModel):
     narration: Optional[str]
     reference_number: Optional[str]
     reference_date: Optional[str]
-    place_of_supply: Optional[str] 
-    
+    place_of_supply: Optional[str]
+
     accounting: List[AccountingUpdate]
     items: Optional[List[InventoryItemUpdate]]

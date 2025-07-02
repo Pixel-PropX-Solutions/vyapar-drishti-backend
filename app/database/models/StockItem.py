@@ -40,12 +40,8 @@ class StockItem(BaseModel):
 # Database Schema
 class StockItemDB(StockItem):
     stock_item_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
-    created_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
-    updated_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
+    created_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
+    updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
 
 
 # Schema for Creating a New Product
@@ -78,10 +74,10 @@ class StockItemCreate(BaseModel):
     # Additonal Optional fields
     low_stock_alert: Optional[int] = 0
 
+
 class StockItemVouchar(BaseModel):
     name: str
     hsn_code: str
     quantity: float
     rate: float
     amount: float
-    

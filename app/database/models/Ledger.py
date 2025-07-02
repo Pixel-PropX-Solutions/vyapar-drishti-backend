@@ -9,17 +9,21 @@ class Ledger(BaseModel):
     ledger_name: str
     company_id: str
     user_id: str
-    parent: str # Group under which the ledger falls (e.g., "Sales Accounts")
-    parent_id: Optional[str] = None  # This is the name or id of the parent Ledger for internal reference
+    parent: str  # Group under which the ledger falls (e.g., "Sales Accounts")
+    parent_id: Optional[str] = (
+        None  # This is the name or id of the parent Ledger for internal reference
+    )
     alias: Optional[str] = None
     is_revenue: Optional[bool] = False
-    is_deemed_positive: Optional[bool] = False # Indicates and Controls Debit/Credit nature
-    opening_balance: Optional[float] = 0.0 # Opening balance for the ledger, can be positive or negative, Amount if ledger is not zeroed
+    is_deemed_positive: Optional[bool] = (
+        False  # Indicates and Controls Debit/Credit nature
+    )
+    opening_balance: Optional[float] = (
+        0.0  # Opening balance for the ledger, can be positive or negative, Amount if ledger is not zeroed
+    )
     image: Optional[str] = None
     qr_image: Optional[str] = None
     is_deleted: Optional[bool] = False
-    
-    
 
     # Optional mailing details
     mailing_name: Optional[str] = None
@@ -28,7 +32,7 @@ class Ledger(BaseModel):
     mailing_country: Optional[str] = None
     mailing_pincode: Optional[str] = None
     email: Optional[str] = None
-    phone: Optional[PhoneNumber] = None 
+    phone: Optional[PhoneNumber] = None
 
     # Optional tax details
     it_pan: Optional[str] = None
@@ -49,24 +53,22 @@ class Ledger(BaseModel):
 
 class LedgerDB(Ledger):
     ledger_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
-    created_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
-    updated_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
+    created_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
+    updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
 
 
 class LedgerCreate(BaseModel):
     ledger_name: str
     company_id: str
     user_id: str
-    parent: str # Group under which the ledger falls (e.g., "Sales Accounts")
-    parent_id: Optional[str] = None  # This is the name or id of the parent Ledger for internal reference
+    parent: str  # Group under which the ledger falls (e.g., "Sales Accounts")
+    parent_id: Optional[str] = (
+        None  # This is the name or id of the parent Ledger for internal reference
+    )
     alias: Optional[str] = None
     is_revenue: Optional[bool] = False
-    is_deemed_positive: Optional[bool] = False 
-    opening_balance: Optional[float] = 0.0 
+    is_deemed_positive: Optional[bool] = False
+    opening_balance: Optional[float] = 0.0
 
     # Optional mailing details
     mailing_name: Optional[str] = None

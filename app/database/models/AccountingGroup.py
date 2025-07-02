@@ -13,16 +13,12 @@ class AccountingGroup(BaseModel):
     is_deleted: bool = False  # Soft delete flag
     parent: Optional[str] = "Primary Group"  # Default parent group name
     parent_id: Optional[str] = "Primary Group"  # Internal use, default parent group name
-    
+
 
 class AccountingGroupDB(AccountingGroup):
     accounting_group_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
-    created_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
-    updated_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
+    created_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
+    updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
 
 
 class AccountingGroupCreate(BaseModel):
@@ -34,4 +30,3 @@ class AccountingGroupCreate(BaseModel):
     description: Optional[str] = ""
     parent: Optional[str] = ""
     parent_id: Optional[str] = ""
-    

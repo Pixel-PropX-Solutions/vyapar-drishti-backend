@@ -16,7 +16,8 @@ class GSTDetails(BaseModel):
 #     deductor_type: Optional[str] = None  # e.g., Company, Individual
 #     default_nature_of_payment: Optional[str] = None
 #     tds_threshold_limit: Optional[float] = None
-    
+
+
 class BankDetails(BaseModel):
     account_holder: Optional[str] = None
     account_number: Optional[str] = None
@@ -37,8 +38,8 @@ class FeatureFlags(BaseModel):
 
 
 class FinancialYearFormat(BaseModel):
-    start_month: int = 4   # April
-    start_day: int = 1     # 1st
+    start_month: int = 4  # April
+    start_day: int = 1  # 1st
     name_format: str = "YYYY"  # e.g., "2024-25"
 
     # def format_year_name(self, date: datetime) -> str:
@@ -61,10 +62,12 @@ class CompanySettings(BaseModel):
     country: str = "India"
     state: str
     currency: str = "INR"
-    motto: Optional[str] = 'LIFE\'S A JOURNEY, KEEP SMILING'
+    motto: Optional[str] = "LIFE'S A JOURNEY, KEEP SMILING"
 
     # Financial Year Format
-    financial_year_format: FinancialYearFormat = Field(default_factory=FinancialYearFormat)
+    financial_year_format: FinancialYearFormat = Field(
+        default_factory=FinancialYearFormat
+    )
 
     # Feature toggles
     features: FeatureFlags = Field(default_factory=FeatureFlags)
@@ -81,13 +84,9 @@ class CompanySettings(BaseModel):
 
     # System flags
     is_deleted: bool = False
-    
-    
+
+
 class CompanySettingsDB(CompanySettings):
     company_settings_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
-    created_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
-    updated_at: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
+    created_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
+    updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())

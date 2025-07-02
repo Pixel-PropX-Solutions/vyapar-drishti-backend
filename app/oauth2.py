@@ -53,9 +53,10 @@ oauth2_scheme = OAuth2PasswordBearerWithCookie(
 
 async def create_refresh_token(data: TokenData):
     to_encode = data.model_dump()
-    expire = datetime.timedelta(
-        minutes=ENV_PROJECT.REFRESH_TOKEN_EXPIRE_MINUTES
-    ) + datetime.datetime.now(datetime.timezone.utc)
+    expire = (
+        datetime.timedelta(minutes=ENV_PROJECT.REFRESH_TOKEN_EXPIRE_MINUTES)
+        + datetime.datetime.now()
+    )
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(
         to_encode, ENV_PROJECT.REFRESH_TOKEN_SECRET, algorithm="HS256"
@@ -84,7 +85,7 @@ async def create_access_token(
     data: TokenData, old_refresh_token: str = None
 ) -> BaseToken:
     to_encode = data.model_dump()
-    expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+    expire = datetime.datetime.now() + datetime.timedelta(
         minutes=ENV_PROJECT.LOGIN_ACCESS_TOKEN_EXPIRE_MINUTES
     )
     to_encode.update({"exp": expire})
@@ -103,7 +104,7 @@ async def create_access_token(
             {
                 "$set": {
                     "refresh_token": refresh_token,
-                    "updated_at": datetime.datetime.now(datetime.timezone.utc),
+                    "updated_at": datetime.datetime.now(),
                 }
             },
         )
@@ -124,7 +125,7 @@ async def get_new_access_token(refresh_token: str):
 
 # async def create_signup_access_token(data: TokenData):
 #     to_encode = data.model_dump()
-#     expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+#     expire = datetime.datetime.now() + datetime.timedelta(
 #         minutes=ENV_PROJECT.EMAIL_CONFIRMATION_TOKEN_EXPIRE_MINUTES
 #     )
 #     to_encode.update({"exp": expire})
@@ -156,7 +157,7 @@ async def get_new_access_token(refresh_token: str):
 
 async def create_forgot_password_access_token(data: TokenData):
     to_encode = data.model_dump()
-    expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+    expire = datetime.datetime.now() + datetime.timedelta(
         minutes=ENV_PROJECT.EMAIL_CONFIRMATION_TOKEN_EXPIRE_MINUTES
     )
     to_encode.update({"exp": expire})
