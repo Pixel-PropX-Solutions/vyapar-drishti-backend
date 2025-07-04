@@ -218,7 +218,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
 
         pipeline = [
             {"$match": filter_params},
-            # Lookup the party ledger (main party involved)
             {
                 "$lookup": {
                     "from": "Ledger",
@@ -236,7 +235,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "as": "accounting",
                 }
             },
-            # Compute debit and credit totals
             {
                 "$addFields": {
                     "debit": {
@@ -271,20 +269,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     },
                 }
             },
-            # Compute total and balance type
-            # {
-            #     "$addFields": {
-            #         "amount": {"$add": ["$debit", "$credit"]},
-            #         "balance_type": {
-            #             "$cond": [
-            #                 {"$gt": ["$debit", "$credit"]},
-            #                 "Dr",
-            #                 {"$cond": [{"$gt": ["$credit", "$debit"]}, "Cr", "Balanced"]},
-            #             ]
-            #         },
-            #     }
-            # },
-            # Add Tally-style ledger entries (like ALLLEDGERENTRIES.LIST)
             {
                 "$addFields": {
                     "ledger_entries": {
@@ -309,8 +293,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     }
                 }
             },
-            {"$unwind": {"path": "$ledger_entries", "preserveNullAndEmptyArrays": True}},
-            # Sort
+            # Removed $unwind on ledger_entries
             {"$sort": sort_stage},
             {
                 "$project": {
@@ -324,10 +307,11 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "narration": 1,
                     # "debit": 1,
                     # "credit": 1,
-                    "amount": "$ledger_entries.amount",
+                    # Project the first ledger entry's fields (or null if none)
+                    "amount": {"$arrayElemAt": ["$ledger_entries.amount", 0]},
                     "balance_type": 1,
-                    "ledger_name": "$ledger_entries.ledgername",
-                    "is_deemed_positive": "$ledger_entries.is_deemed_positive",
+                    "ledger_name": {"$arrayElemAt": ["$ledger_entries.ledgername", 0]},
+                    "is_deemed_positive": {"$arrayElemAt": ["$ledger_entries.is_deemed_positive", 0]},
                     # "ledger_entries": 1,
                     "created_at": 1,
                 }

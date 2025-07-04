@@ -896,6 +896,8 @@ async def print_invoice(
         "party": {
             "name": invoice.get("party_details", {}).get("ledger_name", ""),
             "address": invoice.get("party_details", {}).get("mailing_address", ""),
+            "state": invoice.get("party_details", {}).get("mailing_state", ""),
+            "country": invoice.get("party_details", {}).get("mailing_country", ""),
             "phone": invoice.get("party_details", {}).get("phone", ""),
             "email": invoice.get("party_details", {}).get("email", ""),
             "gst_no": invoice.get("party_details", {}).get("gstin", "") or "",
@@ -911,11 +913,20 @@ async def print_invoice(
         "company": invoice.get("company", {}),
         "company.motto": "LIFE'S A JOURNEY, KEEP SMILING",
     }
+    
+    print("Template variables prepared:", template_vars)
+
+    # Load HTML template (assuming you have it in a file)
+    async with aiofiles.open("app/utils/templates/invoice_template.html", "r") as f:
+        template_str = await f.read()
+
+    template = Template(template_str)
+    rendered_html = template.render(**template_vars)
 
     return {
         "success": True,
         "message": "Data Fetched Successfully...",
-        # "data": rendered_html,
+        "data": rendered_html,
     }
 
 

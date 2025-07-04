@@ -1,44 +1,54 @@
-{
-  "company_id": "9c81bb74-ad75-4cb1-9722-ea02545e4f6d",
-  "date": "2025-06-15",
-  "voucher_type": "Purchase",
-  "voucher_number": "123456",
-  "party_name": "John",
-  "narration": "No",
-  "reference_number": "string",
-  "reference_date": "string",
-  "place_of_supply": "Raj",
-  "accounting": [
-    {
-      "vouchar_id": "",
-      "ledger": "John",
-      "ledger_id": "6c6e2ab2-797e-4217-b9a3-093d37eb585d",
-      "amount": 100
-    },
-{
-      "vouchar_id": "",
-      "ledger": "John Pur",
-      "ledger_id": "5156e8f2-77b6-4a7d-95c4-3b7c38baf2c3",
-      "amount": -100
-    }
-  ],
-  "items": [
-    {
-      "vouchar_id": "",
-      "item": "GST Product 1",
-      "quantity": 20,
-      "rate": 230,
-      "amount": 4600,
-      "additional_amount": 0,
-      "discount_amount": 0,
-      "godown": "",
-      "order_number": "",
-      "order_due_date": "",
-      "hsn_code": "JHGFDSA",
-      "gst_rate": "18",
-      "cgst": 414,
-      "sgst": 414,
-      "igst": 0
-    }
-  ]
-}
+[
+  {
+    "_id": "7ebe5c9a-52ac-4127-aae0-10e4965bb7c7",
+    "date": "2025-07-01",
+    "voucher_number": "INV-514349",
+    "voucher_type": "Sales",
+    "voucher_type_id": "Sales",
+    "narration": "NA",
+    "party_name": "Doe",
+    "party_name_id": "Doe",
+    "amount": -399.0,
+    "ledger_name": "Doe",
+    "is_deemed_positive": True
+  },
+  {
+    "_id": "be2a7adf-f39e-4c34-b34f-d91c7307d187",
+    "date": "2025-07-01",
+    "voucher_number": "INV-284376",
+    "voucher_type": "Purchase",
+    "voucher_type_id": "Purchase",
+    "narration": "dss",
+    "party_name": "John",
+    "party_name_id": "John",
+    "amount": 164.0,
+    "ledger_name": "John",
+    "is_deemed_positive": False
+  },
+  {
+    "_id": "cd63257f-0dd8-45c8-8e47-ce00ea9e98c0",
+    "date": "03/07/2025",
+    "voucher_number": "#INV-25-3357",
+    "voucher_type": "Purchase Bill",
+    "voucher_type_id": "Purchase Bill",
+    "narration": "",
+    "party_name": "John",
+    "party_name_id": "John",
+    "amount": 3150.0,
+    "ledger_name": "John",
+    "is_deemed_positive": False
+  },
+  {
+    "_id": "cd63257f-0dd8-45c8-8e47-ce00ea9e98c0",
+    "date": "03/07/2025",
+    "voucher_number": "#INV-25-3357",
+    "voucher_type": "Purchase Bill",
+    "voucher_type_id": "Purchase Bill",
+    "narration": "",
+    "party_name": "John",
+    "party_name_id": "John",
+    "amount": 3150.0,
+    "ledger_name": "John",
+    "is_deemed_positive": False
+  }
+]

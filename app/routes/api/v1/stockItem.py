@@ -23,7 +23,7 @@ Product = APIRouter()
 )
 async def create_product(
     stock_item_name: str = Form(...),
-    company_id: str = Form(...),
+    company_id: str = Form(None),
     unit: str = Form(...),
     unit_id: str = Form(...),
     # optional fields
