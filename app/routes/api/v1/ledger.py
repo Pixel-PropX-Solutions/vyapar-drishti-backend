@@ -19,7 +19,7 @@ ledger = APIRouter()
 
 @ledger.post("/create", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
 async def create_ledger(
-    company_id: str = Form(...),
+    company_id: str = Form(None),
     parent: str = Form(...),  # Group in which the ledger (e.g."Sales Accounts")
     parent_id: str = Form(...),  # Group ID in which the ledger (e.g."Sales Accounts")
     name: str = Form(...),

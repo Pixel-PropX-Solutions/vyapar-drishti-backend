@@ -10,17 +10,11 @@ class Ledger(BaseModel):
     company_id: str
     user_id: str
     parent: str  # Group under which the ledger falls (e.g., "Sales Accounts")
-    parent_id: Optional[str] = (
-        None  # This is the name or id of the parent Ledger for internal reference
-    )
+    parent_id: Optional[str] = None
     alias: Optional[str] = None
     is_revenue: Optional[bool] = False
-    is_deemed_positive: Optional[bool] = (
-        False  # Indicates and Controls Debit/Credit nature
-    )
-    opening_balance: Optional[float] = (
-        0.0  # Opening balance for the ledger, can be positive or negative, Amount if ledger is not zeroed
-    )
+    is_deemed_positive: Optional[bool] = False
+    opening_balance: Optional[float] = 0.0
     image: Optional[str] = None
     qr_image: Optional[str] = None
     is_deleted: Optional[bool] = False
