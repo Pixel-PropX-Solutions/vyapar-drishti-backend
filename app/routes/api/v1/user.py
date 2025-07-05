@@ -258,7 +258,13 @@ async def createCompany(
 
         await user_settings_repo.update_one(
             {"user_id": current_user.user_id},
-            {"$set": {"current_company_id": response.company_id}},
+            {
+                "$set": {
+                    "current_company_id": response.company_id,
+                    "current_company_name": name,
+                    "updated_at": datetime.now(),
+                }
+            },
         )
 
     return {"success": True, "message": "Company Created Successfully"}
