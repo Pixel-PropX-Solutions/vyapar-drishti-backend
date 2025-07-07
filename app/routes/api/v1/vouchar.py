@@ -83,6 +83,7 @@ async def createVouchar(
     vouchar: VoucherCreate,
     current_user: TokenData = Depends(get_current_user),
 ):
+    print('Creating vouchar:', vouchar)
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
@@ -140,13 +141,41 @@ async def createVouchar(
         try:
 
             for entry in accounting_data:
-                entry_data = {
-                    "vouchar_id": response.vouchar_id,
-                    "ledger": entry.ledger,
-                    "ledger_id": entry.ledger_id,
-                    "amount": entry.amount,
-                }
-                await accounting_repo.new(Accounting(**entry_data))
+                if vouchar.voucher_type in ["Sales", "Purchase"]:
+                    ledger = (
+                        "Sales Account"
+                        if vouchar.voucher_type.lower() == "sales"
+                        else "Purchase Account"
+                    )
+                    party_ledger = await ledger_repo.findOne(
+                        {
+                            "company_id": userSettings["current_company_id"],
+                            "ledger_name": ledger,
+                            "user_id": current_user.user_id,
+                        }
+                    )
+
+                    entry_data = {
+                        "vouchar_id": response.vouchar_id,
+                        "ledger": (
+                            entry.ledger if entry.ledger == vouchar.party_name else party_ledger["ledger_name"]
+                        ),
+                        "ledger_id": (
+                            entry.ledger_id if entry.ledger == vouchar.party_name else party_ledger["_id"]
+                        ),
+                        "amount": entry.amount,
+                    }
+                    await accounting_repo.new(Accounting(**entry_data))
+
+                else:
+
+                    entry_data = {
+                        "vouchar_id": response.vouchar_id,
+                        "ledger": entry.ledger,
+                        "ledger_id": entry.ledger_id,
+                        "amount": entry.amount,
+                    }
+                    await accounting_repo.new(Accounting(**entry_data))
 
             # Create all inventory items
             for item in inventory_data:
@@ -287,12 +316,12 @@ async def updateVouchar(
                         {"_id": entry.entry_id, "vouchar_id": vouchar_id},
                         {"$set": entry_data},
                     )
-                    
+
                     # First, get all existing inventory items for this vouchar
                     existing_items = await inventory_repo.collection.find(
                         {"vouchar_id": vouchar_id}
                     ).to_list(None)
-                    
+
                     existing_item_ids = {str(item.get("_id")) for item in existing_items}
 
                     # Track the item entry_ids received in the update
@@ -323,9 +352,13 @@ async def updateVouchar(
                                 else 0.0
                             ),
                             "godown": item.godown if hasattr(item, "godown") else "",
-                            "godown_id": item.godown_id if hasattr(item, "godown_id") else "",
+                            "godown_id": (
+                                item.godown_id if hasattr(item, "godown_id") else ""
+                            ),
                             "order_number": (
-                                item.order_number if hasattr(item, "order_number") else None
+                                item.order_number
+                                if hasattr(item, "order_number")
+                                else None
                             ),
                             "order_due_date": (
                                 item.order_due_date
@@ -343,20 +376,24 @@ async def updateVouchar(
                                 {"$set": item_data},
                             )
                         else:
-                            item_data.update({
-                                "vouchar_id": vouchar_id,
-                                "item": item.item,
-                                "item_id": item.item_id,
-                            })
+                            item_data.update(
+                                {
+                                    "vouchar_id": vouchar_id,
+                                    "item": item.item,
+                                    "item_id": item.item_id,
+                                }
+                            )
                             await inventory_repo.new(InventoryItem(**item_data))
 
                     # Delete inventory items that are in DB but not in the received update
                     items_to_delete = existing_item_ids - received_entry_ids
                     if items_to_delete:
-                        await inventory_repo.collection.delete_many({
-                            "_id": {"$in": list(items_to_delete)},
-                            "vouchar_id": vouchar_id
-                        })
+                        await inventory_repo.collection.delete_many(
+                            {
+                                "_id": {"$in": list(items_to_delete)},
+                                "vouchar_id": vouchar_id,
+                            }
+                        )
 
         except Exception as e:
             print("Error during vouchar update:", str(e))
@@ -913,7 +950,7 @@ async def print_invoice(
         "company": invoice.get("company", {}),
         "company.motto": "LIFE'S A JOURNEY, KEEP SMILING",
     }
-    
+
     print("Template variables prepared:", template_vars)
 
     # Load HTML template (assuming you have it in a file)

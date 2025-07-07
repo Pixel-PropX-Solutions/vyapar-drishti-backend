@@ -17,6 +17,7 @@ from app.routes.api.v1.companySettings import initialize_company_settings
 from app.schema.token import TokenData
 from app.oauth2 import get_current_user
 from app.database.repositories.UserSettingsRepo import user_settings_repo
+from app.database.repositories.ledgerRepo import ledger_repo, Ledger
 from app.utils.cloudinary_client import cloudinary_client
 from app.database.repositories.companyRepo import company_repo, Company
 from typing import Any, Dict, Optional
@@ -267,6 +268,65 @@ async def createCompany(
             },
         )
 
+        ledger_data = [
+            {
+                "ledger_name": "Purchase Account",
+                "user_id": current_user.user_id,
+                "company_id": response.company_id,
+                "is_deleted": False,
+                "phone": None,
+                "email": None,
+                "parent": "Purchase Account",
+                "parent_id": "e73a4f44-f3af-4851-b36e-103da84580c1",
+                "alias": None,
+                "is_revenue": False,
+                "is_deemed_positive": False,
+                "opening_balance": 0.0,
+                "image": None,
+                "mailing_name": None,
+                "mailing_address": None,
+                "mailing_state": None,
+                "mailing_country": None,
+                "mailing_pincode": None,
+                "it_pan": None,
+                "gstin": None,
+                "account_holder": None,
+                "account_number": None,
+                "bank_ifsc": None,
+                "bank_name": None,
+                "bank_branch": None,
+            },
+            {
+                "ledger_name": "Sales Account",
+                "user_id": current_user.user_id,
+                "company_id": response.company_id,
+                "is_deleted": False,
+                "phone": None,
+                "email": None,
+                "parent": "Sales Account",
+                "parent_id": "8d96d7b3-12fc-49f5-8bbb-c416c64f3567",
+                "alias": None,
+                "is_revenue": True,
+                "is_deemed_positive": False,
+                "opening_balance": 0.0,
+                "image": None,
+                "mailing_name": None,
+                "mailing_address": None,
+                "mailing_state": None,
+                "mailing_country": None,
+                "mailing_pincode": None,
+                "it_pan": None,
+                "gstin": None,
+                "account_holder": None,
+                "account_number": None,
+                "bank_ifsc": None,
+                "bank_name": None,
+                "bank_branch": None,
+            },
+        ]
+        for ledger in ledger_data:
+            await ledger_repo.new(Ledger(**ledger))
+            
     return {"success": True, "message": "Company Created Successfully"}
 
 

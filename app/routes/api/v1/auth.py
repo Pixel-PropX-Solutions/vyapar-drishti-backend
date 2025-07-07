@@ -9,7 +9,6 @@ from app.schema.token import TokenData
 import app.http_exception as http_exception
 from app.utils.hashing import verify_hash, hash_password
 from app.oauth2 import get_current_user
-from app.database.repositories.token import refresh_token_repo
 
 from app.database import mongodb
 
@@ -24,15 +23,30 @@ from app.oauth2 import (
     set_cookies,
 )
 from app.utils import generatePassword, hashing
-from app.database.repositories.user import user_repo
-from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.utils.generatePassword import generatePassword
 from app.routes.api.v1.userSettings import extract_device_info, initialize_user_settings
 
 from app.Config import ENV_PROJECT
 from app.utils.mailer_module import template
 from app.utils.mailer_module import mail
+from app.database.repositories.accountingRepo import accounting_repo
+from app.database.repositories.accountingGroupRepo import accounting_group_repo
+from app.database.repositories.categoryRepo import category_repo
+from app.database.repositories.voucharCounterRepo import vouchar_counter_repo
+from app.database.repositories.VoucharTypeRepo import vouchar_type_repo
 from app.database.repositories.companyRepo import company_repo
+from app.database.repositories.CompanySettingsRepo import company_settings_repo
+from app.database.repositories.gstRateRepo import gst_rate_repo
+from app.database.repositories.InventoryRepo import inventory_repo
+from app.database.repositories.voucharGSTRepo import vouchar_gst_repo
+from app.database.repositories.inventoryGroupRepo import inventory_group_repo
+from app.database.repositories.ledgerRepo import ledger_repo
+from app.database.repositories.stockItemRepo import stock_item_repo
+from app.database.repositories.token import refresh_token_repo
+from app.database.repositories.UnitOMeasureRepo import units_repo
+from app.database.repositories.user import user_repo
+from app.database.repositories.UserSettingsRepo import user_settings_repo
+from app.database.repositories.voucharRepo import vouchar_repo
 from typing import Optional
 from app.schema.enums import UserTypeEnum
 from datetime import datetime
@@ -83,7 +97,9 @@ async def login(
                 "$set": {
                     "last_login": datetime.now(),
                     "last_login_ip": request.client.host,
-                    "last_login_device": extract_device_info(request.headers.get("user-agent", "unknown")),
+                    "last_login_device": extract_device_info(
+                        request.headers.get("user-agent", "unknown")
+                    ),
                 }
             },
         )
@@ -259,6 +275,225 @@ async def get_current_user_details(
         "success": True,
         "message": "User Profile Fetched Successfully",
         "data": response,
+    }
+
+
+# Endpoint to delete the user data completely
+@auth.delete(
+    "/delete/user/company/{company_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def delete_user_company(
+    company_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
+    user = await user_repo.findOne({"_id": current_user.user_id})
+    if user is None:
+        raise http_exception.ResourceNotFoundException("User not found")
+
+    user_settings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    if user_settings is None:
+        raise http_exception.ResourceNotFoundException("User settings not found")
+
+    if user_settings["current_company_id"] != company_id:
+        raise http_exception.ResourceNotFoundException(
+            "The company you are trying to delete does not belong to the current user"
+        )
+
+    voucher_docs = await vouchar_repo.findMany({"company_id": company_id})
+    voucher_ids = [doc["_id"] for doc in voucher_docs]
+
+    # Delete all accounting entries associated with the vouchers
+    await accounting_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}})
+
+    # Delete all the inventory entries associated with the vouchers
+    await inventory_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}})
+
+    # Delete all the vouchers associated with the company
+    await vouchar_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete all the accounting groups associated with the company
+    await accounting_group_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete all the categories associated with the company
+    await category_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete all the voucher counters associated with the company
+    await vouchar_counter_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete all the voucher types associated with the company
+    await vouchar_type_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete all the GST rates associated with the company
+    await gst_rate_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete all the inventory groups associated with the company
+    await inventory_group_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete all the ledgers associated with the company
+    await ledger_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete all the stock items associated with the company
+    await stock_item_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete all the units of measure associated with the company
+    await units_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete all the voucher GST entries associated with the company
+    await vouchar_gst_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete the company settings
+    await company_settings_repo.deleteAll(
+        {"company_id": company_id, "user_id": current_user.user_id}
+    )
+
+    # Delete the company
+    await company_repo.deleteOne({"_id": company_id, "user_id": current_user.user_id})
+
+    # Check if the user has any other companies
+    remaining_companies = await company_repo.collection.aggregate(
+        [
+            {"$match": {"user_id": current_user.user_id, "is_deleted": False}},
+        ]
+    ).to_list(None)
+
+    if not remaining_companies:
+        # If no remaining companies, remove the current company from user settings
+        await user_settings_repo.update_one(
+            {"user_id": current_user.user_id},
+            {"$set": {"current_company_id": "", "current_company_name": ""}},
+        )
+    else:
+        # If there are remaining companies, set the first one as the current company
+        first_company = remaining_companies[0]
+        await user_settings_repo.update_one(
+            {"user_id": current_user.user_id},
+            {
+                "$set": {
+                    "current_company_id": first_company["_id"],
+                    "current_company_name": first_company["company_name"],
+                }
+            },
+        )
+
+    return {
+        "success": True,
+        "message": "Company and all associated data deleted successfully",
+    }
+
+
+# Endpoint to delete the user data completely
+@auth.delete(
+    "/delete/user",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def delete_user(
+    response: Response,
+    current_user: TokenData = Depends(get_current_user),
+):
+    user = await user_repo.findOne({"_id": current_user.user_id})
+    if user is None:
+        raise http_exception.ResourceNotFoundException("User not found")
+
+    voucher_docs = await vouchar_repo.findMany({"user_id": current_user.user_id})
+    voucher_ids = [doc["_id"] for doc in voucher_docs]
+
+    # Delete all accounting entries associated with the vouchers
+    await accounting_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}})
+
+    # Delete all the inventory entries associated with the vouchers
+    await inventory_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}})
+
+    # Delete all the vouchers associated with the company
+    await vouchar_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete all the accounting groups associated with the company
+    await accounting_group_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete all the categories associated with the company
+    await category_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete all the voucher counters associated with the company
+    await vouchar_counter_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete all the voucher types associated with the company
+    await vouchar_type_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete all the GST rates associated with the company
+    await gst_rate_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete all the inventory groups associated with the company
+    await inventory_group_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete all the ledgers associated with the company
+    await ledger_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete all the stock items associated with the company
+    await stock_item_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete all the units of measure associated with the company
+    await units_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete all the voucher GST entries associated with the company
+    await vouchar_gst_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete the company settings
+    await company_settings_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete the company
+    await company_repo.deleteAll({"user_id": current_user.user_id})
+
+    # Delete the user settings
+    await user_settings_repo.deleteOne({"user_id": current_user.user_id})
+
+    # Delete the refresh tokens associated with the user
+
+    # Delete the user
+    await user_repo.deleteOne({"_id": current_user.user_id})
+    await refresh_token_repo.deleteAll({"user_id": current_user.user_id})
+    response.set_cookie(
+        key="access_token",
+        value="",
+        httponly=True,
+        max_age=0,
+        secure=True,
+        samesite="none",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value="",
+        httponly=True,
+        max_age=0,
+        secure=True,
+        samesite="none",
+    )
+    return {
+        "success": True,
+        "message": "User and all associated data deleted successfully",
     }
 
 

@@ -18,7 +18,7 @@ from app.database.repositories.crud.base import (
 def model_serializer(entity, id):
     result = entity.dict(by_alias=True)
     result[id] = str(result[id])
-    
+
     return result
 
 
@@ -207,3 +207,48 @@ class BaseMongoDbCrud(AsyncPagingAndSortingRepository[T]):
 
     async def filterByName(self, name: str):
         await self.collection.find_one({"name": {"$regex": name}})
+
+    async def findMany(self, filter: dict, projection: dict = {}):
+        agg_query = [
+            {"$match": {**filter, **self.default_filter}},
+            {
+                "$lookup": {
+                    "from": "token",
+                    "localField": "_id",
+                    "foreignField": "user_id",
+                    "as": "token_data",
+                }
+            },
+            {
+                "$addFields": {
+                    "token_data": {
+                        "$cond": {
+                            "if": {"$eq": [{"$size": "$token_data"}, 0]},
+                            "then": [{"updated_at": ""}],
+                            "else": "$token_data",
+                        }
+                    }
+                }
+            },
+            {"$unwind": "$token_data"},
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "Details": {"$first": "$$ROOT"},
+                    "lastLogin": {"$max": "$token_data.updated_at"},
+                }
+            },
+            {
+                "$replaceRoot": {
+                    "newRoot": {
+                        "$mergeObjects": ["$Details", {"lastLogin": "$lastLogin"}]
+                    }
+                }
+            },
+        ]
+
+        if projection:
+            agg_query.append({"$project": projection})
+
+        res = [doc async for doc in self.collection.aggregate(agg_query)]
+        return res
