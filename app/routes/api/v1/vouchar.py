@@ -1136,27 +1136,27 @@ async def print_invoice_gst(
             + float(detail.get("cgst", 0.0))
         )
     invoice_taxes = []
-    totals = {"igst": 0.0, "sgt": 0.0, "cgst": 0.0, "gst_amt": 0.0, "taxable_value": 0.0}
+    totals = {"igst": 0.0, "sgst": 0.0, "cgst": 0.0, "gst_amt": 0.0, "taxable_value": 0.0}
     for rate, vals in tax_summary.items():
         invoice_taxes.append(
             {
                 "percent": rate,
                 "igst": round(vals["igst"], 2),
-                "sgt": round(vals["sgt"], 2),
+                "sgst": round(vals["sgst"], 2),
                 "cgst": round(vals["cgst"], 2),
                 "taxable_value": round(vals["taxable_value"], 2),
                 "gst_amt": round(vals["gst_amt"], 2),
             }
         )
         totals["igst"] += vals["igst"]
-        totals["sgt"] += vals["sgt"]
+        totals["sgst"] += vals["sgst"]
         totals["cgst"] += vals["cgst"]
         totals["taxable_value"] += vals["taxable_value"]
         totals["gst_amt"] += vals["gst_amt"]
     totals = {k: round(v, 2) for k, v in totals.items()}
     # --- END GST Tax Table Calculation ---
 
-    grand_total = abs(invoice.get("accounting", {}).get("amount", 0))
+    grand_total = abs(total_total_amount)
 
     # Template variables
     template_vars = {

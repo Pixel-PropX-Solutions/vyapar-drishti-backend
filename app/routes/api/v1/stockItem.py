@@ -515,7 +515,7 @@ async def get_product(
 )
 async def view_all_product(
     current_user: TokenData = Depends(get_current_user),
-    company_id: str = Query(...),
+    company_id: str = Query(None),
     search: str = None,
     category: str = None,
     group: str = None,
@@ -540,6 +540,49 @@ async def view_all_product(
     page_request = PageRequest(paging=page, sorting=sort)
 
     result = await stock_item_repo.viewAllProduct(
+        search=search,
+        company_id=userSettings["current_company_id"],
+        category=category,
+        pagination=page_request,
+        group=group,
+        sort=sort,
+        current_user=current_user,
+        # is_deleted=is_deleted,
+    )
+
+    return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+
+
+@Product.get(
+    "/view/all/stock/items", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+)
+async def view_all_stock_items(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(None),
+    search: str = None,
+    category: str = None,
+    group: str = None,
+    # is_deleted: bool = False,
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(10, le=60),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+    
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await stock_item_repo.view_all_stock_items(
         search=search,
         company_id=userSettings["current_company_id"],
         category=category,
