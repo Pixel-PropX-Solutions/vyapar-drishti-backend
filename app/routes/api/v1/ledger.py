@@ -253,7 +253,6 @@ async def view_ledgers_with_type(
         ]
     ).to_list(None)
 
-
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
 
 
@@ -531,19 +530,27 @@ async def view_ledger(
                                                             "as": "ad",
                                                             "cond": {
                                                                 "$and": [
-                                                                    { "$eq": [ "$$ad.vouchar_id", "$$account.vouchar_id" ] },
-                                                                    { "$ne": [ "$$ad.ledger_id", "$$account.ledger_id" ] }
+                                                                    {
+                                                                        "$eq": [
+                                                                            "$$ad.vouchar_id",
+                                                                            "$$account.vouchar_id",
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "$ne": [
+                                                                            "$$ad.ledger_id",
+                                                                            "$$account.ledger_id",
+                                                                        ]
+                                                                    },
                                                                 ]
-                                                            }
+                                                            },
                                                         }
                                                     },
-                                                    0
+                                                    0,
                                                 ]
                                             }
                                         },
-                                        "in": {
-                                            "$ifNull": [ "$$other_account.ledger", "" ]
-                                        }
+                                        "in": {"$ifNull": ["$$other_account.ledger", ""]},
                                     }
                                 },
                             },
@@ -589,12 +596,70 @@ async def view_ledger(
         ]
     ).to_list(length=1)
 
-
     return {
         "success": True,
         "message": "Customer Data Fetched Successfully...",
         "data": result,
     }
+
+
+# Api endpoint for checking if a user can create a ledger with a given name
+@ledger.get("/check/name", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
+async def check_ledger_name(
+    ledger_name: str, current_user: TokenData = Depends(get_current_user)
+):
+    if current_user.user_type != "admin" and current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    ledgerExists = await ledger_repo.findOne(
+        {
+            "ledger_name": ledger_name,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+            "is_deleted": False,
+        }
+    )
+    # If a ledger with the given name exists, return a conflict response with a message indicating that the ledger name is already taken and returns a array of suggested names related to the given name
+
+    if ledgerExists is not None:
+        existing_names = await ledger_repo.collection.aggregate(
+            [
+                {
+                    "$match": {
+                        "user_id": current_user.user_id,
+                        "company_id": userSettings["current_company_id"],
+                        "is_deleted": False,
+                    }
+                },
+                {"$project": {"ledger_name": 1}},
+            ]
+        ).to_list(length=None)
+        
+        existing_names = [doc["ledger_name"] for doc in existing_names]
+        existing_names = list(set(existing_names))  # Remove duplicates
+        
+        suggestions = ledger_repo.generate_name_suggestions(
+            ledger_name, existing_names=existing_names, count=5
+        )
+
+        return {
+            "success": False,
+            "message": "Ledger with this name already exists.",
+            "data": {"exists": True, "suggested_names": suggestions},
+        }
+    else:
+        #  If no ledger exists with the given name, return success
+        return {
+            "success": True,
+            "message": "Ledger name is available.",
+            "data": {"exists": False},
+        }
 
 
 # @creditor.delete(

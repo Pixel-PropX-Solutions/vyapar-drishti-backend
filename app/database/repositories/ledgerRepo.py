@@ -8,6 +8,32 @@ from app.database.repositories.crud.base import (
     Sort,
     SortingOrder,
 )
+import re
+
+SUFFIXES = [
+    "Traders",
+    "Enterprises",
+    "Corporation",
+    "Group",
+    "Pvt Ltd",
+    "Co.",
+    "Industries",
+    "Solutions",
+    "Exports",
+    "Imports",
+    "Distributors",
+    "& Sons",
+    "LLC",
+    "Inc.",
+    "LLP",
+    "Agencies",
+    "Services"
+]
+
+
+def normalize_name(name: str) -> str:
+    """Basic normalization: remove extra spaces, keep only alphabets and digits."""
+    return re.sub(r"\s+", " ", name.strip())
 
 
 class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
@@ -15,7 +41,7 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
         super().__init__(
             ENV_PROJECT.MONGO_DATABASE,
             "Ledger",
-            unique_attributes=["ledger_name", "user_id", "company_id", 'parent'],
+            unique_attributes=["ledger_name", "user_id", "company_id", "parent"],
         )
 
     async def new(self, sub: Ledger):
@@ -73,7 +99,7 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
             filter_params["$or"] = [
                 {"mailing_state": {"$regex": f"^{state}", "$options": "i"}},
             ]
-       
+
         if parent not in ["", None]:
             filter_params["$or"] = [
                 {"parent": {"$regex": f"^{parent}", "$options": "i"}},
@@ -155,6 +181,33 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
                 **pagination.paging.model_dump(), total=count, unique=unique_states
             ),
         )
+
+    def generate_name_suggestions(
+        self, name: str, existing_names: set = None, count: int = 10
+    ) -> list:
+        if existing_names is None:
+            existing_names = set()
+
+        name = normalize_name(name)
+        suggestions = set()
+
+        # Suffix-based suggestions
+        for suffix in SUFFIXES:
+            suggestion = f"{name} {suffix}"
+            if suggestion not in existing_names:
+                suggestions.add(suggestion)
+            if len(suggestions) >= count:
+                break
+
+        # Add numbered versions
+        i = 1
+        while len(suggestions) < count:
+            variant = f"{name} {str(i).zfill(2)}"
+            if variant not in existing_names:
+                suggestions.add(variant)
+            i += 1
+
+        return list(suggestions)[:count]
 
 
 ledger_repo = ledgerRepo()

@@ -85,13 +85,8 @@ async def create_access_token(
     data: TokenData, old_refresh_token: str = None
 ) -> BaseToken:
     to_encode = data.model_dump()
-    expire = datetime.datetime.now() + datetime.timedelta(
-        minutes=ENV_PROJECT.LOGIN_ACCESS_TOKEN_EXPIRE_MINUTES
-    )
-    to_encode.update({"exp": expire})
-    access_token = jwt.encode(
-        to_encode, ENV_PROJECT.ACCESS_TOKEN_SECRET, algorithm="HS256"
-    )
+    to_encode.update()
+    access_token = jwt.encode(to_encode, ENV_PROJECT.ACCESS_TOKEN_SECRET, algorithm="HS256")
     refresh_token = await create_refresh_token(data=data)
     refresh_token_data: RefreshTokenCreate = RefreshTokenCreate(
         refresh_token=refresh_token, user_id=data.user_id, user_type=data.user_type

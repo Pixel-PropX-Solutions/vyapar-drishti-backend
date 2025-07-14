@@ -91,6 +91,7 @@ async def login(
         )
         token_generated = await create_access_token(token_data)
         set_cookies(response, token_generated.access_token, token_generated.refresh_token)
+        
         await user_settings_repo.update_one(
             {"user_id": user["_id"]},
             {
@@ -103,6 +104,7 @@ async def login(
                 }
             },
         )
+        
         return {
             "ok": True,
             "accessToken": token_generated.access_token,
