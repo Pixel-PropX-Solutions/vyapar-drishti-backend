@@ -305,7 +305,6 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         # unique_categories = [entry["category"] for entry in categories_res]
 
         # unique_groups = [entry["group"] for entry in group_res]
-        print("DOCS", docs)
         return PaginatedResponse(
             docs=docs,
             meta=Meta(
@@ -466,7 +465,6 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         # unique_categories = [entry["category"] for entry in categories_res]
 
         # unique_groups = [entry["group"] for entry in group_res]
-        print("DOCS", docs)
         return PaginatedResponse(
             docs=docs,
             meta=Meta(

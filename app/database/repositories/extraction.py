@@ -339,7 +339,7 @@ class ExtractionTools:
             # Optionally, you can raise a custom exception or return a structured error
             data = None
 
-        print("Extracted Data :", data)
+        # print("Extracted Data :", data)
 
         # return data
 

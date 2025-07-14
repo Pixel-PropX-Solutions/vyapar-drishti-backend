@@ -29,7 +29,7 @@ class GSTItemDetail(BaseModel):
         else:
             amount = taxable_value
 
-        values["total_amount"] = amount
+        values["total_amount"] = round(amount, 2)
         return values
 
 

@@ -503,7 +503,6 @@ async def get_product(
         ]
     ).to_list(None)
 
-    print("Product:", product)
     if product:
         return {"success": True, "data": product}
     else:

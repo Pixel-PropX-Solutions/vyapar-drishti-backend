@@ -31,6 +31,9 @@ class VoucherCounter(BaseModel):
         default="", description="String prepended to the number, e.g. 'INV/'"
     )
     suffix: str = Field(default="", description="String appended, e.g. '/25'")
+    separator: str = Field(
+        default="/", description="String between prefix and number, e.g. '/'"
+    )
     pad_length: int = Field(
         default=4, ge=1, le=12, description="Digits to left‑pad the number with"
     )
@@ -66,7 +69,9 @@ class VoucherCounter(BaseModel):
         """
         next_num = self.current_number + 1
         padded = str(next_num).zfill(self.pad_length)
-        return f"{self.prefix}{padded}{self.suffix}"
+        if self.suffix != "":
+            return f"{self.prefix}{self.separator}{padded}{self.separator}{self.suffix}"
+        return f"{self.prefix}{self.separator}{padded}"
 
     def start_counter(self):
         """

@@ -1,68 +1,73 @@
 [
     {
-        "item": "Stock Item 1",
-        "item_id": "35335033-3250-435b-ba1f-bb46b0fee355",
-        "hsn_code": "AFJKLDAFHL",
-        "gst_rate": "18",
-        "taxable_value": 1089.0,
+        "_id": "4941234e-8082-4cfb-84c7-e71f8401cb67",
+        "voucher_id": "662cb76b-18fd-45eb-b3e7-90829d69db3b",
+        "company_id": "ed1e23d4-41b7-44e5-829a-ebe4626ad7db",
+        "user_id": "1fbfa6df-a4b4-497d-bad2-fc878da08051",
+        "is_gst_applicable": True,
+        "place_of_supply": "",
+        "party_gstin": "",
+        "item_gst_details": [
+            {
+                "item": "Head Light SPL",
+                "item_id": "5fffd0d2-1e0e-45e6-a68e-98891dc38f4d",
+                "hsn_code": "HED",
+                "gst_rate": "16",
+                "taxable_value": 2800.0,
+                "cgst": 0.0,
+                "sgst": 0.0,
+                "igst": 448.0,
+                "total_amount": 3248.0
+            },
+            {
+                "item": "Castrol Active Continous Protection",
+                "item_id": "0f023f9c-9a1b-4aae-8505-45a43ee75eb4",
+                "hsn_code": "OIL",
+                "gst_rate": "28",
+                "taxable_value": 4500.0,
+                "cgst": 0.0,
+                "sgst": 0.0,
+                "igst": 1260.0,
+                "total_amount": 5760.0
+            }
+        ],
+        "created_at": datetime.datetime(2025,
+        7,
+        11,
+        16,
+        45,
+        46,
+        175000),
+        "updated_at": datetime.datetime(2025,
+        7,
+        11,
+        16,
+        45,
+        46,
+        175000)
+    }
+]
+Item GST details: [
+    {
+        "item": "Head Light SPL",
+        "item_id": "5fffd0d2-1e0e-45e6-a68e-98891dc38f4d",
+        "hsn_code": "HED",
+        "gst_rate": "16",
+        "taxable_value": 2800.0,
         "cgst": 0.0,
         "sgst": 0.0,
-        "igst": 196.02,
-        "total_amount": 1285.02
+        "igst": 448.0,
+        "total_amount": 3248.0
     },
     {
-        "item": "Stock Item 2",
-        "item_id": "bda411d5-42b4-4f27-ba6d-5a831c03cace",
-        "hsn_code": "ASD",
-        "gst_rate": "12",
-        "taxable_value": 1089.0,
-        "cgst": 0.0,
-        "sgst": 0.0,
-        "igst": 130.68,
-        "total_amount": 1219.68
-    },
-    {
-        "item": "Stock Item 3",
-        "item_id": "4e6f52ee-55d5-4faa-88ba-4c229c2f18b6",
-        "hsn_code": "LKJ",
+        "item": "Castrol Active Continous Protection",
+        "item_id": "0f023f9c-9a1b-4aae-8505-45a43ee75eb4",
+        "hsn_code": "OIL",
         "gst_rate": "28",
-        "taxable_value": 1089.0,
+        "taxable_value": 4500.0,
         "cgst": 0.0,
         "sgst": 0.0,
-        "igst": 304.92,
-        "total_amount": 1393.92
-    },
-    {
-        "item": "Stock Item 1",
-        "item_id": "35335033-3250-435b-ba1f-bb46b0fee355",
-        "hsn_code": "AFJKLDAFHL",
-        "gst_rate": "18",
-        "taxable_value": 968.0,
-        "cgst": 0.0,
-        "sgst": 0.0,
-        "igst": 174.24,
-        "total_amount": 1142.24
-    },
-    {
-        "item": "Stock Item 2",
-        "item_id": "bda411d5-42b4-4f27-ba6d-5a831c03cace",
-        "hsn_code": "ASD",
-        "gst_rate": "12",
-        "taxable_value": 847.0,
-        "cgst": 0.0,
-        "sgst": 0.0,
-        "igst": 101.64,
-        "total_amount": 948.64
-    },
-    {
-        "item": "Stock Item 3",
-        "item_id": "4e6f52ee-55d5-4faa-88ba-4c229c2f18b6",
-        "hsn_code": "LKJ",
-        "gst_rate": "28",
-        "taxable_value": 726.0,
-        "cgst": 0.0,
-        "sgst": 0.0,
-        "igst": 203.28,
-        "total_amount": 929.28
+        "igst": 1260.0,
+        "total_amount": 5760.0
     }
 ]

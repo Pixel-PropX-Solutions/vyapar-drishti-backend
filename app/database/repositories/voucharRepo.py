@@ -67,8 +67,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             filter_params["voucher_type"] = type
 
         if start_date not in ["", None] and end_date not in ["", None]:
-            print("Start Date", start_date)
-            print("End Date", end_date)
             filter_params["date"] = {"$gte": start_date, "$lte": end_date}
 
             # try:
@@ -329,7 +327,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
 
         res = [doc async for doc in self.collection.aggregate(pipeline)]
         docs = res[0]["docs"]
-        print("Docs", docs)
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
 
         return PaginatedResponse(

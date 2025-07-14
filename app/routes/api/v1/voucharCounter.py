@@ -14,12 +14,12 @@ counter_router = APIRouter()
 
 
 DEFAULT_VOUCHER_TYPES = {
-    "Sales": {"prefix": "INV-", "suffix": "", "reset_cycle": "yearly"},
-    "Purchase": {"prefix": "PUR-", "suffix": "", "reset_cycle": "yearly"},
-    "Payment": {"prefix": "PAY-", "suffix": "", "reset_cycle": "monthly"},
-    "Receipt": {"prefix": "REC-", "suffix": "", "reset_cycle": "monthly"},
-    "Journal": {"prefix": "JRN-", "suffix": "", "reset_cycle": "yearly"},
-    "Contra": {"prefix": "CON-", "suffix": "", "reset_cycle": "yearly"},
+    "Sales": {"prefix": "INV", "suffix": "", "separator": "/", "reset_cycle": "yearly"},
+    "Purchase": {"prefix": "PUR", "suffix": "", "separator": "/", "reset_cycle": "yearly"},
+    "Payment": {"prefix": "PAY", "suffix": "", "separator": "/", "reset_cycle": "monthly"},
+    "Receipt": {"prefix": "REC", "suffix": "", "separator": "/", "reset_cycle": "monthly"},
+    "Journal": {"prefix": "JRN", "suffix": "", "separator": "/", "reset_cycle": "yearly"},
+    "Contra": {"prefix": "CON", "suffix": "", "separator": "/", "reset_cycle": "yearly"},
 }
 
 
@@ -33,21 +33,18 @@ class CounterUpdateRequest(BaseModel):
 
 
 async def initialize_voucher_counters(user_id: str, company_id: str):
-    financial_year = calculate_current_financial_year()
-
     now = datetime.now(tz=pytz.timezone("Asia/Kolkata"))
     counters = []
-    
- 
+
     for voucher_type, config in DEFAULT_VOUCHER_TYPES.items():
         counter = {
             "company_id": company_id,
             "user_id": user_id,
             "voucher_type": voucher_type,
-            "financial_year": financial_year,
             "current_number": 1,
             "prefix": config["prefix"],
             "suffix": config["suffix"],
+            "separator": config["separator"],
             "reset_cycle": config["reset_cycle"],
             "created_at": now,
             "updated_at": now,
@@ -66,6 +63,53 @@ def calculate_current_financial_year() -> str:
     return f"{year}-{str((year + 1) % 100).zfill(2)}"
 
 
+@counter_router.get("/get/current/{voucher_type}", summary="Get voucher counter details")
+async def get_counter(
+    voucher_type: str,
+    company_id: str = "",
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    query = {
+        "company_id": userSettings["current_company_id"],
+        "user_id": current_user.user_id,
+        "voucher_type": voucher_type,
+    }
+
+    counter = await vouchar_counter_repo.findOne(query)
+
+    # Format the current number with prefix, suffix, and padding
+    if counter:
+        pad_length = counter["pad_length"] or 4  # Default padding length if not set
+        separator = counter["separator"]
+        padded_number = str(counter["current_number"]).zfill(pad_length)
+        if counter["suffix"]:
+            formatted_number = f"{counter['prefix']}{separator}{padded_number}{separator}{counter['suffix']}"
+        else:
+            formatted_number = f"{counter['prefix']}{separator}{padded_number}"
+
+    if not counter:
+        raise HTTPException(status_code=404, detail="Counter not found")
+
+    return {
+        "success": True,
+        "message": "Counter retrieved successfully",
+        "data": {
+            "voucher_type": counter["voucher_type"],
+            "current_number": formatted_number,
+        },
+    }
+
+
 @counter_router.put("/update", summary="Create or update a voucher counter")
 async def update_counter(
     request: CounterUpdateRequest,
@@ -74,9 +118,9 @@ async def update_counter(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -84,7 +128,7 @@ async def update_counter(
 
     query = {
         "company_id": userSettings["current_company_id"],
-        'user_id': current_user.user_id,
+        "user_id": current_user.user_id,
         "voucher_type": request.voucher_type,
         "financial_year": request.financial_year,
     }
@@ -116,9 +160,9 @@ async def reset_counter(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."

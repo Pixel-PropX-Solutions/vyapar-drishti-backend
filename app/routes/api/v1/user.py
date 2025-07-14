@@ -199,7 +199,6 @@ async def createCompany(
             detail="Company Already Exists. Please try with different company name."
         )
 
-    # print("Company Created Successfully", response)
     if response:
         qr_url = None
         if qr_code_url:
@@ -418,7 +417,6 @@ async def get_company(
         raise http_exception.CredentialsInvalidException()
 
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    # print("User Settings:", userSettings)
 
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(

@@ -1,3 +1,4 @@
+import json
 from fastapi import (
     APIRouter,
     Depends,
@@ -8,12 +9,13 @@ from fastapi import (
 )
 from app.database.repositories.CompanySettingsRepo import company_settings_repo
 from app.database.repositories.companyRepo import company_repo
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import ORJSONResponse, HTMLResponse
 from pydantic import BaseModel
 import app.http_exception as http_exception
 from app.schema.token import TokenData
 from app.oauth2 import get_current_user
 from app.database.repositories.voucharRepo import vouchar_repo
+from app.database.repositories.voucharCounterRepo import vouchar_counter_repo
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.database.repositories.ledgerRepo import ledger_repo
 from app.database.repositories.voucharGSTRepo import vouchar_gst_repo
@@ -21,43 +23,24 @@ from app.database.repositories.accountingRepo import accounting_repo
 from app.database.repositories.InventoryRepo import inventory_repo
 from app.database.models.Vouchar import Voucher, VoucherCreate, VoucherUpdate
 from app.database.models.VoucharGST import VoucherGST
-from app.database.models.Accounting import Accounting
+from app.database.models.VoucharCounter import VoucherCounter
+from app.database.models.Accounting import Accounting, AccountingUpdate
 from typing import Optional, List
-from app.database.models.Inventory import InventoryItem
+from app.database.models.Inventory import (
+    InventoryItem,
+    UpdateInventoryItemWithGST,
+    CreateInventoryItemWithGST,
+)
 from fastapi import Query
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 from app.database.repositories.stockItemRepo import stock_item_repo
 from jinja2 import Template
 import aiofiles
 from num2words import num2words
+from math import ceil
+
 
 Vouchar = APIRouter()
-
-
-class InventoryItemWithGST(BaseModel):
-    vouchar_id: str
-    item: str
-    item_id: str
-    quantity: int
-    rate: float
-    amount: float
-    additional_amount: Optional[float] = 0.0
-    discount_amount: Optional[float] = 0.0
-    godown: Optional[str] = ""
-    godown_id: Optional[str] = ""
-    order_number: Optional[str] = None
-    order_due_date: Optional[str] = None
-    hsn_code: Optional[str] = None
-    gst_rate: Optional[str] = None
-    gst_amount: Optional[float] = 0.0
-
-
-class VoucherItem(BaseModel):
-    item: str
-    item_id: str
-    quantity: float
-    rate: float
-    amount: float
 
 
 class VoucherWithGSTCreate(BaseModel):
@@ -73,7 +56,26 @@ class VoucherWithGSTCreate(BaseModel):
     reference_date: Optional[str] = None
     place_of_supply: Optional[str] = None
     accounting: List[Accounting]
-    items: List[InventoryItemWithGST]
+    items: List[CreateInventoryItemWithGST]
+
+
+class GSTVoucherUpdate(BaseModel):
+    vouchar_id: str
+    user_id: str
+    company_id: str
+    date: str
+    voucher_type: str
+    voucher_type_id: str
+    voucher_number: str
+    party_name: str
+    party_name_id: str
+    narration: Optional[str]
+    reference_number: Optional[str]
+    reference_date: Optional[str]
+    place_of_supply: Optional[str]
+
+    accounting: List[AccountingUpdate]
+    items: Optional[List[UpdateInventoryItemWithGST]]
 
 
 @Vouchar.post(
@@ -83,7 +85,6 @@ async def createVouchar(
     vouchar: VoucherCreate,
     current_user: TokenData = Depends(get_current_user),
 ):
-    print('Creating vouchar:', vouchar)
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
@@ -158,10 +159,14 @@ async def createVouchar(
                     entry_data = {
                         "vouchar_id": response.vouchar_id,
                         "ledger": (
-                            entry.ledger if entry.ledger == vouchar.party_name else party_ledger["ledger_name"]
+                            entry.ledger
+                            if entry.ledger == vouchar.party_name
+                            else party_ledger["ledger_name"]
                         ),
                         "ledger_id": (
-                            entry.ledger_id if entry.ledger == vouchar.party_name else party_ledger["_id"]
+                            entry.ledger_id
+                            if entry.ledger == vouchar.party_name
+                            else party_ledger["_id"]
                         ),
                         "amount": entry.amount,
                     }
@@ -205,9 +210,19 @@ async def createVouchar(
                 }
                 await inventory_repo.new(InventoryItem(**item_data))
 
+            # Increase the vouchar counter for the voucher type
+            await vouchar_counter_repo.increaseVoucharCounter(
+                company_id=userSettings["current_company_id"],
+                voucher_type=vouchar.voucher_type,
+            )
+
         except Exception as e:
             # Rollback vouchar creation if any error occurs
             print("Error during vouchar creation:", str(e))
+            await vouchar_counter_repo.decreaseVoucharCounter(
+                company_id=userSettings["current_company_id"],
+                voucher_type=vouchar.voucher_type,
+            )
             await accounting_repo.deleteAll({"vouchar_id": response.vouchar_id})
             await inventory_repo.deleteAll({"vouchar_id": response.vouchar_id})
             await vouchar_repo.deleteById(response.vouchar_id)
@@ -245,8 +260,6 @@ async def updateVouchar(
     vouchar_exists = await vouchar_repo.findOne(
         {"_id": vouchar_id, "user_id": current_user.user_id}
     )
-
-    # print("Vouchar exists:", vouchar_exists)
 
     if not vouchar_exists:
         raise http_exception.ResourceNotFoundException(
@@ -318,7 +331,7 @@ async def updateVouchar(
                     )
 
                     # First, get all existing inventory items for this vouchar
-                    existing_items = await inventory_repo.collection.find(
+                    existing_items = await inventory_repo.find(
                         {"vouchar_id": vouchar_id}
                     ).to_list(None)
 
@@ -388,7 +401,7 @@ async def updateVouchar(
                     # Delete inventory items that are in DB but not in the received update
                     items_to_delete = existing_item_ids - received_entry_ids
                     if items_to_delete:
-                        await inventory_repo.collection.delete_many(
+                        await inventory_repo.deleteAll(
                             {
                                 "_id": {"$in": list(items_to_delete)},
                                 "vouchar_id": vouchar_id,
@@ -397,6 +410,7 @@ async def updateVouchar(
 
         except Exception as e:
             print("Error during vouchar update:", str(e))
+            # Rollback vouchar update if any error occurs
             raise http_exception.BadRequestException()
 
         return {"success": True, "message": "Vouchar Updated Successfully"}
@@ -432,6 +446,8 @@ async def createVoucharWithGST(
         raise http_exception.ResourceNotFoundException(
             detail="Company not found. Please check your company ID."
         )
+
+    companyStateCode = companyExists.get("gstin", None)[:2]
 
     companySettings = await company_settings_repo.findOne(
         {
@@ -487,28 +503,50 @@ async def createVoucharWithGST(
     inventory_data = vouchar.items
 
     response = await vouchar_repo.new(Voucher(**vouchar_data))
-    # print("Vouchar response:", response)
-    # print()
 
-    party_ledger = await ledger_repo.findOne(
-        {
-            "company_id": userSettings["current_company_id"],
-            "ledger_name": vouchar.party_name,
-            "user_id": current_user.user_id,
-        }
-    )
-    # print("Party ledger:", party_ledger)
     if response:
         try:
             # Create all accounting entries
             for entry in accounting_data:
-                entry_data = {
-                    "vouchar_id": response.vouchar_id,
-                    "ledger": entry.ledger,
-                    "ledger_id": entry.ledger_id,
-                    "amount": entry.amount,
-                }
-                await accounting_repo.new(Accounting(**entry_data))
+                if vouchar.voucher_type in ["Sales", "Purchase"]:
+                    ledger = (
+                        "Sales Account"
+                        if vouchar.voucher_type.lower() == "sales"
+                        else "Purchase Account"
+                    )
+                    party_ledger = await ledger_repo.findOne(
+                        {
+                            "company_id": userSettings["current_company_id"],
+                            "ledger_name": ledger,
+                            "user_id": current_user.user_id,
+                        }
+                    )
+
+                    entry_data = {
+                        "vouchar_id": response.vouchar_id,
+                        "ledger": (
+                            entry.ledger
+                            if entry.ledger == vouchar.party_name
+                            else party_ledger["ledger_name"]
+                        ),
+                        "ledger_id": (
+                            entry.ledger_id
+                            if entry.ledger == vouchar.party_name
+                            else party_ledger["_id"]
+                        ),
+                        "amount": entry.amount,
+                    }
+                    await accounting_repo.new(Accounting(**entry_data))
+
+                else:
+
+                    entry_data = {
+                        "vouchar_id": response.vouchar_id,
+                        "ledger": entry.ledger,
+                        "ledger_id": entry.ledger_id,
+                        "amount": entry.amount,
+                    }
+                    await accounting_repo.new(Accounting(**entry_data))
 
             # Create all inventory items
             for item in inventory_data:
@@ -538,57 +576,503 @@ async def createVoucharWithGST(
                 }
                 await inventory_repo.new(InventoryItem(**item_data))
 
+            party_ledger = await ledger_repo.findOne(
+                {
+                    "company_id": userSettings["current_company_id"],
+                    "ledger_name": vouchar.party_name,
+                    "user_id": current_user.user_id,
+                }
+            )
+
             if companySettings["features"]["enable_gst"] and party_ledger:
                 # If GST is enabled, ensure vouchar created with GST details
-                vouchar_gst_data = {
-                    "voucher_id": response.vouchar_id,
+                if vouchar.voucher_type == "Purchase":
+                    if not party_ledger["gstin"]:
+                        raise http_exception.BadRequestException(
+                            detail="Party ledger does not have GSTIN. Please update the party ledger."
+                        )
+
+                    # Extract Party GSTIN
+                    partyStateCode = party_ledger["gstin"][:2]
+
+                    vouchar_gst_data = {
+                        "voucher_id": response.vouchar_id,
+                        "company_id": userSettings["current_company_id"],
+                        "user_id": current_user.user_id,
+                        "is_gst_applicable": True,
+                        "place_of_supply": (
+                            vouchar.place_of_supply
+                            if hasattr(vouchar, "place_of_supply")
+                            else ""
+                        ),
+                        "party_gstin": (
+                            party_ledger.gstin if hasattr(party_ledger, "gstin") else ""
+                        ),
+                        "item_gst_details": [
+                            {
+                                "item": item.item,
+                                "item_id": item.item_id,
+                                "hsn_code": item.hsn_code,
+                                "gst_rate": item.gst_rate,
+                                "taxable_value": item.amount,
+                                "cgst": (
+                                    item.gst_amount / 2
+                                    if companyStateCode == partyStateCode
+                                    else 0
+                                ),  # CGST amount
+                                "sgst": (
+                                    item.gst_amount / 2
+                                    if companyStateCode == partyStateCode
+                                    else 0
+                                ),  # SGST amount
+                                "igst": (
+                                    item.gst_amount
+                                    if companyStateCode != partyStateCode
+                                    else 0
+                                ),  # IGST amount
+                            }
+                            for item in vouchar.items
+                        ],
+                    }
+                    await vouchar_gst_repo.new(VoucherGST(**vouchar_gst_data))
+                    # return {"success": True, "message": "Vouchar Created Successfully"}
+
+                elif vouchar.voucher_type == "Sales":
+
+                    if not companyExists.get("gstin", None):
+                        raise http_exception.BadRequestException(
+                            detail="Company does not have GSTIN. Please update the company details."
+                        )
+
+                    companyStateCode = companyExists.get("gstin", None)[:2]
+
+                    if not party_ledger["gstin"]:
+                        companyStateCode = companyExists.get("state", None)
+                        partyStateCode = party_ledger["mailing_state"]
+                    else:
+                        partyStateCode = party_ledger["gstin"][:2]
+
+                    vouchar_gst_data = {
+                        "voucher_id": response.vouchar_id,
+                        "company_id": userSettings["current_company_id"],
+                        "user_id": current_user.user_id,
+                        "is_gst_applicable": True,
+                        "place_of_supply": (
+                            vouchar.place_of_supply
+                            if hasattr(vouchar, "place_of_supply")
+                            else ""
+                        ),
+                        "party_gstin": (
+                            party_ledger.gstin if hasattr(party_ledger, "gstin") else ""
+                        ),
+                        "item_gst_details": [
+                            {
+                                "item": item.item,
+                                "item_id": item.item_id,
+                                "hsn_code": item.hsn_code,
+                                "gst_rate": item.gst_rate,
+                                "taxable_value": item.amount,
+                                "cgst": (
+                                    item.gst_amount / 2
+                                    if companyStateCode == partyStateCode
+                                    else 0
+                                ),  # CGST amount
+                                "sgst": (
+                                    item.gst_amount / 2
+                                    if companyStateCode == partyStateCode
+                                    else 0
+                                ),  # SGST amount
+                                "igst": (
+                                    item.gst_amount
+                                    if companyStateCode != partyStateCode
+                                    else 0
+                                ),  # IGST amount
+                            }
+                            for item in vouchar.items
+                        ],
+                    }
+                    await vouchar_gst_repo.new(VoucherGST(**vouchar_gst_data))
+                    # return {"success": True, "message": "Vouchar Created Successfully"}
+
+            # Increase the vouchar counter for the voucher type
+            await vouchar_counter_repo.update_one(
+                {
+                    "voucher_type": vouchar.voucher_type,
                     "company_id": userSettings["current_company_id"],
                     "user_id": current_user.user_id,
-                    "is_gst_applicable": True,
-                    "place_of_supply": (
-                        vouchar.place_of_supply
-                        if hasattr(vouchar, "place_of_supply")
-                        else ""
-                    ),
-                    "party_gstin": (
-                        party_ledger.gstin if hasattr(party_ledger, "gstin") else ""
-                    ),
-                    "item_gst_details": [
-                        {
-                            "item": item.item,
-                            "item_id": item.item_id,
-                            "hsn_code": item.hsn_code,
-                            "gst_rate": item.gst_rate,
-                            "taxable_value": item.amount,
-                            "cgst": (
-                                item.gst_amount / 2
-                                if companyExists["state"] == vouchar.place_of_supply
-                                else 0
-                            ),  # CGST amount
-                            "sgst": (
-                                item.gst_amount / 2
-                                if companyExists["state"] == vouchar.place_of_supply
-                                else 0
-                            ),  # SGST amount
-                            "igst": (
-                                item.gst_amount
-                                if companyExists["state"] != vouchar.place_of_supply
-                                else 0
-                            ),  # IGST amount
-                        }
-                        for item in vouchar.items
-                    ],
-                }
-                await vouchar_gst_repo.new(VoucherGST(**vouchar_gst_data))
-                return {"success": True, "message": "Vouchar Created Successfully"}
+                },
+                {"$inc": {"current_number": 1}},
+            )
 
         except Exception as e:
             # Rollback vouchar creation if any error occurs
-            print("Error during vouchar creation:", str(e))
+            print("Error during vouchar creation:", e)
+            await accounting_repo.deleteAll({"vouchar_id": response.vouchar_id})
+            await inventory_repo.deleteAll({"vouchar_id": response.vouchar_id})
+            await vouchar_gst_repo.deleteAll({"voucher_id": response.vouchar_id})
             await vouchar_repo.deleteById(response.vouchar_id)
+
             raise http_exception.BadRequestException()
 
         return {"success": True, "message": "Vouchar Created Successfully"}
+
+    if not response:
+        raise http_exception.ResourceAlreadyExistsException(
+            detail="Vouchar Already Exists. Please try with different vouchar name."
+        )
+
+
+@Vouchar.put(
+    "/update/vouchar/gst/{vouchar_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def updateVoucharWithGST(
+    vouchar_id: str,
+    vouchar: GSTVoucherUpdate,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    companyExists = await company_repo.findOne(
+        {"_id": userSettings["current_company_id"], "user_id": current_user.user_id}
+    )
+
+    companyStateCode = companyExists.get("gstin", None)[:2]
+
+    if not companyExists:
+        raise http_exception.ResourceNotFoundException(
+            detail="Company not found. Please check your company ID."
+        )
+
+    companySettings = await company_settings_repo.findOne(
+        {
+            "company_id": userSettings["current_company_id"],
+            "user_id": current_user.user_id,
+        }
+    )
+
+    if not companySettings:
+        raise http_exception.ResourceNotFoundException(
+            detail="Company settings not found. Please check your company ID."
+        )
+
+    vouchar_exists = await vouchar_repo.findOne(
+        {"_id": vouchar_id, "user_id": current_user.user_id}
+    )
+
+    if not vouchar_exists:
+        raise http_exception.ResourceNotFoundException(
+            detail="Vouchar not found. Please check the vouchar ID."
+        )
+
+    vouchar_data = {
+        "date": vouchar.date,
+        "narration": vouchar.narration,
+        "party_name": vouchar.party_name,
+        "party_name_id": vouchar.party_name,
+        # Conditional fields
+        "reference_number": (
+            vouchar.reference_number if hasattr(vouchar, "reference_number") else ""
+        ),
+        "reference_date": (
+            vouchar.reference_date if hasattr(vouchar, "reference_date") else ""
+        ),
+        "place_of_supply": (
+            vouchar.place_of_supply if hasattr(vouchar, "place_of_supply") else ""
+        ),
+        "is_deleted": False,
+        # Conditional fields for voucher types
+        "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
+        "is_accounting_voucher": (
+            1
+            if vouchar.voucher_type in ["sales", "purchase", "payment", "receipt"]
+            else 0
+        ),
+        "is_inventory_voucher": (
+            1
+            if vouchar.voucher_type in ["sales", "purchase"] and len(vouchar.items) > 0
+            else 0
+        ),
+        "is_order_voucher": (
+            1 if vouchar.voucher_type.lower() in ["sales order", "purchase order"] else 0
+        ),
+    }
+
+    accounting_data = vouchar.accounting
+    inventory_data = vouchar.items
+
+    response = await vouchar_repo.update_one(
+        {
+            "_id": vouchar_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+        },
+        {"$set": vouchar_data},
+    )
+
+    if response:
+        try:
+            # First, get all existing inventory items for this vouchar
+            existing_entry = await accounting_repo.find(
+                {"vouchar_id": vouchar_id}
+            ).to_list(None)
+
+            existing_entry_ids = {str(entry.get("_id")) for entry in existing_entry}
+
+            # Track the entry_ids received in the update
+            received_entry_ids = set()
+            for entry in accounting_data:
+                entry_id = getattr(entry, "entry_id", None)
+                received_entry_ids.add(str(entry_id))
+                # Check if item already exists
+                existing_acc = await accounting_repo.findOne(
+                    {
+                        "_id": entry_id,
+                        "vouchar_id": vouchar_id,
+                        "ledger_id": entry.ledger_id,
+                    }
+                )
+
+                entry_data = {
+                    "ledger": entry.ledger,
+                    "ledger_id": entry.ledger_id,
+                    "amount": entry.amount,
+                }
+
+                if existing_acc:
+                    await accounting_repo.update_one(
+                        {
+                            "_id": entry_id,
+                            "vouchar_id": vouchar_id,
+                            "ledger_id": entry.ledger_id,
+                        },
+                        {"$set": entry_data},
+                    )
+                else:
+                    entry_data.update(
+                        {
+                            "vouchar_id": vouchar_id,
+                        }
+                    )
+                    await accounting_repo.new(Accounting(**entry_data))
+
+                    # Delete accounting entries that are in DB but not in the received update
+            entries_to_delete = existing_entry_ids - received_entry_ids
+            if entries_to_delete:
+                await accounting_repo.deleteAll(
+                    {
+                        "vouchar_id": vouchar_id,
+                        "_id": {"$in": list(entries_to_delete)},
+                    }
+                )
+
+            # First, get all existing inventory items for this vouchar
+            existing_items = await inventory_repo.find(
+                {"vouchar_id": vouchar_id}
+            ).to_list(None)
+
+            existing_item_ids = {str(item.get("_id")) for item in existing_items}
+
+            # Track the item entry_ids received in the update
+            received_entry_ids = set()
+            for item in inventory_data:
+                entry_id = getattr(item, "entry_id", None)
+                received_entry_ids.add(str(entry_id))
+                # Check if item already exists
+                existing_item = await inventory_repo.findOne(
+                    {
+                        "_id": entry_id,
+                        "vouchar_id": vouchar_id,
+                        "item_id": item.item_id,
+                    }
+                )
+
+                item_data = {
+                    "quantity": item.quantity,
+                    "rate": item.rate,
+                    "amount": item.amount,
+                    "additional_amount": (
+                        item.additional_amount
+                        if hasattr(item, "additional_amount")
+                        else 0.0
+                    ),
+                    "discount_amount": (
+                        item.discount_amount if hasattr(item, "discount_amount") else 0.0
+                    ),
+                    "godown": item.godown if hasattr(item, "godown") else "",
+                    "godown_id": (item.godown_id if hasattr(item, "godown_id") else ""),
+                    "order_number": (
+                        item.order_number if hasattr(item, "order_number") else None
+                    ),
+                    "order_due_date": (
+                        item.order_due_date if hasattr(item, "order_due_date") else None
+                    ),
+                }
+
+                if existing_item:
+                    await inventory_repo.update_one(
+                        {
+                            "_id": entry_id,
+                            "vouchar_id": vouchar_id,
+                            "item_id": item.item_id,
+                        },
+                        {"$set": item_data},
+                    )
+
+                else:
+                    item_data.update(
+                        {
+                            "vouchar_id": vouchar_id,
+                            "item": item.item,
+                            "item_id": item.item_id,
+                        }
+                    )
+
+                    await inventory_repo.new(InventoryItem(**item_data))
+
+                    # Delete inventory items that are in DB but not in the received update
+            items_to_delete = existing_item_ids - received_entry_ids
+            if items_to_delete:
+                await inventory_repo.collection.delete_many(
+                    {
+                        "_id": {"$in": list(items_to_delete)},
+                        "vouchar_id": vouchar_id,
+                    }
+                )
+            party_ledger = await ledger_repo.findOne(
+                {
+                    "company_id": userSettings["current_company_id"],
+                    "ledger_name": vouchar.party_name,
+                    "user_id": current_user.user_id,
+                }
+            )
+
+            if companySettings["features"]["enable_gst"] and party_ledger:
+                # If GST is enabled, ensure vouchar updated with GST details
+                if vouchar.voucher_type == "Purchase":
+                    if not party_ledger.gstin:
+                        raise http_exception.BadRequestException(
+                            detail="Party ledger does not have GSTIN. Please update the party ledger."
+                        )
+
+                    # Extract Party GSTIN
+                    partyStateCode = party_ledger.get("gstin", None)[:2]
+
+                    vouchar_gst_data = {
+                        "voucher_id": vouchar_id,
+                        "company_id": userSettings["current_company_id"],
+                        "user_id": current_user.user_id,
+                        "is_gst_applicable": True,
+                        "place_of_supply": (
+                            vouchar.place_of_supply
+                            if hasattr(vouchar, "place_of_supply")
+                            else ""
+                        ),
+                        "party_gstin": (
+                            party_ledger.gstin if hasattr(party_ledger, "gstin") else ""
+                        ),
+                        "item_gst_details": [
+                            {
+                                "item": item.item,
+                                "item_id": item.item_id,
+                                "hsn_code": item.hsn_code,
+                                "gst_rate": item.gst_rate,
+                                "taxable_value": item.amount,
+                                "cgst": (
+                                    item.gst_amount / 2
+                                    if companyStateCode == partyStateCode
+                                    else 0
+                                ),  # CGST amount
+                                "sgst": (
+                                    item.gst_amount / 2
+                                    if companyStateCode == partyStateCode
+                                    else 0
+                                ),  # SGST amount
+                                "igst": (
+                                    item.gst_amount
+                                    if companyStateCode != partyStateCode
+                                    else 0
+                                ),  # IGST amount
+                            }
+                            for item in vouchar.items
+                        ],
+                    }
+                    await vouchar_gst_repo.update_one(
+                        {"voucher_id": vouchar_id},
+                        {"$set": vouchar_gst_data},
+                    )
+
+                    return {"success": True, "message": "Vouchar Updated Successfully"}
+                elif vouchar.voucher_type == "Sales":
+                    if not companyExists.get("gstin", None):
+                        raise http_exception.BadRequestException(
+                            detail="Company does not have GSTIN. Please update the company details."
+                        )
+                    companyStateCode = companyExists.get("gstin", None)[:2]
+                    if not party_ledger.gstin:
+                        companyStateCode = companyExists.get("state", None)
+                        partyStateCode = party_ledger.get("mailing_state", None)
+                    else:
+                        partyStateCode = party_ledger.get("gstin", None)[:2]
+
+                    vouchar_gst_data = {
+                        "voucher_id": vouchar_id,
+                        "company_id": userSettings["current_company_id"],
+                        "user_id": current_user.user_id,
+                        "is_gst_applicable": True,
+                        "place_of_supply": (
+                            vouchar.place_of_supply
+                            if hasattr(vouchar, "place_of_supply")
+                            else ""
+                        ),
+                        "party_gstin": (
+                            party_ledger.gstin if hasattr(party_ledger, "gstin") else ""
+                        ),
+                        "item_gst_details": [
+                            {
+                                "item": item.item,
+                                "item_id": item.item_id,
+                                "hsn_code": item.hsn_code,
+                                "gst_rate": item.gst_rate,
+                                "taxable_value": item.amount,
+                                "cgst": (
+                                    item.gst_amount / 2
+                                    if companyStateCode == partyStateCode
+                                    else 0
+                                ),  # CGST amount
+                                "sgst": (
+                                    item.gst_amount / 2
+                                    if companyStateCode == partyStateCode
+                                    else 0
+                                ),  # SGST amount
+                                "igst": (
+                                    item.gst_amount
+                                    if companyStateCode != partyStateCode
+                                    else 0
+                                ),  # IGST amount
+                            }
+                            for item in vouchar.items
+                        ],
+                    }
+                    await vouchar_gst_repo.update_one(
+                        {"voucher_id": vouchar_id},
+                        {"$set": vouchar_gst_data},
+                    )
+
+        except Exception as e:
+            print("Error during vouchar update:", str(e))
+            raise http_exception.BadRequestException()
+
+        return {"success": True, "message": "Vouchar Updated Successfully"}
 
     if not response:
         raise http_exception.ResourceAlreadyExistsException(
@@ -885,8 +1369,6 @@ async def print_invoice(
         ]
     ).to_list(length=1)
 
-    # print("Fetched invoice data:", invoice_data)
-
     if not invoice_data:
         raise http_exception.ResourceNotFoundException()
 
@@ -951,8 +1433,6 @@ async def print_invoice(
         "company.motto": "LIFE'S A JOURNEY, KEEP SMILING",
     }
 
-    print("Template variables prepared:", template_vars)
-
     # Load HTML template (assuming you have it in a file)
     async with aiofiles.open("app/utils/templates/invoice_template.html", "r") as f:
         template_str = await f.read()
@@ -967,6 +1447,26 @@ async def print_invoice(
     }
 
 
+async def render_paginated_html(template_path, template_vars, items, items_per_page=17):
+    """
+    Splits items into pages, renders HTML for each page, and returns all rendered HTMLs.
+    """
+    pages = [items[i : i + items_per_page] for i in range(0, len(items), items_per_page)]
+    rendered_pages = []
+    async with aiofiles.open(template_path, "r") as f:
+        template_str = await f.read()
+    template = Template(template_str)
+    for page_items in pages:
+        page_vars = dict(template_vars)
+        page_vars["invoice"]["items"] = page_items
+        page_vars["no_of_items"] = len(page_items)
+        page_vars["invoice"]["page_number"] = len(rendered_pages) + 1
+        page_vars["invoice"]["total_pages"] = len(pages)
+        html = template.render(**page_vars)
+        rendered_pages.append({"html": html, "page_number": len(rendered_pages) + 1})
+    return rendered_pages
+
+
 @Vouchar.get(
     "/print/vouchar/gst",
     response_class=ORJSONResponse,
@@ -974,7 +1474,7 @@ async def print_invoice(
 )
 async def print_invoice_gst(
     vouchar_id: str = Query(...),
-    company_id: str = Query(...),
+    company_id: str = Query(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type not in {"user", "admin"}:
@@ -1067,8 +1567,6 @@ async def print_invoice_gst(
         ]
     ).to_list(length=1)
 
-    print("Fetched invoice data:", invoice_data)
-
     if not invoice_data:
         raise http_exception.ResourceNotFoundException()
 
@@ -1077,16 +1575,19 @@ async def print_invoice_gst(
     # Prepare item rows
     items = []
     voucher_gst = invoice.get("voucher_gst", [{}])
+
     item_gst_details = voucher_gst[0].get("item_gst_details", [])
 
-    for item, item_gst in zip(
-        invoice.get("inventory", []),
-        item_gst_details,
-    ):
+    # Build a mapping from item_id to GST details
+    item_gst_map = {str(gst.get("item_id", "")): gst for gst in item_gst_details}
+
+    for item in invoice.get("inventory", []):
+        item_id = str(item.get("item_id", ""))
+        item_gst = item_gst_map.get(item_id, {})
         items.append(
             {
                 "name": item.get("item", ""),
-                "item_id": item_gst.get("item_id", ""),
+                "item_id": item_id,
                 "qty": item.get("quantity", 0),
                 "rate": item.get("rate", 0),
                 "amount": item.get("amount", 0),
@@ -1099,12 +1600,14 @@ async def print_invoice_gst(
         )
 
     stock_items = invoice.get("stockItems", [])
+
     for item in items:
         for si in stock_items:
             if si.get("_id") == item.get("item_id"):
                 item["pack"] = si.get("unit", "")
 
     total = sum(i["amount"] for i in items)
+    units = sum(i["qty"] for i in items)
     total_total_amount = sum(i["total_amount"] for i in items)
     total_taxable_value = sum(i["taxable_value"] for i in items)
     total_tax = total_total_amount - total_taxable_value
@@ -1121,6 +1624,7 @@ async def print_invoice_gst(
             "taxable_value": 0.0,
         }
     )
+
     for detail in item_gst_details:
         try:
             rate = float(detail.get("gst_rate", 0))
@@ -1135,6 +1639,7 @@ async def print_invoice_gst(
             + float(detail.get("sgst", 0.0))
             + float(detail.get("cgst", 0.0))
         )
+
     invoice_taxes = []
     totals = {"igst": 0.0, "sgst": 0.0, "cgst": 0.0, "gst_amt": 0.0, "taxable_value": 0.0}
     for rate, vals in tax_summary.items():
@@ -1153,7 +1658,9 @@ async def print_invoice_gst(
         totals["cgst"] += vals["cgst"]
         totals["taxable_value"] += vals["taxable_value"]
         totals["gst_amt"] += vals["gst_amt"]
+
     totals = {k: round(v, 2) for k, v in totals.items()}
+    totals["units"] = units
     # --- END GST Tax Table Calculation ---
 
     grand_total = abs(total_total_amount)
@@ -1164,17 +1671,32 @@ async def print_invoice_gst(
             "voucher_type": invoice.get("voucher_type", ""),
             "voucher_number": invoice.get("voucher_number", ""),
             "date": invoice.get("date", ""),
-            "items": items,
             "total_tax": total_tax,
             # "roundoff": roundoff,
             "total": f"{total:.2f}",
             "grand_total": grand_total,
             "taxes": invoice_taxes,
+            "payment_status": "Paid",  # Example payment status
+            "station": "Rajkot",  # Example station
+            "is_reversed_charge": (
+                "Yes" if invoice.get("is_reversed_charge", False) else "No"
+            ),
+            "vehicle_number": "KA-01-AB-1234",  # Example vehicle number
+            "mode_of_transport": "By Road",  # Example mode of transport
+            "place_of_supply": invoice.get("place_of_supply", ""),
+            "additional_charges": 12.34,  # Example additional charges
             "totals": totals,
         },
         "party": {
             "name": invoice.get("party_details", {}).get("ledger_name", ""),
             "address": invoice.get("party_details", {}).get("mailing_address", ""),
+            "mailing_state": invoice.get("party_details", {}).get("mailing_state", ""),
+            "mailing_country": invoice.get("party_details", {}).get(
+                "mailing_country", ""
+            ),
+            "mailing_pincode": invoice.get("party_details", {}).get(
+                "mailing_pincode", ""
+            ),
             "phone": invoice.get("party_details", {}).get("phone", ""),
             "email": invoice.get("party_details", {}).get("email", ""),
             "gst_no": invoice.get("party_details", {}).get("gstin", "") or "",
@@ -1209,19 +1731,77 @@ async def print_invoice_gst(
         ),
     }
 
-    print("Template variables prepared:", template_vars)
+    if invoice.get("voucher_type", "") == "Sales":
+        async with aiofiles.open(
+            "app/utils/templates/gst_sale_invoice_template.html", "r"
+        ) as f:
+            template_str = await f.read()
 
-    # Load HTML template (assuming you have it in a file)
-    async with aiofiles.open("app/utils/templates/gst_invoice_template.html", "r") as f:
-        template_str = await f.read()
+        template = Template(template_str)
+        vars_with_items = dict(template_vars)
+        vars_with_items["invoice"]["items"] = items
+        rendered_html = template.render(**vars_with_items)
 
-    template = Template(template_str)
-    rendered_html = template.render(**template_vars)
-    return {
-        "success": True,
-        "message": "Data Fetched Successfully...",
-        "data": rendered_html,
-    }
+        async with aiofiles.open(
+            "app/utils/templates/gst_sale_invoice_download_template.html", "r"
+        ) as g:
+            template_str_download = await g.read()
+
+        template = Template(template_str_download)
+        vars_with_items = dict(template_vars)
+        vars_with_items["invoice"]["items"] = items
+        rendered_download_html = template.render(**vars_with_items)
+
+        template_path = "app/utils/templates/gst_sale_invoice_template.html"
+        rendered_pages = await render_paginated_html(
+            template_path, template_vars, items, items_per_page=17
+        )
+
+        return {
+            "success": True,
+            "message": "Data Fetched Successfully...",
+            "data": {
+                "paginated_data": rendered_pages,
+                "complete_data": rendered_html,
+                "download_data": rendered_download_html,
+            },
+        }
+    
+    else:
+        async with aiofiles.open(
+            "app/utils/templates/gst_purchase_template.html", "r"
+        ) as f:
+            template_str = await f.read()
+
+        template = Template(template_str)
+        vars_with_items = dict(template_vars)
+        vars_with_items["invoice"]["items"] = items
+        rendered_html = template.render(**vars_with_items)
+
+        async with aiofiles.open(
+            "app/utils/templates/gst_purchase_download_template.html", "r"
+        ) as g:
+            template_str_download = await g.read()
+
+        template = Template(template_str_download)
+        vars_with_items = dict(template_vars)
+        vars_with_items["invoice"]["items"] = items
+        rendered_download_html = template.render(**vars_with_items)
+
+        template_path = "app/utils/templates/gst_purchase_template.html"
+        rendered_pages = await render_paginated_html(
+            template_path, template_vars, items, items_per_page=17
+        )
+
+        return {
+            "success": True,
+            "message": "Data Fetched Successfully...",
+            "data": {
+                "paginated_data": rendered_pages,
+                "complete_data": rendered_html,
+                "download_data": rendered_download_html,
+            },
+        }
 
 
 @Vouchar.get(
@@ -1313,8 +1893,6 @@ async def print_invoice(
         ]
     ).to_list(length=1)
 
-    # print("Fetched invoice data:", invoice_data)
-
     if not invoice_data:
         raise http_exception.ResourceNotFoundException()
 
@@ -1356,8 +1934,6 @@ async def print_invoice(
             "company": {"motto": "LIFE'S A JOURNEY, KEEP SMILING"},
         },
     }
-
-    # print("Template variables prepared:", template_vars)
 
     # Load HTML template (assuming you have it in a file)
     async with aiofiles.open("app/utils/templates/reciept_template.html", "r") as f:
@@ -1470,8 +2046,6 @@ async def print_invoice(
         ]
     ).to_list(length=1)
 
-    # print("Fetched invoice data:", invoice_data)
-
     if not invoice_data:
         raise http_exception.ResourceNotFoundException()
 
@@ -1524,8 +2098,6 @@ async def print_invoice(
             "company_email": invoice.get("company", {}).get("email", ""),
         },
     }
-
-    # print("Template variables prepared:", template_vars)
 
     # Load HTML template (assuming you have it in a file)
     async with aiofiles.open("app/utils/templates/payment_template.html", "r") as f:

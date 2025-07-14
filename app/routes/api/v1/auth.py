@@ -270,7 +270,6 @@ async def get_current_user_details(
     else:
         data["company"] = []
 
-    # print("User Profile Data:", data)
     return {
         "success": True,
         "message": "User Profile Fetched Successfully",
