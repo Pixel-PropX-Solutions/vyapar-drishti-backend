@@ -101,10 +101,10 @@ async def createVouchar(
         "date": vouchar.date,
         "voucher_number": vouchar.voucher_number,
         "voucher_type": vouchar.voucher_type,
-        "voucher_type_id": vouchar.voucher_type,
+        "voucher_type_id": vouchar.voucher_type_id,
         "narration": vouchar.narration,
         "party_name": vouchar.party_name,
-        "party_name_id": vouchar.party_name,
+        "party_name_id": vouchar.party_name_id,
         # Conditional fields
         "reference_number": (
             vouchar.reference_number if hasattr(vouchar, "reference_number") else ""
@@ -211,17 +211,25 @@ async def createVouchar(
                 await inventory_repo.new(InventoryItem(**item_data))
 
             # Increase the vouchar counter for the voucher type
-            await vouchar_counter_repo.increaseVoucharCounter(
-                company_id=userSettings["current_company_id"],
-                voucher_type=vouchar.voucher_type,
+            await vouchar_counter_repo.update_one(
+                {
+                    "voucher_type": vouchar.voucher_type,
+                    "company_id": userSettings["current_company_id"],
+                    "user_id": current_user.user_id,
+                },
+                {"$inc": {"current_number": 1}},
             )
 
         except Exception as e:
             # Rollback vouchar creation if any error occurs
-            print("Error during vouchar creation:", str(e))
-            await vouchar_counter_repo.decreaseVoucharCounter(
-                company_id=userSettings["current_company_id"],
-                voucher_type=vouchar.voucher_type,
+            print("Error during vouchar creation:", e)
+            await vouchar_counter_repo.update_one(
+                {
+                    "voucher_type": vouchar.voucher_type,
+                    "company_id": userSettings["current_company_id"],
+                    "user_id": current_user.user_id,
+                },
+                {"$inc": {"current_number": -1}},
             )
             await accounting_repo.deleteAll({"vouchar_id": response.vouchar_id})
             await inventory_repo.deleteAll({"vouchar_id": response.vouchar_id})
@@ -467,10 +475,10 @@ async def createVoucharWithGST(
         "date": vouchar.date,
         "voucher_number": vouchar.voucher_number,
         "voucher_type": vouchar.voucher_type,
-        "voucher_type_id": vouchar.voucher_type,
+        "voucher_type_id": vouchar.voucher_type_id,
         "narration": vouchar.narration,
         "party_name": vouchar.party_name,
-        "party_name_id": vouchar.party_name,
+        "party_name_id": vouchar.party_name_id,
         # Conditional fields
         "reference_number": (
             vouchar.reference_number if hasattr(vouchar, "reference_number") else ""
