@@ -14,12 +14,12 @@ counter_router = APIRouter()
 
 
 DEFAULT_VOUCHER_TYPES = {
-    "Sales": {"prefix": "INV", "suffix": "", "separator": "/", "reset_cycle": "yearly"},
-    "Purchase": {"prefix": "PUR", "suffix": "", "separator": "/", "reset_cycle": "yearly"},
-    "Payment": {"prefix": "PAY", "suffix": "", "separator": "/", "reset_cycle": "monthly"},
-    "Receipt": {"prefix": "REC", "suffix": "", "separator": "/", "reset_cycle": "monthly"},
-    "Journal": {"prefix": "JRN", "suffix": "", "separator": "/", "reset_cycle": "yearly"},
-    "Contra": {"prefix": "CON", "suffix": "", "separator": "/", "reset_cycle": "yearly"},
+    "Sales": {"prefix": "INV", "suffix": "", "separator": "-", "reset_cycle": "yearly"},
+    "Purchase": {"prefix": "PUR", "suffix": "", "separator": "-", "reset_cycle": "yearly"},
+    "Payment": {"prefix": "PAY", "suffix": "", "separator": "-", "reset_cycle": "monthly"},
+    "Receipt": {"prefix": "REC", "suffix": "", "separator": "-", "reset_cycle": "monthly"},
+    "Journal": {"prefix": "JRN", "suffix": "", "separator": "-", "reset_cycle": "yearly"},
+    "Contra": {"prefix": "CON", "suffix": "", "separator": "-", "reset_cycle": "yearly"},
 }
 
 

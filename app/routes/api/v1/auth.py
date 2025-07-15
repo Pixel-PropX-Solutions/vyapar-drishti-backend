@@ -71,6 +71,14 @@ async def login(
     user_type: UserTypeEnum,
     creds: OAuth2PasswordRequestForm = Depends(),
 ):
+    """Login endpoint for users and admin."""
+    if not creds.username or not creds.password:
+        return {
+            "ok": False,
+            "message": "Username and password are required",
+            "status": status.HTTP_400_BAD_REQUEST,
+        }
+    
     user = None
     if user_type == UserTypeEnum.ADMIN and creds.username == ENV_PROJECT.ADMIN_EMAIL:
         user = {
@@ -82,9 +90,22 @@ async def login(
             {"email": creds.username},
             {"_id", "password"},
         )
+        
     if not user:
-        raise http_exception.CredentialsInvalidException()
-
+        return {
+            "ok": False,
+            "message": "User not found or invalid credentials",
+            "status": status.HTTP_404_NOT_FOUND,
+        }
+    
+    # Verify the password
+    if not creds.password:
+        return {
+            "ok": False,
+            "message": "Password is required",
+            "status": status.HTTP_400_BAD_REQUEST,
+        }
+        
     if hashing.verify_hash(creds.password, user["password"]):
         token_data = TokenData(
             user_id=user["_id"], user_type=user_type.value, scope="login"
@@ -110,9 +131,12 @@ async def login(
             "accessToken": token_generated.access_token,
             "refreshToken": token_generated.refresh_token,
         }
-
-    raise http_exception.CredentialsInvalidException()
-
+    else:
+        return {
+            "ok": False,
+            "message": "Invalid username or password. Please try again.",
+            "status": status.HTTP_401_UNAUTHORIZED,
+        }
 
 @auth.post("/register", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
 async def register(

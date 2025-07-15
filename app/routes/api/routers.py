@@ -84,19 +84,19 @@ routers.include_router(
 
 routers.include_router(
     vouchar_endpoints,
-    prefix=ENV_PROJECT.BASE_API_V1 + "/user",
+    prefix=ENV_PROJECT.BASE_API_V1 + "/invoices",
     tags=["Vouchars"],
 )
 
 routers.include_router(
     vouchar_type_endpoints,
-    prefix=ENV_PROJECT.BASE_API_V1 + "/user",
+    prefix=ENV_PROJECT.BASE_API_V1 + "/invoices",
     tags=["Vouchar Type"],
 )
 
 routers.include_router(
     vouchar_counter_endpoints,
-    prefix=ENV_PROJECT.BASE_API_V1 + "/user/serial-number",
+    prefix=ENV_PROJECT.BASE_API_V1 + "/invoices/serial-number",
     tags=["Serial Numbers"],
 )
 

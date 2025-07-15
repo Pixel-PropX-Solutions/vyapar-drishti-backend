@@ -47,14 +47,14 @@ async def create_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
         )
-        
+
     image_url = None
     if image:
 
@@ -140,9 +140,9 @@ async def get_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -315,16 +315,16 @@ async def get_product(
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def get_product(
+async def get_product_details(
     product_id: str,
     company_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -526,9 +526,9 @@ async def view_all_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -569,9 +569,9 @@ async def view_all_stock_items(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -600,15 +600,15 @@ async def view_all_stock_items(
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def get_products(
+async def get_products_with_id(
     company_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -637,11 +637,11 @@ async def get_products(
                     "_id": 1,
                     "stock_item_name": 1,
                     "unit": 1,
-                    "hsn_code": '$gst_rate.hsn_code',
-                    "rate": '$gst_rate.rate',
-                    "cgst": '$gst_rate.cgst', # CGST rate
-                    "sgst": '$gst_rate.sgst', # SGST rate
-                    "igst": '$gst_rate.igst', # IGST rate
+                    "hsn_code": "$gst_rate.hsn_code",
+                    "rate": "$gst_rate.rate",
+                    "cgst": "$gst_rate.cgst",  # CGST rate
+                    "sgst": "$gst_rate.sgst",  # SGST rate
+                    "igst": "$gst_rate.igst",  # IGST rate
                 }
             },
         ]
@@ -677,9 +677,9 @@ async def update_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -762,9 +762,9 @@ async def delete_product(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
@@ -780,37 +780,26 @@ async def delete_product(
     )
 
     if not product:
-        raise http_exception.NotFoundException(detail="Product Not Found")
+        raise http_exception.ResourceNotFoundException()
 
     if product:
-        vouchar_id_list = await inventory_repo.findAll(
+        vouchar_id_list = await inventory_repo.findOne(
             {
-                "item": product.name,
+                "item": product["stock_item_name"],
                 "item_id": product_id,
-            },
-            {"project": {"vouchar_id": 1, "_id": 1}},
+            }
         )
 
         # Check if the product is associated with any inventory items
         if vouchar_id_list:
-            for vouchar in vouchar_id_list:
-                vouchar_id = vouchar.get("vouchar_id")
-
-                is_vouchar_present = await vouchar_repo.findAll(
-                    {
-                        "_id": vouchar_id,
-                        "company_id": userSettings["current_company_id"],
-                        "user_id": current_user.user_id,
-                    }
-                )
-                if is_vouchar_present:
-                    raise http_exception.BadRequestException(
-                        detail="Product cannot be deleted as it is associated with invoices."
-                    )
-
-            raise http_exception.BadRequestException(
-                detail="Product cannot be deleted as it is associated with inventory items."
+            raise http_exception.HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Product cannot be deleted as it is associated with inventory items.",
             )
+            # return {
+            #     "success": False,
+            #     "message": "Product cannot be deleted as it is associated with inventory items.",
+            # }
 
         if not vouchar_id_list:
             # If no inventory items are associated, proceed to delete the product

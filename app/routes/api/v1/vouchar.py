@@ -39,7 +39,6 @@ import aiofiles
 from num2words import num2words
 from math import ceil
 
-
 Vouchar = APIRouter()
 
 
@@ -76,6 +75,26 @@ class GSTVoucherUpdate(BaseModel):
 
     accounting: List[AccountingUpdate]
     items: Optional[List[UpdateInventoryItemWithGST]]
+
+
+async def render_paginated_html(template_path, template_vars, items, items_per_page=17):
+    """
+    Splits items into pages, renders HTML for each page, and returns all rendered HTMLs.
+    """
+    pages = [items[i : i + items_per_page] for i in range(0, len(items), items_per_page)]
+    rendered_pages = []
+    async with aiofiles.open(template_path, "r") as f:
+        template_str = await f.read()
+    template = Template(template_str)
+    for page_items in pages:
+        page_vars = dict(template_vars)
+        page_vars["invoice"]["items"] = page_items
+        page_vars["no_of_items"] = len(page_items)
+        page_vars["invoice"]["page_number"] = len(rendered_pages) + 1
+        page_vars["invoice"]["total_pages"] = len(pages)
+        html = template.render(**page_vars)
+        rendered_pages.append({"html": html, "page_number": len(rendered_pages) + 1})
+    return rendered_pages
 
 
 @Vouchar.post(
@@ -273,12 +292,11 @@ async def updateVouchar(
         raise http_exception.ResourceNotFoundException(
             detail="Vouchar not found. Please check the vouchar ID."
         )
-
     vouchar_data = {
         "date": vouchar.date,
         "narration": vouchar.narration,
         "party_name": vouchar.party_name,
-        "party_name_id": vouchar.party_name,
+        "party_name_id": vouchar.party_name_id,
         # Conditional fields
         "reference_number": (
             vouchar.reference_number if hasattr(vouchar, "reference_number") else ""
@@ -321,103 +339,123 @@ async def updateVouchar(
 
     if response:
         try:
-            # Create all accounting entries
+            # First, get all existing inventory items for this vouchar
+            existing_acc = await accounting_repo.collection.aggregate(
+                [{"$match": {"vouchar_id": vouchar_id}}]
+            ).to_list(None)
+
+            existing_acc_ids = {str(acc.get("_id")) for acc in existing_acc}
+
+            # Track the item entry_ids received in the update
+            received_acc_ids = set()
             for entry in accounting_data:
+                acc_id = getattr(entry, "entry_id", None)
+                received_acc_ids.add(str(acc_id))
                 # Check if entry already exists
-                existing_entry = await accounting_repo.findOne(
+                existing_acc = await accounting_repo.findOne(
                     {"_id": entry.entry_id, "vouchar_id": vouchar_id}
                 )
-                if existing_entry:
-                    entry_data = {
-                        "ledger": entry.ledger,
-                        "ledger_id": entry.ledger_id,
-                        "amount": entry.amount,
-                    }
+
+                acc_data = {
+                    "ledger": entry.ledger,
+                    "ledger_id": entry.ledger_id,
+                    "amount": entry.amount,
+                }
+
+                if existing_acc:
                     await accounting_repo.update_one(
                         {"_id": entry.entry_id, "vouchar_id": vouchar_id},
-                        {"$set": entry_data},
+                        {"$set": acc_data},
                     )
-
-                    # First, get all existing inventory items for this vouchar
-                    existing_items = await inventory_repo.find(
-                        {"vouchar_id": vouchar_id}
-                    ).to_list(None)
-
-                    existing_item_ids = {str(item.get("_id")) for item in existing_items}
-
-                    # Track the item entry_ids received in the update
-                    received_entry_ids = set()
-                    for item in inventory_data:
-                        entry_id = getattr(item, "entry_id", None)
-                        received_entry_ids.add(str(entry_id))
-                        # Check if item already exists
-                        existing_item = await inventory_repo.findOne(
-                            {
-                                "_id": entry_id,
-                                "vouchar_id": vouchar_id,
-                                "item_id": item.item_id,
-                            }
-                        )
-                        item_data = {
-                            "quantity": item.quantity,
-                            "rate": item.rate,
-                            "amount": item.amount,
-                            "additional_amount": (
-                                item.additional_amount
-                                if hasattr(item, "additional_amount")
-                                else 0.0
-                            ),
-                            "discount_amount": (
-                                item.discount_amount
-                                if hasattr(item, "discount_amount")
-                                else 0.0
-                            ),
-                            "godown": item.godown if hasattr(item, "godown") else "",
-                            "godown_id": (
-                                item.godown_id if hasattr(item, "godown_id") else ""
-                            ),
-                            "order_number": (
-                                item.order_number
-                                if hasattr(item, "order_number")
-                                else None
-                            ),
-                            "order_due_date": (
-                                item.order_due_date
-                                if hasattr(item, "order_due_date")
-                                else None
-                            ),
+                else:
+                    acc_data.update(
+                        {
+                            "vouchar_id": vouchar_id,
                         }
-                        if existing_item:
-                            await inventory_repo.update_one(
-                                {
-                                    "_id": entry_id,
-                                    "vouchar_id": vouchar_id,
-                                    "item_id": item.item_id,
-                                },
-                                {"$set": item_data},
-                            )
-                        else:
-                            item_data.update(
-                                {
-                                    "vouchar_id": vouchar_id,
-                                    "item": item.item,
-                                    "item_id": item.item_id,
-                                }
-                            )
-                            await inventory_repo.new(InventoryItem(**item_data))
+                    )
+                    await accounting_repo.new(Accounting(**acc_data))
+
+            acc_to_delete = existing_acc_ids - received_acc_ids
+            if acc_to_delete:
+                await accounting_repo.deleteAll(
+                    {
+                        "_id": {"$in": list(acc_to_delete)},
+                        "vouchar_id": vouchar_id,
+                    }
+                )
+
+            # First, get all existing inventory items for this vouchar
+            existing_items = await inventory_repo.collection.aggregate(
+                [{"$match": {"vouchar_id": vouchar_id}}]
+            ).to_list(None)
+
+            existing_item_ids = {str(item.get("_id")) for item in existing_items}
+
+            # Track the item entry_ids received in the update
+            received_entry_ids = set()
+            for item in inventory_data:
+                entry_id = getattr(item, "entry_id", None)
+                received_entry_ids.add(str(entry_id))
+                # Check if item already exists
+                existing_item = await inventory_repo.findOne(
+                    {
+                        "_id": entry_id,
+                        "vouchar_id": vouchar_id,
+                        "item_id": item.item_id,
+                    }
+                )
+                item_data = {
+                    "quantity": item.quantity,
+                    "rate": item.rate,
+                    "amount": item.amount,
+                    "additional_amount": (
+                        item.additional_amount
+                        if hasattr(item, "additional_amount")
+                        else 0.0
+                    ),
+                    "discount_amount": (
+                        item.discount_amount if hasattr(item, "discount_amount") else 0.0
+                    ),
+                    "godown": item.godown if hasattr(item, "godown") else "",
+                    "godown_id": (item.godown_id if hasattr(item, "godown_id") else ""),
+                    "order_number": (
+                        item.order_number if hasattr(item, "order_number") else None
+                    ),
+                    "order_due_date": (
+                        item.order_due_date if hasattr(item, "order_due_date") else None
+                    ),
+                }
+                if existing_item:
+                    await inventory_repo.update_one(
+                        {
+                            "_id": entry_id,
+                            "vouchar_id": vouchar_id,
+                            "item_id": item.item_id,
+                        },
+                        {"$set": item_data},
+                    )
+                else:
+                    item_data.update(
+                        {
+                            "vouchar_id": vouchar_id,
+                            "item": item.item,
+                            "item_id": item.item_id,
+                        }
+                    )
+                    await inventory_repo.new(InventoryItem(**item_data))
 
                     # Delete inventory items that are in DB but not in the received update
-                    items_to_delete = existing_item_ids - received_entry_ids
-                    if items_to_delete:
-                        await inventory_repo.deleteAll(
-                            {
-                                "_id": {"$in": list(items_to_delete)},
-                                "vouchar_id": vouchar_id,
-                            }
-                        )
+            items_to_delete = existing_item_ids - received_entry_ids
+            if items_to_delete:
+                await inventory_repo.deleteAll(
+                    {
+                        "_id": {"$in": list(items_to_delete)},
+                        "vouchar_id": vouchar_id,
+                    }
+                )
 
         except Exception as e:
-            print("Error during vouchar update:", str(e))
+            print("Error during vouchar update:", e)
             # Rollback vouchar update if any error occurs
             raise http_exception.BadRequestException()
 
@@ -786,7 +824,7 @@ async def updateVoucharWithGST(
         "date": vouchar.date,
         "narration": vouchar.narration,
         "party_name": vouchar.party_name,
-        "party_name_id": vouchar.party_name,
+        "party_name_id": vouchar.party_name_id,
         # Conditional fields
         "reference_number": (
             vouchar.reference_number if hasattr(vouchar, "reference_number") else ""
@@ -1098,7 +1136,6 @@ async def view_all_vouchar(
     type: str = None,
     start_date: str = None,
     end_date: str = None,
-    # is_deleted: bool = False,
     page_no: int = Query(1, ge=1),
     limit: int = Query(10, le=60),
     sortField: str = "created_at",
@@ -1299,7 +1336,6 @@ async def print_invoice(
             detail="User Settings Not Found. Please create user settings first."
         )
 
-    # Fetch invoice/voucher details
     invoice_data = await vouchar_repo.collection.aggregate(
         [
             {
@@ -1335,12 +1371,20 @@ async def print_invoice(
                     "as": "inventory",
                 }
             },
+            {
+                "$lookup": {
+                    "from": "StockItem",
+                    "localField": "inventory.item_id",
+                    "foreignField": "_id",
+                    "as": "stockItems",
+                }
+            },
             # Attach party ledger details
             {
                 "$lookup": {
                     "from": "Ledger",
-                    "localField": "party_name",
-                    "foreignField": "ledger_name",
+                    "localField": "party_name_id",
+                    "foreignField": "_id",
                     "as": "party_details",
                 }
             },
@@ -1354,7 +1398,7 @@ async def print_invoice(
                             "$filter": {
                                 "input": "$accounting_entries",
                                 "as": "acc",
-                                "cond": {"$ne": ["$$acc.ledger", "$party_name"]},
+                                "cond": {"$ne": ["$$acc.ledger_id", "$party_name_id"]},
                             }
                         }
                     }
@@ -1364,10 +1408,8 @@ async def print_invoice(
             {
                 "$lookup": {
                     "from": "Ledger",
-                    "let": {"ledger_name": "$accounting.ledger"},
-                    "pipeline": [
-                        {"$match": {"$expr": {"$eq": ["$ledger_name", "$$ledger_name"]}}}
-                    ],
+                    "let": {"ledger_id": "$accounting.ledger_id"},
+                    "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$ledger_id"]}}}],
                     "as": "customer",
                 }
             },
@@ -1402,13 +1444,31 @@ async def print_invoice(
                 "qty": item.get("quantity", 0),
                 "rate": item.get("rate", 0),
                 "amount": item.get("amount", 0),
-                "pack": item.get("pack", ""),
-                "hsn": item.get("hsn", ""),
+                # "pack": item.get("pack", ""),
+                # "hsn": item.get("hsn", ""),
             }
         )
 
+    stock_items = invoice.get("stockItems", [])
+
+    for item in items:
+        for si in stock_items:
+            if si.get("_id") == item.get("item_id"):
+                item["pack"] = si.get("unit", "")
+
     total = sum(i["amount"] for i in items)
     grand_total = abs(invoice.get("accounting", {}).get("amount", 0))
+    total_int = int(grand_total)
+    total_frac = int(round((grand_total - total_int) * 100))
+    if total_frac > 0:
+        total_words = (
+            num2words(total_int, lang="en_IN").title()
+            + " Rupees And "
+            + num2words(total_frac, lang="en_IN").title()
+            + " Paise only"
+        )
+    else:
+        total_words = num2words(total_int, lang="en_IN").title() + " Rupees Only"
 
     # Template variables
     template_vars = {
@@ -1419,12 +1479,18 @@ async def print_invoice(
             "items": items,
             "total": f"{total:.2f}",
             "grand_total": grand_total,
+            "grand_total_words": total_words,
         },
         "party": {
             "name": invoice.get("party_details", {}).get("ledger_name", ""),
             "address": invoice.get("party_details", {}).get("mailing_address", ""),
-            "state": invoice.get("party_details", {}).get("mailing_state", ""),
-            "country": invoice.get("party_details", {}).get("mailing_country", ""),
+            "mailing_state": invoice.get("party_details", {}).get("mailing_state", ""),
+            "mailing_country": invoice.get("party_details", {}).get(
+                "mailing_country", ""
+            ),
+            "mailing_pincode": invoice.get("party_details", {}).get(
+                "mailing_pincode", ""
+            ),
             "phone": invoice.get("party_details", {}).get("phone", ""),
             "email": invoice.get("party_details", {}).get("email", ""),
             "gst_no": invoice.get("party_details", {}).get("gstin", "") or "",
@@ -1442,37 +1508,39 @@ async def print_invoice(
     }
 
     # Load HTML template (assuming you have it in a file)
-    async with aiofiles.open("app/utils/templates/invoice_template.html", "r") as f:
+    async with aiofiles.open("app/utils/templates/no_gst_template.html", "r") as f:
         template_str = await f.read()
 
     template = Template(template_str)
-    rendered_html = template.render(**template_vars)
+    vars_with_items = dict(template_vars)
+    vars_with_items["invoice"]["items"] = items
+    rendered_html = template.render(**vars_with_items)
+
+    async with aiofiles.open(
+        "app/utils/templates/no_gst_download_template.html", "r"
+    ) as g:
+        template_str_download = await g.read()
+
+    template_download = Template(template_str_download)
+    vars_with_items = dict(template_vars)
+    vars_with_items["invoice"]["items"] = items
+    rendered_download_html = template_download.render(**vars_with_items)
+
+    template_path = "app/utils/templates/no_gst_template.html"
+    rendered_pages = await render_paginated_html(
+        template_path, template_vars, items, items_per_page=17
+    )
+    # return HTMLResponse(content=rendered_download_html, status_code=status.HTTP_200_OK)
 
     return {
         "success": True,
         "message": "Data Fetched Successfully...",
-        "data": rendered_html,
+        "data": {
+            "paginated_data": rendered_pages,
+            "complete_data": rendered_html,
+            "download_data": rendered_download_html,
+        },
     }
-
-
-async def render_paginated_html(template_path, template_vars, items, items_per_page=17):
-    """
-    Splits items into pages, renders HTML for each page, and returns all rendered HTMLs.
-    """
-    pages = [items[i : i + items_per_page] for i in range(0, len(items), items_per_page)]
-    rendered_pages = []
-    async with aiofiles.open(template_path, "r") as f:
-        template_str = await f.read()
-    template = Template(template_str)
-    for page_items in pages:
-        page_vars = dict(template_vars)
-        page_vars["invoice"]["items"] = page_items
-        page_vars["no_of_items"] = len(page_items)
-        page_vars["invoice"]["page_number"] = len(rendered_pages) + 1
-        page_vars["invoice"]["total_pages"] = len(pages)
-        html = template.render(**page_vars)
-        rendered_pages.append({"html": html, "page_number": len(rendered_pages) + 1})
-    return rendered_pages
 
 
 @Vouchar.get(
@@ -1534,8 +1602,8 @@ async def print_invoice_gst(
             {
                 "$lookup": {
                     "from": "StockItem",
-                    "localField": "inventory.item",
-                    "foreignField": "stock_item_name",
+                    "localField": "inventory.item_id",
+                    "foreignField": "_id",
                     "as": "stockItems",
                 }
             },
@@ -1774,7 +1842,7 @@ async def print_invoice_gst(
                 "download_data": rendered_download_html,
             },
         }
-    
+
     else:
         async with aiofiles.open(
             "app/utils/templates/gst_purchase_template.html", "r"
@@ -1817,7 +1885,7 @@ async def print_invoice_gst(
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def print_invoice(
+async def print_receipt(
     vouchar_id: str = Query(...),
     company_id: str = Query(...),
     current_user: TokenData = Depends(get_current_user),
@@ -1961,7 +2029,7 @@ async def print_invoice(
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def print_invoice(
+async def print_payment(
     vouchar_id: str = Query(...),
     company_id: str = Query(...),
     current_user: TokenData = Depends(get_current_user),
@@ -2227,3 +2295,112 @@ async def get_vouchar(
     ).to_list(None)
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+
+
+@Vouchar.delete(
+    "/delete/{vouchar_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def delete_vouchar(
+    vouchar_id: str,
+    company_id: str = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    voucharExists = await vouchar_repo.findOne(
+        {
+            "_id": vouchar_id,
+            "company_id": userSettings["current_company_id"],
+            "user_id": current_user.user_id,
+        }
+    )
+
+    if voucharExists is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="No Invoice Found. Please delete appropriate invoice."
+        )
+
+    # Delete all accounting entries associated with the vouchers
+    await accounting_repo.deleteAll({"vouchar_id": vouchar_id})
+
+    # Delete all the inventory entries associated with the vouchers
+    await inventory_repo.deleteAll({"vouchar_id": vouchar_id})
+
+    await vouchar_repo.deleteOne(
+        {
+            "_id": vouchar_id,
+            "company_id": userSettings["current_company_id"],
+            "user_id": current_user.user_id,
+        }
+    )
+
+    return {"success": True, "message": "Invoice Deleted Successfully..."}
+
+
+@Vouchar.delete(
+    "/gst/delete/{vouchar_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def delete_gst_vouchar(
+    vouchar_id: str,
+    company_id: str = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    voucharExists = await vouchar_repo.findOne(
+        {
+            "_id": vouchar_id,
+            "company_id": userSettings["current_company_id"],
+            "user_id": current_user.user_id,
+        }
+    )
+
+    if voucharExists is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="No Invoice Found. Please delete appropriate invoice."
+        )
+
+    # Delete all accounting entries associated with the vouchers
+    await accounting_repo.deleteAll({"vouchar_id": vouchar_id})
+
+    # Delete all the inventory entries associated with the vouchers
+    await inventory_repo.deleteAll({"vouchar_id": vouchar_id})
+
+    # Delete all the voucher GST entries associated with the company
+    await vouchar_gst_repo.deleteOne(
+        {
+            "voucher_id": vouchar_id,
+            "company_id": company_id,
+            "user_id": current_user.user_id,
+        }
+    )
+
+    await vouchar_repo.deleteOne(
+        {
+            "_id": vouchar_id,
+            "company_id": userSettings["current_company_id"],
+            "user_id": current_user.user_id,
+        }
+    )
+
+    return {"success": True, "message": "Invoice Deleted Successfully..."}

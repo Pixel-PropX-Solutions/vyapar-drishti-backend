@@ -63,38 +63,16 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             except re.error:
                 pass
 
-        if type not in ["", None]:
+        if type in ["Invoices", "Transactions"]:
+            if type == "Invoices":
+                filter_params["voucher_type"] = {"$in": ["Sales", "Purchase"]}
+            else:
+                filter_params["voucher_type"] = {"$in": ["Payment", "Receipt"]}
+        elif type not in ["", None]:
             filter_params["voucher_type"] = type
 
         if start_date not in ["", None] and end_date not in ["", None]:
             filter_params["date"] = {"$gte": start_date, "$lte": end_date}
-
-            # try:
-            # start_date = (
-            #     datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-            #     if "T" in start_date
-            #     else datetime.strptime(start_date, "%Y-%m-%d")
-            # )
-            # end_date = (
-            #     datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-            #     if "T" in end_date
-            #     else datetime.strptime(end_date, "%Y-%m-%d")
-            # )
-            # # Always set end_date to end of day to include all entries for that date
-            # end_date = end_date.replace(
-            #     hour=23, minute=59, second=59, microsecond=999999
-            # )
-
-            # filter_params["date"] = {"$gte": start_date, "$lte": end_date}
-            # except ValueError:
-            #     # If parsing fails, still try to set end_date to end of day if possible
-            #     # try:
-            #     #     if isinstance(end_date, str):
-            #     #         temp_end = datetime.strptime(end_date, "%Y-%m-%d")
-            #     #         end_date = temp_end.replace(hour=23, minute=59, second=59, microsecond=999999)
-            #     # except Exception:
-            #     #     pass
-            #     filter_params["date"] = {"$gte": start_date, "$lte": end_date}
 
         sort_options = {
             "voucher_number_asc": {"voucher_number": 1},
@@ -219,8 +197,8 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             {
                 "$lookup": {
                     "from": "Ledger",
-                    "localField": "party_name",
-                    "foreignField": "name",
+                    "localField": "party_name_id",
+                    "foreignField": "_id",
                     "as": "party",
                 }
             },
@@ -275,7 +253,9 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                                 "$filter": {
                                     "input": "$accounting",
                                     "as": "entry",
-                                    "cond": {"$eq": ["$$entry.ledger", "$party_name"]},
+                                    "cond": {
+                                        "$eq": ["$$entry.ledger_id", "$party_name_id"]
+                                    },
                                 }
                             },
                             "as": "entry",
@@ -309,7 +289,9 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "amount": {"$arrayElemAt": ["$ledger_entries.amount", 0]},
                     "balance_type": 1,
                     "ledger_name": {"$arrayElemAt": ["$ledger_entries.ledgername", 0]},
-                    "is_deemed_positive": {"$arrayElemAt": ["$ledger_entries.is_deemed_positive", 0]},
+                    "is_deemed_positive": {
+                        "$arrayElemAt": ["$ledger_entries.is_deemed_positive", 0]
+                    },
                     # "ledger_entries": 1,
                     "created_at": 1,
                 }
@@ -375,7 +357,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         if start_date not in ["", None] and end_date not in ["", None]:
             filter_params["date"] = {"$gte": start_date, "$lte": end_date}
 
-            
         sort_options = {
             "voucher_number_asc": {"voucher_number": 1},
             "voucher_number_desc": {"voucher_number": -1},

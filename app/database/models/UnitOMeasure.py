@@ -18,7 +18,7 @@ class UOM(BaseModel):
     is_simple_unit: bool = False
     base_units: str = ""
     additional_units: str = ""
-    conversion: float
+    conversion: float = 1
     si_representation: SIRepresentationEnum
     description: Optional[str] = ""
     symbol: Optional[str] = ""
