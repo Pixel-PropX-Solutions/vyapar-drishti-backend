@@ -188,7 +188,6 @@ async def get_all_vouchar_type(
 #                 "financial_year_start": 1,
 #                 "books_begin_from": 1,
 #                 "gstin": 1,
-#                 "pan": 1,
 #                 "website": 1,
 #                 "created_at": 1,
 #                 "updated_at": 1,

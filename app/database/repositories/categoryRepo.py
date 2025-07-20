@@ -32,7 +32,6 @@ class CategoryRepo(BaseMongoDbCrud[CategoryDB]):
         pagination: PageRequest,
         sort: Sort,
         current_user: TokenData = Depends(get_current_user),
-        parent: str = "Primary",
     ):
         filter_params = {
             "user_id": current_user.user_id,
@@ -48,7 +47,6 @@ class CategoryRepo(BaseMongoDbCrud[CategoryDB]):
 
         sort_fields_mapping = {
             "category_name": "category_name",
-            "parent": "parent",
             "created_at": "created_at",
             "updated_at": "updated_at",
         }
@@ -66,7 +64,6 @@ class CategoryRepo(BaseMongoDbCrud[CategoryDB]):
                     "user_id": 1,
                     "company_id": 1,
                     "category_name": 1,
-                    "under": 1,
                     "description": 1,
                     "image": 1,
                     "is_deleted": 1,

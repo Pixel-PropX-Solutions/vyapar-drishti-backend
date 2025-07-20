@@ -29,7 +29,6 @@ class Ledger(BaseModel):
     phone: Optional[PhoneNumber] = None
 
     # Optional tax details
-    it_pan: Optional[str] = None
     gstin: Optional[str] = None
     gst_registration_type: Optional[str] = None
     gst_supply_type: Optional[str] = None
@@ -73,7 +72,6 @@ class LedgerCreate(BaseModel):
     email: Optional[str] = None
 
     # # Optional tax details
-    it_pan: Optional[str] = None
     gstin: Optional[str] = None
     gst_registration_type: Optional[str] = None
     gst_supply_type: Optional[str] = None

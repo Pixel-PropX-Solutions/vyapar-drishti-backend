@@ -46,7 +46,6 @@
         "books_begin_from": "Tue Apr 01 2025 00:00:00 GMT+0530 (India Standard Time)",
         "image": None,
         "gstin": "08AUVPK0732E1ZK",
-        "pan": None,
         "website": None,
         "is_deleted": False,
         "created_at": datetime.datetime(2025,
@@ -317,7 +316,6 @@
             "code": "",
             "number": ""
         },
-        "it_pan": None,
         "gstin": "07AIWPC2337E1ZC",
         "gst_registration_type": None,
         "gst_supply_type": None,

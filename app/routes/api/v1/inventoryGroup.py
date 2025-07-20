@@ -39,13 +39,13 @@ async def createGroup(
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
+        raise http_exception.CredentialsInvalidException(detail="User is not authorized to create groups.")
 
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
 
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     image_url = None
@@ -83,7 +83,7 @@ async def createGroup(
     response = await inventory_group_repo.new(InventoryGroup(**group_data))
 
     if not response:
-        raise http_exception.ResourceAlreadyExistsException(
+        raise http_exception.ResourceConflictException(
             detail="Group Already Exists. Please try with different Group name."
         )
 
@@ -106,13 +106,15 @@ async def view_all_group(
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
-        raise http_exception.CredentialsInvalidException()
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
 
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
 
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     page = Page(page=page_no, limit=limit)
@@ -141,13 +143,15 @@ async def view_group(
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
-        raise http_exception.CredentialsInvalidException()
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
 
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
 
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     result = await inventory_group_repo.findOne(
@@ -171,13 +175,15 @@ async def view_all_groups(
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
-        raise http_exception.CredentialsInvalidException()
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
     
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
     
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     result = await inventory_group_repo.collection.aggregate(
@@ -223,13 +229,15 @@ async def updateGroup(
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
+        raise http_exception.CredentialsInvalidException(
+            detail="User is not authorized to update groups."
+        )
     
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
     
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     groupExists = await inventory_group_repo.findOne(
@@ -241,7 +249,9 @@ async def updateGroup(
         },
     )
     if groupExists is None:
-        raise http_exception.ResourceNotFoundException()
+        raise http_exception.ResourceNotFoundException(
+            detail="Group Not Found. Please check the group ID."
+        )
 
     image_url = None
     if image:
@@ -288,3 +298,62 @@ async def updateGroup(
         "success": True,
         "message": "Group Updated Successfully",
     }
+
+
+@inventory_group_router.delete(
+    "/delete/group/${group_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def deleteGroup(
+    group_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException(
+            detail="User is not authorized to delete the group."
+        )
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    # Check if the group exists
+    groupExists = await inventory_group_repo.findOne(
+        {
+            "_id": group_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+        },
+    )
+    if groupExists is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="Group Not Found. Please check the group ID."
+        )
+
+    # Check if the group is associated with any transactions or entries
+    associated_entries = await ledger_repo.findOne(
+        {
+            "parent_id": group_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+        },
+    )
+
+    if associated_entries is not None:
+        raise http_exception.OperationNotAllowedException(
+            detail="Cannot delete group as it is associated with existing Customers or Transactions."
+        )
+
+    await accounting_group_repo.deleteOne(
+        {
+            "_id": group_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+        },
+    )
+
+    return {"success": True, "message": "Group Deleted Successfully"}

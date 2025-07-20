@@ -3,6 +3,7 @@ from fastapi.responses import ORJSONResponse
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from app.Config import ENV_PROJECT
 from app.database.models.user import User, UserCreate
+# from app.database.models.OTP import OTP
 from loguru import logger
 from pydantic import BaseModel
 from app.schema.token import TokenData
@@ -43,6 +44,7 @@ from app.database.repositories.inventoryGroupRepo import inventory_group_repo
 from app.database.repositories.ledgerRepo import ledger_repo
 from app.database.repositories.stockItemRepo import stock_item_repo
 from app.database.repositories.token import refresh_token_repo
+# from app.database.repositories.otpRepo import otp_repo
 from app.database.repositories.UnitOMeasureRepo import units_repo
 from app.database.repositories.user import user_repo
 from app.database.repositories.UserSettingsRepo import user_settings_repo
@@ -64,6 +66,46 @@ class Email_Body(BaseModel):
     email: str
 
 
+# class OTPdata(BaseModel):
+#     email: str
+#     phone_number: str
+
+
+# @auth.post("/verify/otp", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
+# async def login(
+#     request: Request,
+#     response: Response,
+#     user_type: UserTypeEnum,
+#     creds: OAuth2PasswordRequestForm = Depends(),
+# ):
+#     if not creds.username or not creds.password:
+#         raise http_exception.CredentialsInvalidException(
+#             detail="Username and password are required."
+#         )
+
+#     user = None
+#     if user_type == UserTypeEnum.ADMIN and creds.username == ENV_PROJECT.ADMIN_EMAIL:
+#         user = {
+#             "password": ENV_PROJECT.ADMIN_PASSWORD,
+#             "_id": "",
+#         }
+        
+        
+        
+#     elif user_type in [UserTypeEnum.USER]:
+#         otp_record = await otp_repo.findOne(
+#             {"phone_number": creds.username, "otp": creds.password}
+#         )
+#         if not otp_record:
+#             return ORJSONResponse({"ok": False, "error": "Invalid OTP"}, status_code=400)
+
+#         return {
+#             "ok": True,
+#             "success": True,
+#             "message": "OTP verified successfully. Please proceed to login.",
+#         }
+
+
 @auth.post("/login", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
 async def login(
     request: Request,
@@ -73,46 +115,34 @@ async def login(
 ):
     """Login endpoint for users and admin."""
     if not creds.username or not creds.password:
-        return {
-            "ok": False,
-            "message": "Username and password are required",
-            "status": status.HTTP_400_BAD_REQUEST,
-        }
-    
+        raise http_exception.CredentialsInvalidException(
+            detail="Username and password are required."
+        )
+
     user = None
     if user_type == UserTypeEnum.ADMIN and creds.username == ENV_PROJECT.ADMIN_EMAIL:
         user = {
             "password": ENV_PROJECT.ADMIN_PASSWORD,
             "_id": "",
-        }
+        } 
     elif user_type in [UserTypeEnum.USER]:
         user = await user_repo.findOne(
             {"email": creds.username},
             {"_id", "password"},
         )
-        
+
     if not user:
-        return {
-            "ok": False,
-            "message": "User not found or invalid credentials",
-            "status": status.HTTP_404_NOT_FOUND,
-        }
-    
-    # Verify the password
-    if not creds.password:
-        return {
-            "ok": False,
-            "message": "Password is required",
-            "status": status.HTTP_400_BAD_REQUEST,
-        }
-        
+        raise http_exception.ResourceNotFoundException(
+            detail="User not found. Please check your username."
+        )
+
     if hashing.verify_hash(creds.password, user["password"]):
         token_data = TokenData(
             user_id=user["_id"], user_type=user_type.value, scope="login"
         )
         token_generated = await create_access_token(token_data)
         set_cookies(response, token_generated.access_token, token_generated.refresh_token)
-        
+
         await user_settings_repo.update_one(
             {"user_id": user["_id"]},
             {
@@ -125,18 +155,17 @@ async def login(
                 }
             },
         )
-        
+        # await otp_repo.delete_one({"phone_number": creds.username, "otp": creds.password})
         return {
             "ok": True,
             "accessToken": token_generated.access_token,
             "refreshToken": token_generated.refresh_token,
         }
     else:
-        return {
-            "ok": False,
-            "message": "Invalid username or password. Please try again.",
-            "status": status.HTTP_401_UNAUTHORIZED,
-        }
+        raise http_exception.CredentialsInvalidException(
+            detail="Invalid username or password. Please try again."
+        )
+
 
 @auth.post("/register", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
 async def register(
@@ -218,7 +247,7 @@ async def get_current_user_details(
                 ],
             }
         else:
-            raise http_exception.ResourceNotFoundException()
+            raise http_exception.ResourceNotFoundException(detail="User not found")
 
     user_pipeline = [
         {"$match": {"_id": current_user.user_id}},
@@ -284,7 +313,7 @@ async def get_current_user_details(
 
     response = await user_repo.collection.aggregate(pipeline=user_pipeline).to_list(None)
     if not response:
-        raise http_exception.ResourceNotFoundException("User not found")
+        raise http_exception.ResourceNotFoundException(detail="User not found")
 
     company = await company_repo.collection.aggregate(pipeline=company_pipeline).to_list(
         None
@@ -313,17 +342,21 @@ async def delete_user_company(
     company_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
-    user = await user_repo.findOne({"_id": current_user.user_id})
-    if user is None:
-        raise http_exception.ResourceNotFoundException("User not found")
+    if current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
 
     user_settings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
     if user_settings is None:
-        raise http_exception.ResourceNotFoundException("User settings not found")
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
 
     if user_settings["current_company_id"] != company_id:
         raise http_exception.ResourceNotFoundException(
-            "The company you are trying to delete does not belong to the current user"
+            detail="The company you are trying to delete does not belong to you."
         )
 
     voucher_docs = await vouchar_repo.findMany({"company_id": company_id})
@@ -440,9 +473,21 @@ async def delete_user(
     response: Response,
     current_user: TokenData = Depends(get_current_user),
 ):
+    if current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
+
+    user_settings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if user_settings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
     user = await user_repo.findOne({"_id": current_user.user_id})
+
     if user is None:
-        raise http_exception.ResourceNotFoundException("User not found")
+        raise http_exception.ResourceNotFoundException(detail="User not found")
 
     voucher_docs = await vouchar_repo.findMany({"user_id": current_user.user_id})
     voucher_ids = [doc["_id"] for doc in voucher_docs]
@@ -551,3 +596,36 @@ async def logout(response: Response, refresh_token: str = Depends(get_refresh_to
         samesite="none",
     )
     return {"ok": True}
+
+
+# @auth.post("/send/otp", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
+# async def send_otp(response: Response, data: OTPdata):
+#     otp = await generatePassword.createPassword()  # Generate OTP
+#     # Store OTP in DB/cache with phone_number
+#     otp_data = OTP(
+#         phone_number=data.phone_number,
+#         otp=otp,
+#         user_type=UserTypeEnum.USER,
+#     )
+#     await otp_repo.new(otp_data)
+#     mail.send(
+#         "Welcome to Vyapar Drishti",
+#         data.email,
+#         template.Onboard(role="user", email=data.email, password=otp),
+#     )
+#     res = await send_whatsapp_message(otp, data.phone_number)
+#     print("WhatsApp response:", res)
+#     return {"ok": True, "message": "OTP sent"}
+
+
+# @auth.post("/send/otp2", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
+# async def send_otp2(response: Response, phone_number: str):
+#     password = await generatePassword.createPassword()
+#     mail.send(
+#         "Welcome to Vyapar Drishti",
+#         user.email,
+#         template.Onboard(role="user", email=user.email, password=password),
+#     )
+#     message = f"Your OTP code is: {password}\nPlease use this code to complete your registration."
+#     send_whatsapp_message(message, phone_number)
+#     return {"ok": True}

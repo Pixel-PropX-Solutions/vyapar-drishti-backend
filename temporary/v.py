@@ -1379,8 +1379,6 @@ async def print_invoice(
         "phone": invoice.get("customer", {}).get("phone", ""),
         "gst_no": "08ABIPJ1392D1ZT",
         # "gst_no": invoice.get("customer", {}).get("gst_no", ""),
-        "pan_no": "08ABIPJ1392D1ZT",
-        # "pan_no": invoice.get("customer", {}).get("pan_no", ""),
     }
 
     # Prepare item rows
@@ -1418,7 +1416,6 @@ async def print_invoice(
             "phone": invoice.get("party_details", {}).get("phone", ""),
             "email": invoice.get("party_details", {}).get("email", ""),
             "gst_no": invoice.get("party_details", {}).get("gstin", "") or "",
-            "pan_no": invoice.get("party_details", {}).get("it_pan", "") or "",
             "bank_name": invoice.get("party_details", {}).get("bank_name", ""),
             "bank_branch": invoice.get("party_details", {}).get("bank_branch", ""),
             "account_no": invoice.get("party_details", {}).get("account_number", ""),
@@ -1678,7 +1675,6 @@ async def print_invoice_gst(
             "phone": invoice.get("party_details", {}).get("phone", ""),
             "email": invoice.get("party_details", {}).get("email", ""),
             "gst_no": invoice.get("party_details", {}).get("gstin", "") or "",
-            "pan_no": invoice.get("party_details", {}).get("it_pan", "") or "",
             "bank_name": invoice.get("party_details", {}).get("bank_name", ""),
             "bank_branch": invoice.get("party_details", {}).get("bank_branch", ""),
             "account_no": invoice.get("party_details", {}).get("account_number", ""),

@@ -9,6 +9,22 @@ from app.database.repositories.crud.base import (
     SortingOrder,
 )
 import re
+from fastapi import Depends
+from app.Config import ENV_PROJECT
+from app.database.models.Vouchar import Voucher, VoucherDB
+from app.oauth2 import get_current_user
+from app.schema.token import TokenData
+from .crud.base_mongo_crud import BaseMongoDbCrud
+from app.database.repositories.crud.base import (
+    PageRequest,
+    Meta,
+    PaginatedResponse,
+    SortingOrder,
+    Sort,
+    Page,
+)
+import re
+from datetime import datetime
 
 SUFFIXES = [
     "Traders",
@@ -27,7 +43,7 @@ SUFFIXES = [
     "Inc.",
     "LLP",
     "Agencies",
-    "Services"
+    "Services",
 ]
 
 
@@ -62,34 +78,34 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
 
         if search not in ["", None]:
             filter_params["$or"] = [
-                {"email": {"$regex": f"^{search}", "$options": "i"}},
+                {"email": {"$regex": f"{search}", "$options": "i"}},
                 {
                     "ledger_name": {
-                        "$regex": f"^{search}",
+                        "$regex": f"{search}",
                         "$options": "i",
                     }
                 },
                 {
                     "parent": {
-                        "$regex": f"^{search}",
+                        "$regex": f"{search}",
                         "$options": "i",
                     }
                 },
                 {
                     "email": {
-                        "$regex": f"^{search}",
+                        "$regex": f"{search}",
                         "$options": "i",
                     }
                 },
                 {
                     "alias": {
-                        "$regex": f"^{search}",
+                        "$regex": f"{search}",
                         "$options": "i",
                     }
                 },
                 {
                     "mailing_name": {
-                        "$regex": f"^{search}",
+                        "$regex": f"{search}",
                         "$options": "i",
                     }
                 },
@@ -97,10 +113,12 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
 
         if state not in ["", None]:
             filter_params["$or"] = [
-                {"mailing_state": {"$regex": f"^{state}", "$options": "i"}},
+                {"mailing_state": {"$regex": f"{state}", "$options": "i"}},
             ]
 
-        if parent not in ["", None]:
+        if parent == "Customers":
+            filter_params["parent"] = {"$in": ["Debtors", "Creditors"]}
+        elif parent not in ["", None]:
             filter_params["$or"] = [
                 {"parent": {"$regex": f"^{parent}", "$options": "i"}},
             ]
@@ -120,14 +138,15 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
         sort_criteria = {sort_field_mapped: sort_order_value}
 
         pipeline = []
-        match_stage = {"is_deleted": is_deleted}
-        if current_user_id is not None:
-            match_stage["user_id"] = current_user_id
-        if company_id is not None:
-            match_stage["company_id"] = company_id
+
         pipeline.extend(
             [
-                {"$match": match_stage},
+                {
+                    "$match": {
+                        "user_id": current_user_id,
+                        "company_id": company_id,
+                    }
+                },
                 {"$match": filter_params},
                 {"$sort": sort_criteria},
             ]
@@ -149,7 +168,12 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
         )
 
         unique_states_pipeline = [
-            {"$match": match_stage},
+            {
+                "$match": {
+                    "user_id": current_user_id,
+                    "company_id": company_id,
+                }
+            },
             {
                 "$project": {
                     "states": {
@@ -208,6 +232,262 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
             i += 1
 
         return list(suggestions)[:count]
+
+    async def get_ledger_invoices(
+        self,
+        search: str,
+        type: str,
+        company_id: str,
+        ledger_id: str,
+        pagination: PageRequest,
+        sort: Sort,
+        current_user: TokenData = Depends(get_current_user),
+        start_date: datetime = None,
+        end_date: datetime = None,
+    ):
+        filter_params = {
+            "_id": ledger_id,
+            "company_id": company_id,
+            "user_id": current_user.user_id,
+        }
+
+        sort_options = {
+            "voucher_number_asc": {"voucher_number": 1},
+            "voucher_number_desc": {"voucher_number": -1},
+            "date_asc": {"date": 1},
+            "date_desc": {"date": -1},
+        }
+
+        sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
+        sort_stage = sort_options.get(sort_key, {"date": -1})
+
+        pipeline = [
+            {"$match": filter_params},
+            {
+                "$lookup": {
+                    "from": "Accounting",
+                    "localField": "_id",
+                    "foreignField": "ledger_id",
+                    "as": "accounts",
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Voucher",
+                    "localField": "accounts.vouchar_id",
+                    "foreignField": "_id",
+                    "as": "vouchars",
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Accounting",
+                    "localField": "vouchars._id",
+                    "foreignField": "vouchar_id",
+                    "as": "account_details",
+                },
+            },
+            {
+                "$addFields": {
+                    "accounts": {
+                        "$map": {
+                            "input": "$accounts",
+                            "as": "account",
+                            "in": {
+                                "amount": "$$account.amount",
+                                "is_deemed_positive": {
+                                    "$cond": [
+                                        {"$lt": ["$$account.amount", 0]},
+                                        True,
+                                        False,
+                                    ]
+                                },
+                                "vouchar_id": "$$account.vouchar_id",
+                                "date": {
+                                    "$arrayElemAt": [
+                                        "$vouchars.date",
+                                        {
+                                            "$indexOfArray": [
+                                                "$vouchars._id",
+                                                "$$account.vouchar_id",
+                                            ]
+                                        },
+                                    ]
+                                },
+                                "voucher_number": {
+                                    "$arrayElemAt": [
+                                        "$vouchars.voucher_number",
+                                        {
+                                            "$indexOfArray": [
+                                                "$vouchars._id",
+                                                "$$account.vouchar_id",
+                                            ]
+                                        },
+                                    ]
+                                },
+                                "voucher_type": {
+                                    "$arrayElemAt": [
+                                        "$vouchars.voucher_type",
+                                        {
+                                            "$indexOfArray": [
+                                                "$vouchars._id",
+                                                "$$account.vouchar_id",
+                                            ]
+                                        },
+                                    ]
+                                },
+                                "narration": {
+                                    "$arrayElemAt": [
+                                        "$vouchars.narration",
+                                        {
+                                            "$indexOfArray": [
+                                                "$vouchars._id",
+                                                "$$account.vouchar_id",
+                                            ]
+                                        },
+                                    ]
+                                },
+                                "reference_date": {
+                                    "$arrayElemAt": [
+                                        "$vouchars.reference_date",
+                                        {
+                                            "$indexOfArray": [
+                                                "$vouchars._id",
+                                                "$$account.vouchar_id",
+                                            ]
+                                        },
+                                    ]
+                                },
+                                "reference_number": {
+                                    "$arrayElemAt": [
+                                        "$vouchars.reference_number",
+                                        {
+                                            "$indexOfArray": [
+                                                "$vouchars._id",
+                                                "$$account.vouchar_id",
+                                            ]
+                                        },
+                                    ]
+                                },
+                                "place_of_supply": {
+                                    "$arrayElemAt": [
+                                        "$vouchars.place_of_supply",
+                                        {
+                                            "$indexOfArray": [
+                                                "$vouchars._id",
+                                                "$$account.vouchar_id",
+                                            ]
+                                        },
+                                    ]
+                                },
+                                "customer": {
+                                    "$let": {
+                                        "vars": {
+                                            "other_account": {
+                                                "$arrayElemAt": [
+                                                    {
+                                                        "$filter": {
+                                                            "input": "$account_details",
+                                                            "as": "ad",
+                                                            "cond": {
+                                                                "$and": [
+                                                                    {
+                                                                        "$eq": [
+                                                                            "$$ad.vouchar_id",
+                                                                            "$$account.vouchar_id",
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "$ne": [
+                                                                            "$$ad.ledger_id",
+                                                                            "$$account.ledger_id",
+                                                                        ]
+                                                                    },
+                                                                ]
+                                                            },
+                                                        }
+                                                    },
+                                                    0,
+                                                ]
+                                            }
+                                        },
+                                        "in": {"$ifNull": ["$$other_account.ledger", ""]},
+                                    }
+                                },
+                            },
+                        }
+                    }
+                }
+            },
+            {
+                "$addFields": {"total_amount": {"$sum": "$accounts.amount"}},
+            },
+            {
+                "$unwind": "$accounts",
+            },
+            {
+                "$project": {
+                    "accounts": 1,
+                },
+            },
+            {
+                "$match": {
+                    **(
+                        {
+                            "$or": [
+                                {
+                                    "accounts.voucher_number": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "accounts.customer": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                            ]
+                        }
+                        if search
+                        else {}
+                    ),
+                    **({"accounts.voucher_type": type} if type not in ["", None] else {}),
+                    **(
+                        {"accounts.date": {"$gte": start_date, "$lte": end_date}}
+                        if start_date and end_date
+                        else {}
+                    ),
+                }
+            },
+            {"$sort": sort_stage},
+            {
+                "$facet": {
+                    "docs": [
+                        {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
+                        {"$limit": pagination.paging.limit},
+                    ],
+                    "count": [{"$count": "count"}],
+                }
+            },
+        ]
+
+        res = [doc async for doc in self.collection.aggregate(pipeline)]
+        docs = res[0]["docs"]
+        count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
+
+        # Transform docs to only include the 'accounts' dict for each entry
+        docs = [doc["accounts"] for doc in docs]
+
+        return PaginatedResponse(
+            docs=docs,
+            meta=Meta(
+                page=pagination.paging.page,
+                limit=pagination.paging.limit,
+                total=count,
+                unique=[],
+            ),
+        )
 
 
 ledger_repo = ledgerRepo()

@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     CLOUDINARY_API_SECRET: str
     
     GEMINI_API_KEY : str 
+    # PHONE_NUMBER_ID: str
+    # WHATSAPP_TOKEN: str
 
     model_config = SettingsConfigDict(env_file=".env")
 

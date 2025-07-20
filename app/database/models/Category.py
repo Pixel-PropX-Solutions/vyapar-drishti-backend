@@ -8,7 +8,6 @@ from typing import Optional
 class Category(BaseModel):
     # required fields
     category_name: str
-    under: Optional[str] = "Primary"
     company_id: str
     user_id: str
     is_deleted: bool = False
@@ -29,7 +28,6 @@ class CategoryCreate(BaseModel):
     category_name: str
     user_id: str
     company_id: str
-    under: Optional[str] = "Primary Category"
     image: Optional[str] = None
     description: Optional[str] = None
     is_deleted: Optional[bool] = False

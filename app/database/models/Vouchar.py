@@ -31,6 +31,10 @@ class Voucher(BaseModel):
     place_of_supply: str = (
         ""  # Required if GST is enabled (used for determining IGST/CGST/SGST applicability).
     )
+    vehicle_number: Optional[str] = None
+    mode_of_transport: Optional[str] = None
+    status: Optional[str] = None
+    due_date: Optional[str] = None
 
     # Automatically set fields
     is_invoice: Optional[int] = 0
@@ -57,6 +61,10 @@ class VoucherCreate(BaseModel):
     reference_number: Optional[str] = None
     reference_date: Optional[str] = None
     place_of_supply: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    mode_of_transport: Optional[str] = None
+    status: Optional[str] = None
+    due_date: Optional[str] = None
 
     accounting: List[Accounting]
     items: List[InventoryItem] = []
@@ -76,6 +84,11 @@ class VoucherUpdate(BaseModel):
     reference_number: Optional[str]
     reference_date: Optional[str]
     place_of_supply: Optional[str]
+    
+    vehicle_number: Optional[str] = None
+    mode_of_transport: Optional[str] = None
+    status: Optional[str] = None
+    due_date: Optional[str] = None
 
     accounting: List[AccountingUpdate]
     items: Optional[List[InventoryItemUpdate]]

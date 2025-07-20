@@ -343,8 +343,8 @@ async def get_product_details(
             {
                 "$lookup": {
                     "from": "Category",
-                    "localField": "category",
-                    "foreignField": "category_name",
+                    "localField": "category_id",
+                    "foreignField": "_id",
                     "as": "category",
                 }
             },
@@ -352,8 +352,8 @@ async def get_product_details(
             {
                 "$lookup": {
                     "from": "Group",
-                    "localField": "group",
-                    "foreignField": "inventory_group_name",
+                    "localField": "group_id",
+                    "foreignField": "_id",
                     "as": "group",
                 }
             },
@@ -361,8 +361,8 @@ async def get_product_details(
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "stock_item_name",
-                    "foreignField": "item",
+                    "localField": "_id",
+                    "foreignField": "item_id",
                     "as": "inventory_entries",
                 }
             },
@@ -404,10 +404,6 @@ async def get_product_details(
                     "opening_balance": {"$first": "$opening_balance"},
                     "opening_rate": {"$first": "$opening_rate"},
                     "opening_value": {"$first": "$opening_value"},
-                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
-                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
-                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
-                    # "gst_hsn_code": {"$first": "$gst_hsn_code"},
                     "group": {"$first": "$group"},
                     "purchase_qty": {
                         "$sum": {
@@ -791,15 +787,10 @@ async def delete_product(
         )
 
         # Check if the product is associated with any inventory items
-        if vouchar_id_list:
-            raise http_exception.HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Product cannot be deleted as it is associated with inventory items.",
+        if vouchar_id_list is not None:
+            raise http_exception.OperationNotAllowedException(
+                detail="Product cannot be deleted as it is associated with invoices."
             )
-            # return {
-            #     "success": False,
-            #     "message": "Product cannot be deleted as it is associated with inventory items.",
-            # }
 
         if not vouchar_id_list:
             # If no inventory items are associated, proceed to delete the product

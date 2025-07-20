@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import ORJSONResponse
 from starlette.requests import Request
 from starlette.responses import Response
+from loguru import logger
 
 from app.Config import ENV_PROJECT
 from app.core.app_configure import (
@@ -17,13 +18,22 @@ from app.routes.api.routers import routers
 from app.schema.health import Health_Schema
 from app.utils.uptime import getUptime
 
+from fastapi.responses import JSONResponse
+from fastapi.requests import Request
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
 start_time = time.time()
 
+IS_PROD = ENV_PROJECT.ENV == "production"
 
 app = FastAPI(
     title=ENV_PROJECT.APP_TITILE,
     description=ENV_PROJECT.APP_DESCRIPTION,
     version="v" + ENV_PROJECT.APP_VERSION,
+    docs_url=None if IS_PROD else "/docs",
+    redoc_url=None if IS_PROD else "/redoc",
+    openapi_url=None if IS_PROD else "/openapi.json",
 )
 
 
@@ -69,3 +79,29 @@ for app_configure in configs:
 
 app.include_router(routers)
 app.add_exception_handler(HTTPException, http_error_handler)
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Internal Server Error", "error": str(exc)},
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"message": exc.detail},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "message": f"{exc.errors()[0]['msg']} : {', '.join(err['loc'][1] for err in exc.errors())}",
+        },
+    )

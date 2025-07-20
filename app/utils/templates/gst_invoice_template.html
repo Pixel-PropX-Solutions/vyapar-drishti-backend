@@ -34,9 +34,7 @@
                             {% if party.gst_no %}
                             <div style="margin-bottom: 3px;"><strong>GST No.:</strong> {{ party.gst_no }}</div>
                             {% endif %}
-                            {% if party.pan_no %}
-                            <div style="margin-bottom: 8px;"><strong>PAN No.:</strong> {{ party.pan_no }}</div>
-                            {% endif %}
+                           
                             {% if party.bank_name and party.bank_branch %}
                             <div style=" padding-top: 5px;">
                                 <strong>BANK :</strong> {{ party.bank_name }},&nbsp;{{ party.bank_branch }}
@@ -70,9 +68,6 @@
                             {% if company.gstin %}
                             <div style="margin-bottom: 3px;"><strong>GST No.:</strong> {{ company.gstin }}</div>
                             {% endif %}
-                            {% if company.pan %}
-                            <div><strong>PAN No.:</strong> {{ company.pan }}</div>
-                            {% endif %}
                         </td>
                         {% endif %}
 
@@ -95,9 +90,6 @@
                             {% endif %}
                             {% if company.gstin %}
                             <div style="margin-bottom: 3px;"><strong>GST No.:</strong> {{ company.gstin }}</div>
-                            {% endif %}
-                            {% if company.pan %}
-                            <div><strong>PAN No.:</strong> {{ company.pan }}</div>
                             {% endif %}
 
                             {% if company.bank_name and company.bank_branch %}
@@ -144,9 +136,7 @@
                             {% if party.gst_no %}
                             <div style="margin-bottom: 3px;"><strong>GST No.:</strong> {{ party.gst_no }}</div>
                             {% endif %}
-                            {% if party.pan_no %}
-                            <div style="margin-bottom: 8px;"><strong>PAN No.:</strong> {{ party.pan_no }}</div>
-                            {% endif %}
+                            
                         </td>
                         {% endif %}
 

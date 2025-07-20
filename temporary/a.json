@@ -1,113 +1,16 @@
-{
-  "invoice": {
-    "voucher_type": "Sales",
-    "voucher_number": "SAL-0003",
-    "date": "2025-07-12",
-    "total_tax": 4.18,
-    "total": "20.00",
-    "grand_total": 24.18,
-    "taxes": [
-      {
-        "percent": 18.0,
-        "igst": 1.26,
-        "sgst": 0.0,
-        "cgst": 0.0,
-        "taxable_value": 7.0,
-        "gst_amt": 1.26
-      },
-      {
-        "percent": 16.0,
-        "igst": 0.96,
-        "sgst": 0.0,
-        "cgst": 0.0,
-        "taxable_value": 6.0,
-        "gst_amt": 0.96
-      },
-      {
-        "percent": 28.0,
-        "igst": 1.96,
-        "sgst": 0.0,
-        "cgst": 0.0,
-        "taxable_value": 7.0,
-        "gst_amt": 1.96
-      }
-    ],
-    "payment_status": "Paid",
-    "station": "Rajkot",
-    "is_reversed_charge": "No",
-    "vehicle_number": "KA-01-AB-1234",
-    "mode_of_transport": "By Road",
-    "place_of_supply": "",
-    "additional_charges": 12.34,
-    "totals": {
-      "igst": 4.18,
-      "sgst": 0.0,
-      "cgst": 0.0,
-      "gst_amt": 4.18,
-      "taxable_value": 20.0,
-      "units": 20
-    }
-  },
-  "party": {
-    "name": "Ganpati Motors",
-    "address": None,
-    "mailing_state": "Gujarat",
-    "mailing_country": "India",
-    "mailing_pincode": None,
+[
+  {
+    "_id": "72d7dae7-e831-4d0a-8d5a-38aba7c37df9",
+    "ledger_name": "Vikas Auto Ajency",
+    "parent": "Creditors",
+    "alias": None,
+    "is_deemed_positive": False,
+    "email": "vikasauto@gmail.com",
     "phone": {
-      "code": "",
-      "number": ""
+      "code": "+91",
+      "number": "7689548765"
     },
-    "email": "",
-    "gst_no": "04AUVPK0732E1ZK",
-    "pan_no": "",
-    "bank_name": None,
-    "bank_branch": None,
-    "account_no": None,
-    "account_name": None,
-    "ifsc": None
-  },
-  "company": {
-    "_id": "ed1e23d4-41b7-44e5-829a-ebe4626ad7db",
-    "company_name": "New Quality Marble",
-    "user_id": "1fbfa6df-a4b4-497d-bad2-fc878da08051",
-    "mailing_name": None,
-    "address_1": "123 Main street, Main Suite",
-    "address_2": "Apartment 34B, Rajsamand",
-    "pinCode": "313324",
-    "state": "Rajasthan",
-    "country": "India",
-    "phone": {
-      "code": "91",
-      "number": "9867543829"
-    },
-    "email": "newqualitymarble@gmail.com",
-    "financial_year_start": "Tue Apr 01 2025 00:00:00 GMT+0530 (India Standard Time)",
-    "books_begin_from": "Tue Apr 01 2025 00:00:00 GMT+0530 (India Standard Time)",
-    "image": None,
-    "gstin": "08AUVPK0732E1ZK",
-    "pan": None,
-    "website": None,
-    "is_deleted": False,
-    "created_at": datetime.datetime(2025,
-    7,
-    8,
-    18,
-    6,
-    44,
-    323000),
-    "updated_at": datetime.datetime(2025,
-    7,
-    8,
-    18,
-    6,
-    44,
-    323000)
-  },
-  "company.bank_name": None,
-  "company.bank_branch": None,
-  "company.account_no": None,
-  "company.account_name": None,
-  "company.ifsc": None,
-  "company.qr_code_url": None,
-  "company.motto": "LIFE"S A JOURNEY, KEEP SMILING", "items": [{"name": "Castrol Active Continous Protection", "item_id": "0f023f9c-9a1b-4aae-8505-45a43ee75eb4", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "OIL", "gst_rate": "28", "taxable_value": 1.0, "total_amount": 1.28, "pack": "PAC"}, {"name": "Castrol Active Continous Protection", "item_id": "0f023f9c-9a1b-4aae-8505-45a43ee75eb4", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "OIL", "gst_rate": "28", "taxable_value": 1.0, "total_amount": 1.28, "pack": "PAC"}, {"name": "Castrol Active Continous Protection", "item_id": "0f023f9c-9a1b-4aae-8505-45a43ee75eb4", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "OIL", "gst_rate": "28", "taxable_value": 1.0, "total_amount": 1.28, "pack": "PAC"}, {"name": "Castrol Active Continous Protection", "item_id": "0f023f9c-9a1b-4aae-8505-45a43ee75eb4", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "OIL", "gst_rate": "28", "taxable_value": 1.0, "total_amount": 1.28, "pack": "PAC"}, {"name": "Castrol Active Continous Protection", "item_id": "0f023f9c-9a1b-4aae-8505-45a43ee75eb4", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "OIL", "gst_rate": "28", "taxable_value": 1.0, "total_amount": 1.28, "pack": "PAC"}, {"name": "Castrol Active Continous Protection", "item_id": "0f023f9c-9a1b-4aae-8505-45a43ee75eb4", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "OIL", "gst_rate": "28", "taxable_value": 1.0, "total_amount": 1.28, "pack": "PAC"}, {"name": "Castrol Active Continous Protection", "item_id": "0f023f9c-9a1b-4aae-8505-45a43ee75eb4", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "OIL", "gst_rate": "28", "taxable_value": 1.0, "total_amount": 1.28, "pack": "PAC"}, {"name": "Head Light SPL", "item_id": "5fffd0d2-1e0e-45e6-a68e-98891dc38f4d", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "HED", "gst_rate": "16", "taxable_value": 1.0, "total_amount": 1.16, "pack": "NOS"}, {"name": "Head Light SPL", "item_id": "5fffd0d2-1e0e-45e6-a68e-98891dc38f4d", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "HED", "gst_rate": "16", "taxable_value": 1.0, "total_amount": 1.16, "pack": "NOS"}, {"name": "Head Light SPL", "item_id": "5fffd0d2-1e0e-45e6-a68e-98891dc38f4d", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "HED", "gst_rate": "16", "taxable_value": 1.0, "total_amount": 1.16, "pack": "NOS"}, {"name": "Head Light SPL", "item_id": "5fffd0d2-1e0e-45e6-a68e-98891dc38f4d", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "HED", "gst_rate": "16", "taxable_value": 1.0, "total_amount": 1.16, "pack": "NOS"}, {"name": "Head Light SPL", "item_id": "5fffd0d2-1e0e-45e6-a68e-98891dc38f4d", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "HED", "gst_rate": "16", "taxable_value": 1.0, "total_amount": 1.16, "pack": "NOS"}, {"name": "Head Light SPL", "item_id": "5fffd0d2-1e0e-45e6-a68e-98891dc38f4d", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "HED", "gst_rate": "16", "taxable_value": 1.0, "total_amount": 1.16, "pack": "NOS"}, {"name": "Tyre 27-18", "item_id": "e1471393-8507-4a05-a7c1-4d7051e4966b", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "12321", "gst_rate": "18", "taxable_value": 1.0, "total_amount": 1.18, "pack": "NOS"}, {"name": "Tyre 27-18", "item_id": "e1471393-8507-4a05-a7c1-4d7051e4966b", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "12321", "gst_rate": "18", "taxable_value": 1.0, "total_amount": 1.18, "pack": "NOS"}, {"name": "Tyre 27-18", "item_id": "e1471393-8507-4a05-a7c1-4d7051e4966b", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "12321", "gst_rate": "18", "taxable_value": 1.0, "total_amount": 1.18, "pack": "NOS"}, {"name": "Tyre 27-18", "item_id": "e1471393-8507-4a05-a7c1-4d7051e4966b", "qty": 1, "rate": 1.0, "amount": 1.0, "hsn": "12321", "gst_rate": "18", "taxable_value": 1.0, "total_amount": 1.18, "pack": "NOS"}]}
+    "gstin": None,
+    "total_amount": 9000.0
+  }
+]

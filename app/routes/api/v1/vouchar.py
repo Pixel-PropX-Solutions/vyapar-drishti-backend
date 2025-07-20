@@ -54,6 +54,10 @@ class VoucherWithGSTCreate(BaseModel):
     reference_number: Optional[str] = None
     reference_date: Optional[str] = None
     place_of_supply: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    mode_of_transport: Optional[str] = None
+    status: Optional[str] = None
+    due_date: Optional[str] = None
     accounting: List[Accounting]
     items: List[CreateInventoryItemWithGST]
 
@@ -72,6 +76,10 @@ class GSTVoucherUpdate(BaseModel):
     reference_number: Optional[str]
     reference_date: Optional[str]
     place_of_supply: Optional[str]
+    vehicle_number: Optional[str] = None
+    mode_of_transport: Optional[str] = None
+    status: Optional[str] = None
+    due_date: Optional[str] = None
 
     accounting: List[AccountingUpdate]
     items: Optional[List[UpdateInventoryItemWithGST]]
@@ -134,6 +142,18 @@ async def createVouchar(
         "place_of_supply": (
             vouchar.place_of_supply if hasattr(vouchar, "place_of_supply") else ""
         ),
+        "vehicle_number": (
+            vouchar.vehicle_number if hasattr(vouchar, "vehicle_number") else ""
+        ),
+        "mode_of_transport": (
+            vouchar.mode_of_transport if hasattr(vouchar, "mode_of_transport") else ""
+        ),
+        "status": (
+            vouchar.status if hasattr(vouchar, "status") else ""
+        ),
+        "due_date": (
+            vouchar.due_date if hasattr(vouchar, "due_date") else ""
+        ),
         "is_deleted": False,
         # Conditional fields for voucher types
         "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
@@ -163,9 +183,9 @@ async def createVouchar(
             for entry in accounting_data:
                 if vouchar.voucher_type in ["Sales", "Purchase"]:
                     ledger = (
-                        "Sales Account"
+                        "Sales"
                         if vouchar.voucher_type.lower() == "sales"
-                        else "Purchase Account"
+                        else "Purchases"
                     )
                     party_ledger = await ledger_repo.findOne(
                         {
@@ -527,6 +547,18 @@ async def createVoucharWithGST(
         "place_of_supply": (
             vouchar.place_of_supply if hasattr(vouchar, "place_of_supply") else ""
         ),
+        'vehicle_number': (
+            vouchar.vehicle_number if hasattr(vouchar, "vehicle_number") else ""
+        ),
+        'mode_of_transport': (
+            vouchar.mode_of_transport if hasattr(vouchar, "mode_of_transport") else ""
+        ),
+        'status': (
+            vouchar.status if hasattr(vouchar, "status") else ""
+        ),
+        'due_date': (
+            vouchar.due_date if hasattr(vouchar, "due_date") else ""
+        ),
         "is_deleted": False,
         # Conditional fields for voucher types
         "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
@@ -556,9 +588,9 @@ async def createVoucharWithGST(
             for entry in accounting_data:
                 if vouchar.voucher_type in ["Sales", "Purchase"]:
                     ledger = (
-                        "Sales Account"
+                        "Sales"
                         if vouchar.voucher_type.lower() == "sales"
-                        else "Purchase Account"
+                        else "Purchases"
                     )
                     party_ledger = await ledger_repo.findOne(
                         {
@@ -1431,8 +1463,6 @@ async def print_invoice(
         "phone": invoice.get("customer", {}).get("phone", ""),
         "gst_no": "08ABIPJ1392D1ZT",
         # "gst_no": invoice.get("customer", {}).get("gst_no", ""),
-        "pan_no": "08ABIPJ1392D1ZT",
-        # "pan_no": invoice.get("customer", {}).get("pan_no", ""),
     }
 
     # Prepare item rows
@@ -1494,7 +1524,6 @@ async def print_invoice(
             "phone": invoice.get("party_details", {}).get("phone", ""),
             "email": invoice.get("party_details", {}).get("email", ""),
             "gst_no": invoice.get("party_details", {}).get("gstin", "") or "",
-            "pan_no": invoice.get("party_details", {}).get("it_pan", "") or "",
             "bank_name": invoice.get("party_details", {}).get("bank_name", ""),
             "bank_branch": invoice.get("party_details", {}).get("bank_branch", ""),
             "account_no": invoice.get("party_details", {}).get("account_number", ""),
@@ -1752,15 +1781,15 @@ async def print_invoice_gst(
             "total": f"{total:.2f}",
             "grand_total": grand_total,
             "taxes": invoice_taxes,
-            "payment_status": "Paid",  # Example payment status
-            "station": "Rajkot",  # Example station
+            "payment_status": invoice.get("status", ""),  
+            "station": "Rajkot",
             "is_reversed_charge": (
                 "Yes" if invoice.get("is_reversed_charge", False) else "No"
             ),
-            "vehicle_number": "KA-01-AB-1234",  # Example vehicle number
-            "mode_of_transport": "By Road",  # Example mode of transport
+            "vehicle_number": invoice.get("vehicle_number", ""),
+            "mode_of_transport": invoice.get("mode_of_transport", ""),
             "place_of_supply": invoice.get("place_of_supply", ""),
-            "additional_charges": 12.34,  # Example additional charges
+            "additional_charges": 12.34, 
             "totals": totals,
         },
         "party": {
@@ -1776,7 +1805,6 @@ async def print_invoice_gst(
             "phone": invoice.get("party_details", {}).get("phone", ""),
             "email": invoice.get("party_details", {}).get("email", ""),
             "gst_no": invoice.get("party_details", {}).get("gstin", "") or "",
-            "pan_no": invoice.get("party_details", {}).get("it_pan", "") or "",
             "bank_name": invoice.get("party_details", {}).get("bank_name", ""),
             "bank_branch": invoice.get("party_details", {}).get("bank_branch", ""),
             "account_no": invoice.get("party_details", {}).get("account_number", ""),

@@ -6,9 +6,17 @@ from app.schema.token import TokenData
 from app.oauth2 import get_current_user
 import app.http_exception as http_exception
 from app.database.models.Ledger import Ledger
-from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
+from app.database.repositories.crud.base import (
+    PageRequest,
+    Meta,
+    PaginatedResponse,
+    SortingOrder,
+    Sort,
+    Page,
+)
 from fastapi import Query
 from app.database.repositories.ledgerRepo import ledger_repo
+from app.database.repositories.voucharRepo import vouchar_repo
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.utils.cloudinary_client import cloudinary_client
 import sys
@@ -38,7 +46,6 @@ async def create_ledger(
     mailing_state: str = Form(None),
     mailing_country: str = Form(None),
     mailing_pincode: str = Form(None),
-    it_pan: str = Form(None),
     gstin: str = Form(None),
     # gst_registration_type: str = Form(None),
     # gst_supply_type: str = Form(None),
@@ -72,7 +79,7 @@ async def create_ledger(
 
     if ledgerExists is not None:
         raise http_exception.ResourceConflictException(
-            message="Ledger with this name already exists."
+            detail="Ledger with this name already exists."
         )
 
     image_url = None
@@ -116,7 +123,6 @@ async def create_ledger(
         "mailing_state": mailing_state,
         "mailing_country": mailing_country,
         "mailing_pincode": mailing_pincode,
-        "it_pan": it_pan,
         "gstin": gstin,
         # "gst_registration_type": gst_registration_type,
         # "gst_supply_type": gst_supply_type,
@@ -206,6 +212,7 @@ async def view_all_ledgers(
                     "user_id": current_user.user_id,
                     "company_id": userSettings["current_company_id"],
                     "is_deleted": False,
+                    "parent": {"$in": ["Debtors", "Creditors"]},
                 },
             },
             {
@@ -256,6 +263,44 @@ async def view_ledgers_with_type(
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
 
 
+@ledger.post(
+    "/view/ledgers/transaction/type",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def view_ledgers_transaction_type(
+    type: list[str],
+    company_id: str = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "admin" and current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    result = await ledger_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "user_id": current_user.user_id,
+                    "company_id": userSettings["current_company_id"],
+                    "parent": {"$in": type},
+                },
+            },
+            {
+                "$project": {"_id": 1, "ledger_name": 1, "parent": 1},
+            },
+        ]
+    ).to_list(None)
+
+    return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+
+
 @ledger.put(
     "/update/{ledger_id}",
     response_class=ORJSONResponse,
@@ -279,7 +324,6 @@ async def update_ledger(
     mailing_state: str = Form(None),
     mailing_country: str = Form(None),
     mailing_pincode: str = Form(None),
-    it_pan: str = Form(None),
     gstin: str = Form(None),
     # gst_registration_type: str = Form(None),
     # gst_supply_type: str = Form(None),
@@ -346,7 +390,6 @@ async def update_ledger(
         "mailing_state": mailing_state,
         "mailing_country": mailing_country,
         "mailing_pincode": mailing_pincode,
-        "it_pan": it_pan,
         "gstin": gstin,
         "bank_account_holder": bank_account_holder,
         "bank_account_number": bank_account_number,
@@ -418,153 +461,22 @@ async def view_ledger(
                 }
             },
             {
-                "$lookup": {
-                    "from": "Voucher",
-                    "localField": "accounts.vouchar_id",
-                    "foreignField": "_id",
-                    "as": "vouchars",
-                }
-            },
-            {
-                "$lookup": {
-                    "from": "Accounting",
-                    "localField": "vouchars._id",
-                    "foreignField": "vouchar_id",
-                    "as": "account_details",
-                },
+                "$addFields": {"total_amount": {"$sum": "$accounts.amount"}},
             },
             {
                 "$addFields": {
-                    "accounts": {
-                        "$map": {
-                            "input": "$accounts",
-                            "as": "account",
-                            "in": {
-                                "amount": "$$account.amount",
-                                "vouchar_id": "$$account.vouchar_id",
-                                "date": {
-                                    "$arrayElemAt": [
-                                        "$vouchars.date",
-                                        {
-                                            "$indexOfArray": [
-                                                "$vouchars._id",
-                                                "$$account.vouchar_id",
-                                            ]
-                                        },
-                                    ]
-                                },
-                                "voucher_number": {
-                                    "$arrayElemAt": [
-                                        "$vouchars.voucher_number",
-                                        {
-                                            "$indexOfArray": [
-                                                "$vouchars._id",
-                                                "$$account.vouchar_id",
-                                            ]
-                                        },
-                                    ]
-                                },
-                                "voucher_type": {
-                                    "$arrayElemAt": [
-                                        "$vouchars.voucher_type",
-                                        {
-                                            "$indexOfArray": [
-                                                "$vouchars._id",
-                                                "$$account.vouchar_id",
-                                            ]
-                                        },
-                                    ]
-                                },
-                                "narration": {
-                                    "$arrayElemAt": [
-                                        "$vouchars.narration",
-                                        {
-                                            "$indexOfArray": [
-                                                "$vouchars._id",
-                                                "$$account.vouchar_id",
-                                            ]
-                                        },
-                                    ]
-                                },
-                                "reference_date": {
-                                    "$arrayElemAt": [
-                                        "$vouchars.reference_date",
-                                        {
-                                            "$indexOfArray": [
-                                                "$vouchars._id",
-                                                "$$account.vouchar_id",
-                                            ]
-                                        },
-                                    ]
-                                },
-                                "reference_number": {
-                                    "$arrayElemAt": [
-                                        "$vouchars.reference_number",
-                                        {
-                                            "$indexOfArray": [
-                                                "$vouchars._id",
-                                                "$$account.vouchar_id",
-                                            ]
-                                        },
-                                    ]
-                                },
-                                "place_of_supply": {
-                                    "$arrayElemAt": [
-                                        "$vouchars.place_of_supply",
-                                        {
-                                            "$indexOfArray": [
-                                                "$vouchars._id",
-                                                "$$account.vouchar_id",
-                                            ]
-                                        },
-                                    ]
-                                },
-                                "customer": {
-                                    "$let": {
-                                        "vars": {
-                                            "other_account": {
-                                                "$arrayElemAt": [
-                                                    {
-                                                        "$filter": {
-                                                            "input": "$account_details",
-                                                            "as": "ad",
-                                                            "cond": {
-                                                                "$and": [
-                                                                    {
-                                                                        "$eq": [
-                                                                            "$$ad.vouchar_id",
-                                                                            "$$account.vouchar_id",
-                                                                        ]
-                                                                    },
-                                                                    {
-                                                                        "$ne": [
-                                                                            "$$ad.ledger_id",
-                                                                            "$$account.ledger_id",
-                                                                        ]
-                                                                    },
-                                                                ]
-                                                            },
-                                                        }
-                                                    },
-                                                    0,
-                                                ]
-                                            }
-                                        },
-                                        "in": {"$ifNull": ["$$other_account.ledger", ""]},
-                                    }
-                                },
-                            },
-                        }
-                    }
-                }
-            },
-            {
-                "$addFields": {"total_amount": {"$sum": "$accounts.amount"}},
+                    "is_deemed_positive": {
+                        "$cond": [
+                            {"$lt": [{"$sum": "$accounts.amount"}, 0]},
+                            True,
+                            False,
+                        ]
+                    },
+                },
             },
             {
                 "$project": {
                     "id_deleted": 0,
-                    "vouchars": 0,
                     "gst_registration_type": 0,
                     "gst_supply_type": 0,
                     "account_holder": 0,
@@ -577,7 +489,6 @@ async def view_ledger(
                     "created_at": 0,
                     "updated_at": 0,
                     "is_revenue": 0,
-                    "is_deemed_positive": 0,
                     "opening_balance": 0,
                     "image": 0,
                     "qr_image": 0,
@@ -590,11 +501,63 @@ async def view_ledger(
                     "mailing_state": 0,
                     "mailing_country": 0,
                     "mailing_pincode": 0,
-                    "account_details": 0,
+                    "accounts": 0,
                 },
             },
         ]
     ).to_list(length=1)
+
+    print(f"Result: {result}")
+    return {
+        "success": True,
+        "message": "Customer Data Fetched Successfully...",
+        "data": result,
+    }
+
+
+@ledger.get(
+    "/view/invoices/{ledger_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def view_ledger_invoices(
+    ledger_id: str,
+    company_id: str = Query(None),
+    search: str = None,
+    type: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(10, le=60),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "admin" and current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await ledger_repo.get_ledger_invoices(
+        search=search,
+        type=type,
+        ledger_id=ledger_id,
+        start_date=start_date,
+        end_date=end_date,
+        current_user=current_user,
+        pagination=page_request,
+        sort=sort,
+        company_id=userSettings["current_company_id"],
+    )
 
     return {
         "success": True,
@@ -609,12 +572,12 @@ async def check_ledger_name(
     ledger_name: str, current_user: TokenData = Depends(get_current_user)
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
-        raise http_exception.CredentialsInvalidException()
+        raise http_exception.CredentialsInvalidException(detail="Invalid user type")
 
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     ledgerExists = await ledger_repo.findOne(
@@ -640,10 +603,10 @@ async def check_ledger_name(
                 {"$project": {"ledger_name": 1}},
             ]
         ).to_list(length=None)
-        
+
         existing_names = [doc["ledger_name"] for doc in existing_names]
         existing_names = list(set(existing_names))  # Remove duplicates
-        
+
         suggestions = ledger_repo.generate_name_suggestions(
             ledger_name, existing_names=existing_names, count=5
         )
@@ -662,39 +625,63 @@ async def check_ledger_name(
         }
 
 
-# @creditor.delete(
-#     "/delete/{creditor_id}",
-#     response_class=ORJSONResponse,
-#     status_code=status.HTTP_200_OK,
-# )
-# async def delete_creditor(
-#     creditor_id: str = "",
-#     current_user: TokenData = Depends(get_current_user),
-# ):
-#     if current_user.user_type != "admin" and current_user.user_type != "user":
-#         raise http_exception.CredentialsInvalidException()
+@ledger.delete(
+    "/delete/{ledger_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def delete_ledger(
+    ledger_id: str = "",
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "admin" and current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
 
-#     creditorExists = await creditor_repo.findOne(
-#         {"_id": creditor_id, "user_id": current_user.user_id, "is_deleted": False}
-#     )
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
 
-#     if creditorExists is None:
-#         raise http_exception.ResourceNotFoundException()
+    ledgerExists = await ledger_repo.findOne(
+        {
+            "_id": ledger_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+        }
+    )
 
-#     await creditor_repo.collection.update_one(
-#         {"_id": creditor_id, "user_id": current_user.user_id, "is_deleted": False},
-#         {
-#             "$set": {
-#                 "is_deleted": True,
-#             }
-#         },
-#     )
+    if ledgerExists is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="Customer not found or already deleted."
+        )
 
-#     return {
-#         "success": True,
-#         "message": "Creditor deleted successfully",
-#         "data": {"creditor_id": creditor_id},
-#     }
+    # Check whether the ledger is associated with any voucher or transaction
+    associated_voucher = await vouchar_repo.findOne(
+        {
+            "party_name_id": ledger_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+        }
+    )
+
+    if associated_voucher:
+        raise http_exception.ResourceConflictException(
+            detail="Customer cannot be deleted as it is associated with existing invoices or transactions."
+        )
+
+    await ledger_repo.deleteOne(
+        {
+            "_id": ledger_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+        },
+    )
+
+    return {
+        "success": True,
+        "message": "Customer deleted successfully",
+    }
 
 
 # @creditor.put(

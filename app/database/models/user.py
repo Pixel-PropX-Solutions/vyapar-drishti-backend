@@ -14,6 +14,8 @@ class User(BaseModel):
     password: str
     user_type: Optional[UserTypeEnum] = UserTypeEnum.USER
 
+# db.users.dropIndex("email_1")
+# db.users.createIndex({ phone: 1 }, { unique: true })
 
 class UserDB(User):
     id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")

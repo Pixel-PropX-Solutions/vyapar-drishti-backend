@@ -11,7 +11,7 @@ from app.Config import ENV_PROJECT
 from app.database.models.token import RefreshTokenCreate
 from app.database.repositories.token import refresh_token_repo
 from app.schema.token import BaseToken, TokenData
-
+import requests
 from typing import Optional, Dict
 
 
@@ -53,11 +53,7 @@ oauth2_scheme = OAuth2PasswordBearerWithCookie(
 
 async def create_refresh_token(data: TokenData):
     to_encode = data.model_dump()
-    expire = (
-        datetime.timedelta(minutes=ENV_PROJECT.REFRESH_TOKEN_EXPIRE_MINUTES)
-        + datetime.datetime.now()
-    )
-    to_encode.update({"exp": expire})
+    to_encode.update()
     encoded_jwt = jwt.encode(
         to_encode, ENV_PROJECT.REFRESH_TOKEN_SECRET, algorithm="HS256"
     )
@@ -73,6 +69,9 @@ async def verify_refresh_token(refresh_token: str) -> TokenData:
         user_id: str = payload.get("user_id", None)
         user_type: str = payload.get("user_type", None)
         scope: str = payload.get("scope", None)
+        token_in_db = await refresh_token_repo.findOne({"refresh_token": refresh_token})
+        if not token_in_db:
+            raise http_exception.CredentialsInvalidException()
         if user_id is None or user_type is None or scope is None:
             raise http_exception.CredentialsInvalidException
         token_data = TokenData(user_id=user_id, user_type=user_type, scope=scope)
@@ -86,12 +85,15 @@ async def create_access_token(
 ) -> BaseToken:
     to_encode = data.model_dump()
     to_encode.update()
-    access_token = jwt.encode(to_encode, ENV_PROJECT.ACCESS_TOKEN_SECRET, algorithm="HS256")
+    access_token = jwt.encode(
+        to_encode, ENV_PROJECT.ACCESS_TOKEN_SECRET, algorithm="HS256"
+    )
     refresh_token = await create_refresh_token(data=data)
     refresh_token_data: RefreshTokenCreate = RefreshTokenCreate(
         refresh_token=refresh_token, user_id=data.user_id, user_type=data.user_type
     )
     if old_refresh_token is None:
+        await refresh_token_repo.deleteAll({"user_id": data.user_id})
         res = await refresh_token_repo.new(data=refresh_token_data)
     else:
         res = await refresh_token_repo.update_one(
@@ -116,6 +118,44 @@ async def create_access_token(
 async def get_new_access_token(refresh_token: str):
     token_data = await verify_refresh_token(refresh_token)
     return await create_access_token(token_data, old_refresh_token=refresh_token)
+
+
+# async def send_whatsapp_message(message: str, to_number: str):
+#     print("Sending WhatsApp message:", message, "to", to_number)
+#     url = f"https://graph.facebook.com/v22.0/{ENV_PROJECT.PHONE_NUMBER_ID}/messages"
+#     headers = {
+#         "Authorization": f"Bearer {ENV_PROJECT.WHATSAPP_TOKEN}",
+#         "Content-Type": "application/json",
+#     }
+
+#     payload = {
+#         "messaging_product": "whatsapp",
+#         "to": to_number,
+#         "type": "template",
+#         "template": {
+#             "name": "logincode",
+#             "language": {"code": "en_US"},
+#             "components": [
+#                 {"type": "body", "parameters": [{"type": "text", "text": message}]},
+#                 {
+#                     "type": "button",
+#                     "sub_type": "url",
+#                     "index": "0",
+#                     "parameters": [
+#                         {
+#                             "type": "text",
+#                             "text": message,
+#                         }
+#                     ],
+#                 },
+#             ],
+#         },
+#     }
+#     print("WhatsApp API payload:", payload)
+#     response = requests.post(url, headers=headers, json=payload)
+#     print("WhatsApp API response:", response.status_code, response.text)
+#     print("WhatsApp API response JSON:", response.json())
+#     return response.json()
 
 
 # async def create_signup_access_token(data: TokenData):

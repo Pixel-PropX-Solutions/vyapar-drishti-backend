@@ -8,6 +8,7 @@ from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRe
 
 from app.database.models.Category import CategoryCreate
 from app.database.repositories.categoryRepo import category_repo
+from app.database.repositories.stockItemRepo import stock_item_repo
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 
 from app.utils.cloudinary_client import cloudinary_client
@@ -23,21 +24,21 @@ async def createCategory(
     category_name: str = Form(...),
     description: str = Form(None),
     image: UploadFile = File(None),
-    under: str = Form("Primary"),
     company_id: str = Form(...),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
-    
-    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
-    if userSettings is None:
-        raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
         )
-        
-        
+
+    user_settings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if user_settings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
     image_url = None
     if image:
 
@@ -60,8 +61,7 @@ async def createCategory(
     category_data = {
         "category_name": category_name,
         "user_id": current_user.user_id,
-        "under": under,
-        "company_id": userSettings["current_company_id"],
+        "company_id": user_settings["current_company_id"],
         "is_deleted": False,
         "image": image_url,
         "description": description,
@@ -70,9 +70,7 @@ async def createCategory(
     response = await category_repo.new(CategoryCreate(**category_data))
 
     if not response:
-        raise http_exception.ResourceAlreadyExistsException(
-            detail="Category Already Exists"
-        )
+        raise http_exception.ResourceConflictException(detail="Category Already Exists")
 
     return {"success": True, "message": "Category Created Successfully", "data": response}
 
@@ -88,13 +86,15 @@ async def getCategory(
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
-    
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     categories = await category_repo.findOne(
@@ -106,7 +106,7 @@ async def getCategory(
         },
     )
     if not categories:
-        raise http_exception
+        raise http_exception.ResourceNotFoundException(detail="Category not found.")
 
     return {
         "success": True,
@@ -129,13 +129,15 @@ async def view_all_category(
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
-    
-    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
-    if userSettings is None:
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
+
+    user_settings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if user_settings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     page = Page(page=page_no, limit=limit)
@@ -145,9 +147,8 @@ async def view_all_category(
     result = await category_repo.viewAllCategories(
         search=search,
         pagination=page_request,
-        company_id=userSettings["current_company_id"],
+        company_id=user_settings["current_company_id"],
         sort=sort,
-        parent=parent,
         current_user=current_user,
     )
 
@@ -162,13 +163,15 @@ async def view_all_categories(
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
-    
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     categories = await category_repo.collection.aggregate(
@@ -211,13 +214,15 @@ async def view_default_category(
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
-        raise http_exception.CredentialsInvalidException()
-    
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     result = await category_repo.collection.aggregate(
@@ -233,7 +238,6 @@ async def view_default_category(
                     "_id": 1,
                     "category_name": 1,
                     "description": 1,
-                    "under": 1,
                 }
             },
         ]
@@ -253,19 +257,20 @@ async def updateCategory(
     category_id: str = "",
     category_name: str = Form(...),
     company_id: str = Form(...),
-    under: str = Form(None),
     description: str = Form(None),
     image: UploadFile = File(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException()
-    
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     categoryExists = await category_repo.findOne(
@@ -277,7 +282,7 @@ async def updateCategory(
         },
     )
     if categoryExists is None:
-        raise http_exception.ResourceNotFoundException()
+        raise http_exception.ResourceNotFoundException(detail="Category not found.")
 
     image_url = None
     if image:
@@ -301,7 +306,6 @@ async def updateCategory(
         "is_deleted": False,
         "description": description,
         "category_name": category_name,
-        "under": under,
     }
     if image:
         update_fields["image"] = image_url
@@ -322,27 +326,64 @@ async def updateCategory(
     }
 
 
-# @category_router.delete(
-#     "/delete/category/${category_id}",
-#     response_class=ORJSONResponse,
-#     status_code=status.HTTP_200_OK,
-# )
-# async def deleteCategory(
-#     category_id: str,
-#     current_user: TokenData = Depends(get_current_user),
-# ):
-#     if current_user.user_type != "user" and current_user.user_type != "admin":
-#         raise http_exception.CredentialsInvalidException()
+@category_router.delete(
+    "/delete/category/${category_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def deleteCategory(
+    category_id: str,
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
 
-#     response = await category_repo.update_one(
-#         {"_id": category_id, "user_id": current_user.user_id, "is_deleted": False},
-#         {"$set": {"is_deleted": True}},
-#     )
+    user_settings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    if user_settings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
 
-#     if not response:
-#         raise http_exception.ResourceNotFoundException(detail="Category Not Found")
+    # Check if the category exists
+    category_exists = await category_repo.findOne(
+        {
+            "_id": category_id,
+            "user_id": current_user.user_id,
+            "company_id": user_settings["current_company_id"],
+            "is_deleted": False,
+        }
+    )
 
-#     return {"success": True, "message": "Category Deleted Successfully"}
+    if not category_exists:
+        raise http_exception.ResourceNotFoundException(detail="Category Not Found")
+
+    # Check if the category is associated with any products or items
+    associated_items = await stock_item_repo.findOne(
+        {
+            "category_id": category_id,
+            "user_id": current_user.user_id,
+            "company_id": user_settings["current_company_id"],
+        }
+    )
+
+    if associated_items:
+        raise http_exception.ResourceConflictException(
+            detail="Category is associated with products or items."
+        )
+
+    # Proceed to delete the category
+    await category_repo.deleteOne(
+        {
+            "_id": category_id,
+            "user_id": current_user.user_id,
+            "company_id": user_settings["current_company_id"],
+        },
+    )
+
+
+    return {"success": True, "message": "Category Deleted Successfully"}
 
 
 # @category_router.put(

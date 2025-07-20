@@ -69,7 +69,6 @@ class ExtractionTools:
                     "email": "string",
                     "gstin": "string",
                     "company_name": "string",
-                    "pan_number": "string",
                     "billing_address": {{
                         "state":  "string",
                         "address_1":  "string",
@@ -106,7 +105,6 @@ class ExtractionTools:
                     "email": "string",
                     "company_name": "string",
                     "gstin": "string",
-                    "pan_number": "string",
                 }},
                 "product_details": [
                     {{
@@ -216,7 +214,6 @@ class ExtractionTools:
         - email: Email address of the creditor.
         - gstin: GST Identification Number of the creditor.
         - company_name: Name of the creditor's company.
-        - pan_number: PAN (Permanent Account Number) of the creditor (if available).
         - billing_address: Object containing the billing address fields:
             - state: State of the billing address.
             - address_1: First line of the billing address.
@@ -249,7 +246,6 @@ class ExtractionTools:
         - email: Email address of the debitor.
         - company_name: Name of the debitor's company.
         - gstin: GST Identification Number of the debitor.
-        - pan_number: PAN (Permanent Account Number) of the debitor (if available, only in sale).
         
         product_details: A list of products/items in the bill. Each item contains:
         - name: Name of the product (can expand upto 2 or three lines).
@@ -305,7 +301,6 @@ class ExtractionTools:
         - Try dividing the name of the creditor and debitor into first name and last name if possible, otherwise set last name to null.
         - The 'billing_address' and 'shipping_address' objects should contain the specified fields.
         - The 'shipping_address' title and notes fields are optional and can be null.
-        - The 'pan_number' field in the 'creditor' and 'debitor' objects is optional and can be null.
         - The 'company_name' field in the 'creditor' and 'debitor' objects is optional and can be null.
         - The 'address_2' field in the 'billing_address' and 'shipping_address' objects is optional and can be null.
         - The 'phone' and 'email' fields in the 'creditor' and 'debitor' objects are optional and can be null.
