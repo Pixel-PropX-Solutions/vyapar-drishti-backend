@@ -86,112 +86,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
         sort_stage = sort_options.get(sort_key, {"date": -1})
 
-        # pipeline = [
-        #     {"$match": filter_params},
-        #     {
-        #         "$lookup": {
-        #             "from": "Ledger",
-        #             "localField": "party_name",
-        #             "foreignField": "name",
-        #             "as": "party",
-        #         }
-        #     },
-        #     {"$unwind": {"path": "$party", "preserveNullAndEmptyArrays": True}},
-        #     {
-        #         "$lookup": {
-        #             "from": "Inventory",
-        #             "localField": "_id",
-        #             "foreignField": "vouchar_id",
-        #             "as": "inventory",
-        #         }
-        #     },
-        #     {
-        #         "$lookup": {
-        #             "from": "Accounting",
-        #             "localField": "_id",
-        #             "foreignField": "vouchar_id",
-        #             "as": "accounting",
-        #         }
-        #     },
-        #     {
-        #         "$addFields": {
-        #             "debit": {
-        #                 "$sum": {
-        #                     "$map": {
-        #                         "input": "$accounting",
-        #                         "as": "entry",
-        #                         "in": {
-        #                             "$cond": [
-        #                                 {"$gt": ["$$entry.amount", 0]},
-        #                                 "$$entry.amount",
-        #                                 0,
-        #                             ]
-        #                         },
-        #                     }
-        #                 }
-        #             },
-        #             "credit": {
-        #                 "$sum": {
-        #                     "$map": {
-        #                         "input": "$accounting",
-        #                         "as": "entry",
-        #                         "in": {
-        #                             "$cond": [
-        #                                 {"$lt": ["$$entry.amount", 0]},
-        #                                 {"$abs": "$$entry.amount"},
-        #                                 0,
-        #                             ]
-        #                         },
-        #                     }
-        #                 }
-        #             },
-        #         }
-        #     },
-        #     {
-        #         "$addFields": {
-        #             "amount": {"$add": ["$debit", "$credit"]},
-        #             "balance_type": {
-        #                 "$cond": [
-        #                     {"$gt": ["$debit", "$credit"]},
-        #                     "Dr",
-        #                     {
-        #                         "$cond": [
-        #                             {"$gt": ["$credit", "$debit"]},
-        #                             "Cr",
-        #                             "Balanced",
-        #                         ]
-        #                     },
-        #                 ]
-        #             },
-        #         }
-        #     },
-        #     {"$sort": sort_stage},
-        #     {
-        #         "$project": {
-        #             "_id": 1,
-        #             "date": 1,
-        #             "voucher_number": 1,
-        #             "voucher_type": 1,
-        #             "party_name": 1,
-        #             "debit": 1,
-        #             "credit": 1,
-        #             "amount": 1,
-        #             "balance_type": 1,
-        #             "narration": 1,
-        #             "created_at": 1,
-        #         }
-        #     },
-        #     {
-        #         "$facet": {
-        #             "docs": [
-        #                 {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
-        #                 {"$limit": pagination.paging.limit},
-        #             ],
-        #             "count": [{"$count": "count"}],
-        #         }
-        #     },
-        # ]
-
         pipeline = [
             {"$match": filter_params},
             {
@@ -285,7 +179,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "narration": 1,
                     # "debit": 1,
                     # "credit": 1,
-                    # Project the first ledger entry's fields (or null if none)
                     "amount": {"$arrayElemAt": ["$ledger_entries.amount", 0]},
                     "balance_type": 1,
                     "ledger_name": {"$arrayElemAt": ["$ledger_entries.ledgername", 0]},

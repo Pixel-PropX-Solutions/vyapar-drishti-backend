@@ -234,7 +234,7 @@
                     <tr style="border-bottom: 1px solid #000 !important;">
                         <!-- Party Details Details -->
                         {% if invoice.voucher_type == 'Sales' %}
-                        <td style="font-size: 14px !important; padding: 2mm !important; vertical-align: top;">
+                        <td style="font-size: 14px !important; width: 50% !important; padding: 2mm !important; vertical-align: top;">
                             <table>
                                 <tr>
                                     <td style="font-weight: bold; padding-bottom: 1mm !important;">{{ party.name }}
@@ -311,7 +311,7 @@
                             </table>
                         </td>
                         {% else %}
-                        <td style="font-size: 14px !important; padding: 2mm !important; vertical-align: top;">
+                        <td style="font-size: 14px !important; width: 50% !important; padding: 2mm !important; vertical-align: top;">
                             <table>
                                 <tr>
                                     <td style="font-weight: bold; padding-bottom: 1mm !important;"> {{
@@ -406,7 +406,7 @@
 
                         <!-- Invoice Details -->
                         <td
-                            style="font-size: 14px !important; vertical-align: top !important; text-align: left !important; border-left: 1px solid #000; padding: 1mm !important;">
+                            style="font-size: 14px !important; width: 50% !important; vertical-align: top !important; text-align: left !important; border-left: 1px solid #000; padding: 1mm !important;">
                             <table>
                                 <tr>
                                     <td style="font-weight: bold;"">Invoice No</td>
@@ -490,6 +490,7 @@
                     {% endif %}
                     {% for item in page_items %}
                     <!-- Product Details Row -->
+                     
                     <tr {% if loop.index0 % 2==1
                         %}style="width: 100% !important; height: 5mm !important; background-color: #f9f9f9 !important;"
                         {% endif %}style="width: 100% !important; height: 5mm !important;">
