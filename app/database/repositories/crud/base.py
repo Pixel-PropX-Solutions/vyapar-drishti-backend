@@ -63,6 +63,7 @@ class Meta(Page):
     purchase_value: float = None
     sale_value: float = None
     positive_stock: float = None
+    negative_stock: float = None
     low_stock: float = None
 
 

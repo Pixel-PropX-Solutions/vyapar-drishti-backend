@@ -15,7 +15,7 @@ from app.database.repositories.crud.base import (
     Page,
 )
 from pydantic import BaseModel
-from typing import List
+from typing import List, Any
 import re
 
 
@@ -41,12 +41,100 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         current_user: TokenData = Depends(get_current_user),
         # is_deleted: bool = False,
     ):
+        # Stats filter: only user_id, is_deleted, company_id
+        stats_filter_params = {
+            "user_id": current_user.user_id,
+            "is_deleted": False,
+            "company_id": company_id,
+        }
+        stats_pipeline = [
+            {"$match": stats_filter_params},
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "localField": "_id",
+                    "foreignField": "item_id",
+                    "as": "inventory_entries",
+                }
+            },
+            {
+                "$unwind": {
+                    "path": "$inventory_entries",
+                    "preserveNullAndEmptyArrays": True,
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Voucher",
+                    "localField": "inventory_entries.vouchar_id",
+                    "foreignField": "_id",
+                    "as": "voucher",
+                }
+            },
+            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
+            {
+                "$project": {
+                    "low_stock_alert": 1,
+                    "purchase_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        {"$toLower": "$voucher.voucher_type"},
+                                        "purchase",
+                                    ]
+                                },
+                                "$inventory_entries.quantity",
+                                0,
+                            ]
+                        }
+                    },
+                    "sales_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
+                                {"$abs": "$inventory_entries.quantity"},
+                                0,
+                            ]
+                        }
+                    },
+                    "current_stock": {
+                        "$subtract": [
+                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
+                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                        ]
+                    },
+                    "negative_stock": {
+                        "$cond": [
+                            {"$lt": ["$current_stock", 0]},
+                            {"$abs": "$current_stock"},
+                            0,
+                        ]
+                    },
+                    "low_stock": {
+                        "$cond": [
+                            {"$lt": ["$current_stock", "$low_stock_alert"]},
+                            "$current_stock",
+                            0,
+                        ]
+                    },
+                    "positive_stock": {
+                        "$cond": [
+                            {"$gt": ["$current_stock", 0]},
+                            "$current_stock",
+                            0,
+                        ]
+                    },
+                }
+            },
+        ]
+
+        # Now build filter_params for docs pipeline
         filter_params = {
             "user_id": current_user.user_id,
             "is_deleted": False,
             "company_id": company_id,
         }
-        # Filter by search term
         if search not in ["", None]:
             try:
                 safe_search = re.escape(search)
@@ -58,28 +146,19 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     {"description": {"$regex": safe_search, "$options": "i"}},
                 ]
             except re.error:
-                # If regex is invalid, ignore search filter or handle as needed
                 pass
-
         if category not in ["", None]:
             filter_params["category"] = category
-
         if group not in ["", None]:
             filter_params["group"] = group
 
-        # Define sorting logic
         sort_options = {
             "name_asc": {"stock_item_name": 1},
             "name_desc": {"stock_item_name": -1},
-            # "price_asc": {"selling_price": 1},
-            # "price_desc": {"selling_price": -1},
             "created_at_asc": {"created_at": 1},
             "created_at_desc": {"created_at": -1},
         }
-
-        # Construct sorting key
         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
-
         sort_stage = sort_options.get(sort_key, {"created_at": 1})
 
         pipeline = [
@@ -215,9 +294,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "group": {"$ifNull": ["$group.inventory_group_name", None]},
                     "image": 1,
                     "description": 1,
-                    # "gst_nature_of_goods": 1,
                     "gst_hsn_code": 1,
-                    # "gst_taxability": 1,
                     "low_stock_alert": 1,
                     "created_at": 1,
                     "updated_at": 1,
@@ -246,6 +323,27 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "sales_qty": "$sales_qty",
                     "sales_value": "$sales_value",
                     "last_restock_date": "$last_restock_date",
+                    "negative": {
+                        "$cond": [
+                            {"$lt": ["$current_stock", 0]},
+                            {"$abs": "$current_stock"},
+                            0,
+                        ]
+                    },
+                    "low_stock": {
+                        "$cond": [
+                            {"$lt": ["$current_stock", "$low_stock_alert"]},
+                            "$current_stock",
+                            0,
+                        ]
+                    },
+                    "positive_stock": {
+                        "$cond": [
+                            {"$gt": ["$current_stock", 0]},
+                            "$current_stock",
+                            0,
+                        ]
+                    },
                 }
             },
             {
@@ -259,58 +357,26 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             },
         ]
 
-        unique_categories_pipeline = [
-            {
-                "$match": {
-                    "user_id": current_user.user_id,
-                    "is_deleted": False,
-                    "company_id": company_id,
-                }
-            },
-            {"$group": {"_id": "$category"}},
-            {"$project": {"_id": 0, "category": "$_id"}},
-            {"$sort": {"category": 1}},
-        ]
-
-        # unique_groups_pipeline = [
-        #     {
-        #         "$match": {
-        #             "user_id": current_user.user_id,
-        #             "is_deleted": False,
-        #             "company_id": company_id,
-        #         }
-        #     },
-        #     {"$group": {"_id": "$group"}},
-        #     {"$project": {"_id": 0, "group": "$_id"}},
-        #     {"$sort": {"group": 1}},
-        # ]
-
+        # Run stats pipeline first (no search/category/group filters)
+        stats_res = [doc async for doc in self.collection.aggregate(stats_pipeline)]
         res = [doc async for doc in self.collection.aggregate(pipeline)]
-
-        # categories_res = [
-        #     doc
-        #     async for doc in category_repo.collection.aggregate(
-        #         unique_categories_pipeline
-        #     )
-        # ]
-
-        # group_res = [
-        #     doc
-        #     async for doc in inventory_group_repo.collection.aggregate(unique_groups_pipeline)
-        # ]
         docs = res[0]["docs"]
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
 
-        # Extract unique categories and groups
-        # unique_categories = [entry["category"] for entry in categories_res]
+        # Aggregate stats for all products of user in company
+        positive_stock = sum((doc.get("positive_stock") or 0) for doc in stats_res)
+        negative_stock = sum((doc.get("negative_stock") or 0) for doc in stats_res)
+        low_stock = sum((doc.get("low_stock") or 0) for doc in stats_res)
 
-        # unique_groups = [entry["group"] for entry in group_res]
         return PaginatedResponse(
             docs=docs,
             meta=Meta(
                 page=pagination.paging.page,
                 limit=pagination.paging.limit,
                 total=count,
+                positive_stock=positive_stock,
+                negative_stock=negative_stock,
+                low_stock=low_stock,
                 unique=[],
             ),
         )
@@ -369,24 +435,6 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
 
         pipeline = [
             {"$match": filter_params},
-            {
-                "$lookup": {
-                    "from": "Category",
-                    "localField": "category",
-                    "foreignField": "category_name",
-                    "as": "category",
-                }
-            },
-            {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
-            {
-                "$lookup": {
-                    "from": "Group",
-                    "localField": "group_id",
-                    "foreignField": "_id",
-                    "as": "group",
-                }
-            },
-            {"$unwind": {"path": "$group", "preserveNullAndEmptyArrays": True}},
             {"$sort": sort_stage},
             {
                 "$project": {
@@ -396,8 +444,10 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "user_id": 1,
                     "unit": 1,
                     "alias_name": 1,
-                    "category": {"$ifNull": ["$category.category_name", None]},
-                    "group": {"$ifNull": ["$group.inventory_group_name", None]},
+                    "category": 1,
+                    "category_id": 1,
+                    "group": 1,
+                    "group_id": 1,
                     "image": 1,
                     "description": 1,
                     # "gst_nature_of_goods": 1,
@@ -419,59 +469,68 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             },
         ]
 
-        # unique_categories_pipeline = [
-        #     {
-        #         "$match": {
-        #             "user_id": current_user.user_id,
-        #             "is_deleted": False,
-        #             "company_id": company_id,
-        #         }
-        #     },
-        #     {"$group": {"_id": "$category"}},
-        #     {"$project": {"_id": 0, "category": "$_id"}},
-        #     {"$sort": {"category": 1}},
-        # ]
+        unique_categories_pipeline = [
+            {
+                "$match": {
+                    "user_id": current_user.user_id,
+                    "is_deleted": False,
+                    "company_id": company_id,
+                }
+            },
+            {"$group": {"_id": "$category_name"}},
+            {"$project": {"_id": 0, "category": "$_id"}},
+            {"$sort": {"category": 1}},
+        ]
 
-        # unique_groups_pipeline = [
-        #     {
-        #         "$match": {
-        #             "user_id": current_user.user_id,
-        #             "is_deleted": False,
-        #             "company_id": company_id,
-        #         }
-        #     },
-        #     {"$group": {"_id": "$group"}},
-        #     {"$project": {"_id": 0, "group": "$_id"}},
-        #     {"$sort": {"group": 1}},
-        # ]
+        unique_groups_pipeline = [
+            {
+                "$match": {
+                    "user_id": current_user.user_id,
+                    "is_deleted": False,
+                    "company_id": company_id,
+                }
+            },
+            {"$group": {"_id": "$inventory_group_name"}},
+            {"$project": {"_id": 0, "group": "$_id"}},
+            {"$sort": {"group": 1}},
+        ]
 
         res = [doc async for doc in self.collection.aggregate(pipeline)]
 
-        # categories_res = [
-        #     doc
-        #     async for doc in category_repo.collection.aggregate(
-        #         unique_categories_pipeline
-        #     )
-        # ]
-
-        # group_res = [
-        #     doc
-        #     async for doc in inventory_group_repo.collection.aggregate(unique_groups_pipeline)
-        # ]
+        categories_res = [doc async for doc in category_repo.collection.aggregate(unique_categories_pipeline)]
+        print("categories_res", categories_res)
+        group_res = [
+            doc
+            async for doc in inventory_group_repo.collection.aggregate(
+                unique_groups_pipeline
+            )
+        ]
+        print("group_res", group_res)
         docs = res[0]["docs"]
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
 
         # Extract unique categories and groups
-        # unique_categories = [entry["category"] for entry in categories_res]
+        unique_categories = [entry["category"] for entry in categories_res]
 
-        # unique_groups = [entry["group"] for entry in group_res]
-        return PaginatedResponse(
+        unique_groups = [entry["group"] for entry in group_res]
+
+        class Meta2(Page):
+            total: int
+            unique_groups: List[Any]
+            unique_categories: List[Any]
+
+        class PaginatedResponse2(BaseModel):
+            docs: List[Any]
+            meta: Meta2
+
+        return PaginatedResponse2(
             docs=docs,
-            meta=Meta(
+            meta=Meta2(
                 page=pagination.paging.page,
                 limit=pagination.paging.limit,
                 total=count,
-                unique=[],
+                unique_categories=unique_categories,
+                unique_groups=unique_groups,
             ),
         )
 

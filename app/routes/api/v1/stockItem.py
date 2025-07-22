@@ -8,11 +8,13 @@ from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRe
 from app.database.models.GST_Rate import GSTRate
 from app.database.repositories.gstRateRepo import gst_rate_repo
 from app.database.repositories.UserSettingsRepo import user_settings_repo
+from app.database.repositories.CompanySettingsRepo import company_settings_repo
 from app.database.repositories.stockItemRepo import stock_item_repo
 from app.database.repositories.voucharRepo import vouchar_repo
 from app.database.repositories.InventoryRepo import inventory_repo
 from app.database.models.StockItem import StockItem
 from app.utils.cloudinary_client import cloudinary_client
+import re
 
 
 Product = APIRouter()
@@ -161,8 +163,8 @@ async def get_product(
             {
                 "$lookup": {
                     "from": "Category",
-                    "localField": "category",
-                    "foreignField": "category_name",
+                    "localField": "category_id",
+                    "foreignField": "_id",
                     "as": "category",
                 }
             },
@@ -170,8 +172,8 @@ async def get_product(
             {
                 "$lookup": {
                     "from": "Group",
-                    "localField": "group",
-                    "foreignField": "inventory_group_name",
+                    "localField": "group_id",
+                    "foreignField": "_id",
                     "as": "group",
                 }
             },
@@ -179,8 +181,8 @@ async def get_product(
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "stock_item_name",
-                    "foreignField": "item",
+                    "localField": "_id",
+                    "foreignField": "item_id",
                     "as": "inventory_entries",
                 }
             },
@@ -200,16 +202,29 @@ async def get_product(
             },
             {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
             {
+                "$lookup": {
+                    "from": "GSTRate",
+                    "localField": "_id",
+                    "foreignField": "item_id",
+                    "as": "gst_rate",
+                }
+            },
+            {"$unwind": {"path": "$gst_rate", "preserveNullAndEmptyArrays": True}},
+            {
                 "$group": {
                     "_id": "$_id",
                     "company_id": {"$first": "$company_id"},
                     "stock_item_name": {"$first": "$stock_item_name"},
                     "unit": {"$first": "$unit"},
+                    "unit_id": {"$first": "$unit_id"},
                     "category": {"$first": "$category"},
                     "alias_name": {"$first": "$alias_name"},
                     "image": {"$first": "$image"},
                     "description": {"$first": "$description"},
                     "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
+                    "gst_taxability": {"$first": "$gst_taxability"},
+                    "gst_percentage": {"$first": "$gst_rate.rate"},
                     "group": {"$first": "$group"},
                     "voucher": {"$first": "$voucher"},
                     "purchase_qty": {
@@ -296,6 +311,7 @@ async def get_product(
                         ]
                     },
                     "purchase_qty": "$purchase_qty",
+                    "gst_percentage": "$gst_percentage",
                     "purchase_value": "$purchase_value",
                     "sales_qty": "$sales_qty",
                     "sales_value": "$sales_value",
@@ -544,6 +560,7 @@ async def view_all_product(
         current_user=current_user,
         # is_deleted=is_deleted,
     )
+    print('View all result', result)
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
 
@@ -652,13 +669,16 @@ async def get_products_with_id(
 )
 async def update_product(
     product_id: str = "",
-    name: str = Form(...),
+    stock_item_name: str = Form(...),
     company_id: str = Form(...),
     unit: str = Form(...),
+    unit_id: str = Form(...),
     # optional fields
     alias_name: str = Form(None),
     category: str = Form(None),
     group: str = Form(None),
+    category_id: str = Form(None),
+    group_id: str = Form(None),
     image: UploadFile = File(None),
     description: str = Form(None),
     # Additonal Optional fields
@@ -668,6 +688,7 @@ async def update_product(
     gst_nature_of_goods: str = Form(None),
     gst_hsn_code: str = Form(None),
     gst_taxability: str = Form(None),
+    gst_percentage: str = Form(None),
     low_stock_alert: int = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
@@ -678,7 +699,18 @@ async def update_product(
 
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    companySettings = await company_settings_repo.findOne(
+        {
+            "company_id": userSettings["current_company_id"],
+            "user_id": current_user.user_id,
+        }
+    )
+    if companySettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="Company Settings Not Found. Please contact support."
         )
 
     productExists = await stock_item_repo.findOne(
@@ -689,8 +721,9 @@ async def update_product(
             "company_id": userSettings["current_company_id"],
         },
     )
+
     if productExists is None:
-        raise http_exception.ResourceNotFoundException()
+        raise http_exception.ResourceNotFoundException(detail="Product Not Found")
 
     image_url = None
     if image:
@@ -711,12 +744,15 @@ async def update_product(
         image_url = upload_result["url"]
 
     update_fields = {
-        "stock_item_name": name,
+        "stock_item_name": stock_item_name,
         "unit": unit,
+        "unit_id": unit_id,
         # optional fields
         "alias_name": alias_name,
         "category": category,
+        "category_id": category_id,
         "group": group,
+        "group_id": group_id,
         "description": description,
         # additonal optional fields
         "opening_balance": opening_balance,
@@ -730,7 +766,7 @@ async def update_product(
     if image:
         update_fields["image"] = image_url
 
-    await stock_item_repo.update_one(
+    response = await stock_item_repo.update_one(
         {
             "_id": product_id,
             "user_id": current_user.user_id,
@@ -739,6 +775,74 @@ async def update_product(
         },
         {"$set": update_fields},
     )
+    if response and companySettings["features"]["enable_gst"]:
+        gstExists = await gst_rate_repo.findOne(
+            {
+                "user_id": current_user.user_id,
+                "company_id": userSettings["current_company_id"],
+                "item_id": product_id,
+            }
+        )
+        match = re.fullmatch(r"(\d+(?:\.\d+)?)\+(\d+(?:\.\d+)?)", gst_percentage)
+        if gstExists:
+            # Update existing GST rate
+            res = await gst_rate_repo.update_one(
+                {
+                    "user_id": current_user.user_id,
+                    "company_id": userSettings["current_company_id"],
+                    "item_id": product_id,
+                },
+                {
+                    "$set": {
+                        "item": stock_item_name,
+                        "hsn_code": gst_hsn_code,
+                        "nature_of_goods": gst_nature_of_goods,
+                        "taxability": gst_taxability,
+                        "rate": gst_percentage,
+                        "cgst": (
+                            float(match.group(1)) if match else float(gst_percentage) / 2
+                        ),
+                        "sgst": (
+                            float(match.group(2)) if match else float(gst_percentage) / 2
+                        ),
+                        "igst": (
+                            float(match.group(1)) + float(match.group(2))
+                            if match
+                            else float(gst_percentage)
+                        ),
+                    }
+                },
+            )
+        else:
+            # Create new GST rate if it doesn't exist
+            gstr_data = {
+                "user_id": current_user.user_id,
+                "company_id": userSettings["current_company_id"],
+                "item": stock_item_name,
+                "item_id": product_id,
+                "hsn_code": gst_hsn_code,
+                "nature_of_goods": gst_nature_of_goods,
+                "taxability": gst_taxability,
+                "rate": gst_percentage,
+                "cgst": float(match.group(1)) if match else float(gst_percentage) / 2,
+                "sgst": float(match.group(2)) if match else float(gst_percentage) / 2,
+                "igst": (
+                    float(match.group(1)) + float(match.group(2))
+                    if match
+                    else float(gst_percentage)
+                ),
+            }
+            res = await gst_rate_repo.new(GSTRate(**gstr_data))
+
+        if not res:
+            raise http_exception.ResourceAlreadyExistsException(
+                detail="GST Rate Already Exists for this Product"
+            )
+
+    if not response:
+        raise http_exception.ResourceAlreadyExistsException(
+            detail="Product Already Exists"
+        )
 
     return {
         "success": True,
