@@ -17,7 +17,9 @@ from app.http_exception import http_error_handler
 from app.routes.api.routers import routers
 from app.schema.health import Health_Schema
 from app.utils.uptime import getUptime
-
+from fastapi import FastAPI
+from apscheduler.schedulers.background import BackgroundScheduler
+import requests
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
 from fastapi.exceptions import RequestValidationError
@@ -36,6 +38,7 @@ app = FastAPI(
     openapi_url=None if IS_PROD else "/openapi.json",
 )
 
+scheduler = BackgroundScheduler()
 
 configs = [
     configure_database,
@@ -44,6 +47,14 @@ configs = [
 ]
 
 
+def call_api():
+    response = requests.get("https://dristidocs-backend.onrender.com/health")
+    print(f"API called: {response}")
+
+# Schedule the job (e.g., every 5 minutes)
+scheduler.add_job(call_api, 'cron', minute='*/5', )
+scheduler.start()
+
 @app.get(
     "/health",
     response_class=ORJSONResponse,
@@ -51,6 +62,8 @@ configs = [
     status_code=status.HTTP_200_OK,
     tags=["Health Route"],
 )
+
+
 async def check_health(request: Request, response: Response):
     """
     Health Route : Returns App details.

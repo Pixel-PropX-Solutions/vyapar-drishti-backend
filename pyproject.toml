@@ -35,6 +35,7 @@ pytz = "^2025.2"
 pyyaml = "^6.0.2"
 ua-parser = "^1.0.1"
 user-agents = "^2.2.0"
+apscheduler = "^3.11.0"
 
 
 [tool.poetry.group.test.dependencies]
