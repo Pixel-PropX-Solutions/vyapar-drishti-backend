@@ -22,6 +22,7 @@ class UOM(BaseModel):
     si_representation: SIRepresentationEnum
     description: Optional[str] = ""
     symbol: Optional[str] = ""
+    is_deleted: bool = False
 
     @validator("unit_name", pre=True)
     def normalize_unit_name(cls, v):
@@ -32,7 +33,6 @@ class UOMDB(UOM):
     unit_id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
     created_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
     updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now())
-    is_active: bool = True
 
 
 class UOMCreate(BaseModel):

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, File, UploadFile, Form
+from fastapi import APIRouter, Depends, status, File, UploadFile, Form, Body
 from fastapi.responses import ORJSONResponse
 import app.http_exception as http_exception
 from app.schema.token import TokenData
@@ -15,6 +15,7 @@ from app.database.repositories.InventoryRepo import inventory_repo
 from app.database.models.StockItem import StockItem
 from app.utils.cloudinary_client import cloudinary_client
 import re
+from typing import Any, Dict, Optional
 
 
 Product = APIRouter()
@@ -157,14 +158,16 @@ async def get_product(
                     "_id": product_id,
                     "user_id": current_user.user_id,
                     "company_id": userSettings["current_company_id"],
-                    "is_deleted": False,
+                    # "is_deleted": False,
                 }
             },
             {
                 "$lookup": {
                     "from": "Category",
-                    "localField": "category_id",
-                    "foreignField": "_id",
+                    "let": {"category_id": "$category_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$_id", "$$category_id"]}}}
+                    ],
                     "as": "category",
                 }
             },
@@ -172,8 +175,8 @@ async def get_product(
             {
                 "$lookup": {
                     "from": "Group",
-                    "localField": "group_id",
-                    "foreignField": "_id",
+                    "let": {"group_id": "$group_id"},
+                    "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$group_id"]}}}],
                     "as": "group",
                 }
             },
@@ -181,52 +184,35 @@ async def get_product(
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "_id",
-                    "foreignField": "item_id",
+                    "let": {"stock_item_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$item_id", "$$stock_item_id"]}}}
+                    ],
                     "as": "inventory_entries",
                 }
             },
             {
                 "$unwind": {
                     "path": "$inventory_entries",
-                    "preserveNullAndEmptyArrays": True,
                 }
             },
             {
                 "$lookup": {
                     "from": "Voucher",
-                    "localField": "inventory_entries.vouchar_id",
-                    "foreignField": "_id",
+                    "let": {"inventory_voucher_id": "$inventory_entries.vouchar_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$_id", "$$inventory_voucher_id"]}}}
+                    ],
                     "as": "voucher",
                 }
             },
-            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
             {
-                "$lookup": {
-                    "from": "GSTRate",
-                    "localField": "_id",
-                    "foreignField": "item_id",
-                    "as": "gst_rate",
+                "$unwind": {
+                    "path": "$voucher",
                 }
             },
-            {"$unwind": {"path": "$gst_rate", "preserveNullAndEmptyArrays": True}},
             {
-                "$group": {
-                    "_id": "$_id",
-                    "company_id": {"$first": "$company_id"},
-                    "stock_item_name": {"$first": "$stock_item_name"},
-                    "unit": {"$first": "$unit"},
-                    "unit_id": {"$first": "$unit_id"},
-                    "category": {"$first": "$category"},
-                    "alias_name": {"$first": "$alias_name"},
-                    "image": {"$first": "$image"},
-                    "description": {"$first": "$description"},
-                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
-                    "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
-                    "gst_taxability": {"$first": "$gst_taxability"},
-                    "gst_percentage": {"$first": "$gst_rate.rate"},
-                    "group": {"$first": "$group"},
-                    "voucher": {"$first": "$voucher"},
+                "$addFields": {
                     "purchase_qty": {
                         "$sum": {
                             "$cond": [
@@ -273,6 +259,33 @@ async def get_product(
                             ]
                         }
                     },
+                },
+            },
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "company_id": {"$first": "$company_id"},
+                    "stock_item_name": {"$first": "$stock_item_name"},
+                    "unit": {"$first": "$unit"},
+                    "unit_id": {"$first": "$unit_id"},
+                    "alias_name": {"$first": "$alias_name"},
+                    "category": {"$first": "$category"},
+                    "group": {"$first": "$group"},
+                    "image": {"$first": "$image"},
+                    "description": {"$first": "$description"},
+                    "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
+                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    "gst_taxability": {"$first": "$gst_taxability"},
+                    "low_stock_alert": {"$first": "$low_stock_alert"},
+                    "created_at": {"$first": "$created_at"},
+                    "updated_at": {"$first": "$updated_at"},
+                    "purchase_qty": {"$first": "$purchase_qty"},
+                    "purchase_value": {"$first": "$purchase_value"},
+                    "sales_qty": {"$first": "$sales_qty"},
+                    "sales_value": {"$first": "$sales_value"},
+                    "opening_balance": {"$first": "$opening_balance"},
+                    "opening_rate": {"$first": "$opening_rate"},
+                    "opening_value": {"$first": "$opening_value"},
                 }
             },
             {
@@ -311,7 +324,6 @@ async def get_product(
                         ]
                     },
                     "purchase_qty": "$purchase_qty",
-                    "gst_percentage": "$gst_percentage",
                     "purchase_value": "$purchase_value",
                     "sales_qty": "$sales_qty",
                     "sales_value": "$sales_value",
@@ -353,14 +365,16 @@ async def get_product_details(
                     "_id": product_id,
                     "user_id": current_user.user_id,
                     "company_id": userSettings["current_company_id"],
-                    "is_deleted": False,
+                    # "is_deleted": False,
                 }
             },
             {
                 "$lookup": {
                     "from": "Category",
-                    "localField": "category_id",
-                    "foreignField": "_id",
+                    "let": {"category_id": "$category_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$_id", "$$category_id"]}}}
+                    ],
                     "as": "category",
                 }
             },
@@ -368,8 +382,8 @@ async def get_product_details(
             {
                 "$lookup": {
                     "from": "Group",
-                    "localField": "group_id",
-                    "foreignField": "_id",
+                    "let": {"group_id": "$group_id"},
+                    "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$group_id"]}}}],
                     "as": "group",
                 }
             },
@@ -377,50 +391,35 @@ async def get_product_details(
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "_id",
-                    "foreignField": "item_id",
+                    "let": {"stock_item_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$item_id", "$$stock_item_id"]}}}
+                    ],
                     "as": "inventory_entries",
                 }
             },
             {
                 "$unwind": {
                     "path": "$inventory_entries",
-                    "preserveNullAndEmptyArrays": True,
                 }
             },
             {
                 "$lookup": {
                     "from": "Voucher",
-                    "localField": "inventory_entries.vouchar_id",
-                    "foreignField": "_id",
+                    "let": {"inventory_voucher_id": "$inventory_entries.vouchar_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$_id", "$$inventory_voucher_id"]}}}
+                    ],
                     "as": "voucher",
                 }
             },
-            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
             {
-                "$group": {
-                    "_id": "$_id",
-                    "company_id": {"$first": "$company_id"},
-                    "stock_item_name": {"$first": "$stock_item_name"},
-                    "unit": {"$first": "$unit"},
-                    "category": {"$first": "$category"},
-                    "alias_name": {"$first": "$alias_name"},
-                    "image": {"$first": "$image"},
-                    "description": {"$first": "$description"},
-                    "user_id": {"$first": "$user_id"},
-                    "unit_id": {"$first": "$unit_id"},
-                    "category_id": {"$first": "$category_id"},
-                    "group_id": {"$first": "$group_id"},
-                    "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
-                    "gst_taxability": {"$first": "$gst_taxability"},
-                    "low_stock_alert": {"$first": "$low_stock_alert"},
-                    "created_at": {"$first": "$created_at"},
-                    "updated_at": {"$first": "$updated_at"},
-                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
-                    "opening_balance": {"$first": "$opening_balance"},
-                    "opening_rate": {"$first": "$opening_rate"},
-                    "opening_value": {"$first": "$opening_value"},
-                    "group": {"$first": "$group"},
+                "$unwind": {
+                    "path": "$voucher",
+                }
+            },
+            {
+                "$addFields": {
                     "purchase_qty": {
                         "$sum": {
                             "$cond": [
@@ -467,6 +466,33 @@ async def get_product_details(
                             ]
                         }
                     },
+                },
+            },
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "company_id": {"$first": "$company_id"},
+                    "stock_item_name": {"$first": "$stock_item_name"},
+                    "unit": {"$first": "$unit"},
+                    "unit_id": {"$first": "$unit_id"},
+                    "alias_name": {"$first": "$alias_name"},
+                    "category": {"$first": "$category"},
+                    "group": {"$first": "$group"},
+                    "image": {"$first": "$image"},
+                    "description": {"$first": "$description"},
+                    "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
+                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    "gst_taxability": {"$first": "$gst_taxability"},
+                    "low_stock_alert": {"$first": "$low_stock_alert"},
+                    "created_at": {"$first": "$created_at"},
+                    "updated_at": {"$first": "$updated_at"},
+                    "purchase_qty": {"$first": "$purchase_qty"},
+                    "purchase_value": {"$first": "$purchase_value"},
+                    "sales_qty": {"$first": "$sales_qty"},
+                    "sales_value": {"$first": "$sales_value"},
+                    "opening_balance": {"$first": "$opening_balance"},
+                    "opening_rate": {"$first": "$opening_rate"},
+                    "opening_value": {"$first": "$opening_value"},
                 }
             },
             {
@@ -490,6 +516,10 @@ async def get_product_details(
                     "low_stock_alert": 1,
                     "created_at": 1,
                     "updated_at": 1,
+                    "purchase_qty": 1,
+                    "purchase_value": 1,
+                    "sales_qty": 1,
+                    "sales_value": 1,
                     "current_stock": {
                         "$subtract": [
                             {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
@@ -503,22 +533,22 @@ async def get_product_details(
                             0,
                         ]
                     },
-                    "purchase_qty": "$purchase_qty",
-                    "purchase_value": "$purchase_value",
-                    "sales_qty": "$sales_qty",
-                    "sales_value": "$sales_value",
                     "opening_balance": 1,
                     "opening_rate": 1,
                     "opening_value": 1,
                 }
             },
         ]
-    ).to_list(None)
+    ).to_list(length=1)
+
+    print("Product Details:", product)
 
     if product:
         return {"success": True, "data": product}
     else:
-        raise http_exception.ResourceNotFoundException()
+        raise http_exception.ResourceNotFoundException(
+            detail="Product Not Found. Please check the product ID."
+        )
 
 
 @Product.get(
@@ -560,7 +590,7 @@ async def view_all_product(
         current_user=current_user,
         # is_deleted=is_deleted,
     )
-    print('View all result', result)
+    print("View all result", result)
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
 
@@ -847,6 +877,96 @@ async def update_product(
     return {
         "success": True,
         "message": "Product Updated Successfully",
+    }
+
+
+@Product.put(
+    "/update/product/details/{product_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def update_product_details(
+    product_id: str = "",
+    product_details: Dict[str, Any] = Body(...),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException(
+            detail="Operation not allowed for this user type."
+        )
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    companySettings = await company_settings_repo.findOne(
+        {
+            "company_id": userSettings["current_company_id"],
+            "user_id": current_user.user_id,
+        }
+    )
+
+    if companySettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="Company Settings Not Found. Please contact support."
+        )
+
+    productExists = await stock_item_repo.findOne(
+        {
+            "_id": product_id,
+            "user_id": current_user.user_id,
+            "is_deleted": False,
+            "company_id": userSettings["current_company_id"],
+        },
+    )
+
+    if productExists is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="Product not found. Please check the product ID."
+        )
+
+    updated_dict = {}
+    print()
+    print("data received", product_details)
+
+    for k, v in dict(product_details).items():
+        updated_dict[k] = v
+
+    print()
+    print("Updated Product Details:", updated_dict)
+    print()
+
+    await stock_item_repo.update_one(
+        {
+            "_id": product_id,
+            "user_id": current_user.user_id,
+            "is_deleted": False,
+            "company_id": userSettings["current_company_id"],
+        },
+        {"$set": updated_dict, "$currentDate": {"updated_at": True}},
+    )
+
+    updated_product = await stock_item_repo.findOne(
+        {
+            "_id": product_id,
+            "user_id": current_user.user_id,
+            "is_deleted": False,
+            "company_id": userSettings["current_company_id"],
+        }
+    )
+    print("Update Product Response:", updated_product)
+
+    # if not updated_product:
+    #     raise http_exception.ResourceAlreadyExistsException(
+    #         detail="Product Already Exists"
+    #     )
+
+    return {
+        "success": True,
+        "message": "Product details Updated Successfully",
     }
 
 

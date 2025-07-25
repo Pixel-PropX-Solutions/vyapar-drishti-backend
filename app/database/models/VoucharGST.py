@@ -70,6 +70,7 @@ class VoucherGST(BaseModel):
     item_gst_details: Optional[List[GSTItemDetail]] = []
     # tax_ledgers: Optional[List[GSTLedgerDetail]] = []
     # gst_summary: Optional[List[GSTSummaryEntry]] = []
+    is_deleted: bool = False
 
 
 class VoucherGSTDB(VoucherGST):

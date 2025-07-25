@@ -21,6 +21,7 @@ class GSTRate(BaseModel):
     rate: Optional[str] = None  # Accepts "18", "9+9"
     nature_of_goods: Optional[str] = None  # Goods or Services
     taxability: Optional[str] = "Taxable"  # Taxable / Exempt / Nil Rated
+    is_deleted: bool = False
 
     # Auto-parsed fields (not input)
     cgst: Optional[float] = None

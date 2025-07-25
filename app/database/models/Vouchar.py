@@ -41,6 +41,7 @@ class Voucher(BaseModel):
     is_accounting_voucher: Optional[int] = 0
     is_inventory_voucher: Optional[int] = 0
     is_order_voucher: Optional[int] = 0
+    is_deleted: bool = False
 
 
 class VoucherDB(Voucher):

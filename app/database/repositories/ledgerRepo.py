@@ -148,6 +148,28 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
                     }
                 },
                 {"$match": filter_params},
+                {
+                    "$lookup": {
+                        "from": "Accounting",
+                        "localField": "_id",
+                        "foreignField": "ledger_id",
+                        "as": "accounts",
+                    }
+                },
+                {
+                    "$addFields": {"total_amount": {"$sum": "$accounts.amount"}},
+                },
+                {
+                    "$addFields": {
+                        "is_positive": {
+                            "$cond": [
+                                {"$lt": [{"$sum": "$accounts.amount"}, 0]},
+                                True,
+                                False,
+                            ]
+                        },
+                    },
+                },
                 {"$sort": sort_criteria},
             ]
         )

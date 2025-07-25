@@ -20,6 +20,7 @@ from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.database.repositories.ledgerRepo import ledger_repo, Ledger
 from app.utils.cloudinary_client import cloudinary_client
 from app.database.repositories.companyRepo import company_repo, Company
+from app.database.repositories.CompanySettingsRepo import company_settings_repo
 from typing import Any, Dict, Optional
 
 
@@ -371,9 +372,10 @@ async def createCompany(
                 "bank_branch": None,
             },
         ]
+
         for ledger in ledger_data:
             await ledger_repo.new(Ledger(**ledger))
-            
+
     return {"success": True, "message": "Company Created Successfully"}
 
 
@@ -397,15 +399,26 @@ async def get_all_company(
                 "is_deleted": False,
             }
         },
-        {
-            "$lookup": {
-                "from": "CompanySettings",
-                "localField": "_id",
-                "foreignField": "company_id",
-                "as": "company_settings",
-            }
-        },
-        {"$unwind": {"path": "$company_settings", "preserveNullAndEmptyArrays": True}},
+         {
+                "$lookup": {
+                    "from": "CompanySettings",
+                    "let": {"company_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$company_id", "$$company_id"]}}}
+                    ],
+                    "as": "company_settings",
+                }
+            },
+            {"$unwind": {"path": "$company_settings", }},
+        # {
+        #     "$lookup": {
+        #         "from": "CompanySettings",
+        #         "localField": "_id",
+        #         "foreignField": "company_id",
+        #         "as": "company_settings",
+        #     }
+        # },
+        # {"$unwind": {"path": "$company_settings", "preserveNullAndEmptyArrays": True}},
         {
             "$project": {
                 "_id": 1,
@@ -553,6 +566,12 @@ async def updateCompany(
     country: str = Form(None),
     financial_year_start: str = Form(None),
     books_begin_from: str = Form(None),
+    account_holder: str = Form(None),
+    account_number: str = Form(None),
+    bank_ifsc: str = Form(None),
+    bank_name: str = Form(None),
+    bank_branch: str = Form(None),
+    qr_code_url: UploadFile = File(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -604,10 +623,51 @@ async def updateCompany(
     if image:
         update_fields["image"] = image_url
 
-    await company_repo.update_one(
+    res = await company_repo.update_one(
         {"_id": company_id, "user_id": current_user.user_id},
         {"$set": update_fields},
     )
+   
+    if res is not None:
+        settings_dict = {
+            "company_name": name,
+            "country": country,
+            "state": state,
+            "currency": "INR",
+            "gstin": gstin,
+            "gst_registration_type": "Regular",  # Default or can be passed
+            "place_of_supply": state,  # Default or can be passed
+            "bank_details": {
+                "account_holder": account_holder,
+                "account_number": account_number,
+                "bank_ifsc": bank_ifsc,
+                "bank_name": bank_name,
+                "bank_branch": bank_branch,
+            },
+        }
+
+        if qr_code_url:
+            if qr_code_url.content_type not in [
+                "image/jpeg",
+                "image/jpg",
+                "image/png",
+                "image/gif",
+            ]:
+                raise http_exception.BadRequestException(
+                    detail="Invalid image type. Only JPEG, JPG, PNG, and GIF are allowed."
+                )
+            if hasattr(qr_code_url, "size") and qr_code_url.size > 5 * 1024 * 1024:
+                raise http_exception.BadRequestException(
+                    detail="File size exceeds the 5 MB limit."
+                )
+
+            upload_result = await cloudinary_client.upload_file(qr_code_url)
+            settings_dict["bank_details"]["qr_code_url"] = upload_result["url"]
+
+        await company_settings_repo.update_one(
+            {"company_id": company_id, "user_id": current_user.user_id},
+            {"$set": settings_dict, "$currentDate": {"updated_at": True}},
+        )
 
     return {
         "success": True,
@@ -623,6 +683,7 @@ async def updateCompany(
 async def updateCompanyDetails(
     company_id: str,
     company_details: Dict[str, Any] = Body(...),
+    company_settings: Dict[str, Any] = Body(...),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -636,10 +697,15 @@ async def updateCompanyDetails(
         raise http_exception.ResourceNotFoundException()
 
     updated_dict = {}
+    updated_settings_dict = {}
 
     for k, v in dict(company_details).items():
-        if isinstance(v, str) and v not in ["", None]:
+        if v is not None:
             updated_dict[k] = v
+
+    for k, v in dict(company_settings).items():
+        if isinstance(v, str) and v not in ["", None]:
+            updated_settings_dict[k] = v
         elif isinstance(v, dict):
             temp_dict = {}
             for k1, v1 in v.items():
@@ -647,22 +713,33 @@ async def updateCompanyDetails(
                     temp_dict[k1] = v1
 
             if temp_dict:  #
-                updated_dict[k] = temp_dict
+                updated_settings_dict[k] = temp_dict
 
     await company_repo.update_one(
         {"_id": company_id, "user_id": current_user.user_id},
         {"$set": updated_dict, "$currentDate": {"updated_at": True}},
     )
+    if not updated_settings_dict:
+        return {
+            "success": True,
+            "message": "Company Details Updated Successfully",
+            "data": company,
+        }
 
-    # Fetch the updated document after update
-    updatedCompany = await company_repo.findOne(
-        {"_id": company_id, "user_id": current_user.user_id, "is_deleted": False},
+    await company_settings_repo.update_one(
+        {"company_id": company_id, "user_id": current_user.user_id},
+        {"$set": updated_settings_dict, "$currentDate": {"updated_at": True}},
     )
+
+    # # Fetch the updated document after update
+    # updatedCompany = await company_repo.findOne(
+    #     {"_id": company_id, "user_id": current_user.user_id, "is_deleted": False},
+    # )
 
     return {
         "success": True,
         "message": "Company Details Updated Successfully",
-        "data": updatedCompany,
+        # "data": updatedCompany,
     }
 
 

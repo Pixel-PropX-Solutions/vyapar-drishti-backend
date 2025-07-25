@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import FastAPI, status, Depends, File, UploadFile, Form
+from fastapi import FastAPI, status, Depends, File, UploadFile, Form, Body
 from fastapi.responses import ORJSONResponse
 from fastapi import APIRouter
 from app.schema.token import TokenData
@@ -20,6 +20,7 @@ from app.database.repositories.voucharRepo import vouchar_repo
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.utils.cloudinary_client import cloudinary_client
 import sys
+from typing import Any, Dict, Optional
 
 
 ledger = APIRouter()
@@ -422,6 +423,99 @@ async def update_ledger(
     }
 
 
+@ledger.put(
+    "/update/details/{ledger_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def update_ledger_details(
+    ledger_id: str,
+    ledger_details: Dict[str, Any] = Body(...),
+    current_user: TokenData = Depends(get_current_user),
+):
+    print("Updating Ledger Details:", ledger_details)
+    if current_user.user_type != "admin" and current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException(
+            detail="Invalid user type. Only admin and user types are allowed."
+        )
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    ledgerExists = await ledger_repo.findOne(
+        {
+            "_id": ledger_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+            "is_deleted": False,
+        }
+    )
+
+    if ledgerExists is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="Customer not found or already deleted."
+        )
+
+    updated_dict = {}
+
+    for k, v in dict(ledger_details).items():
+        if v is not None:
+            if k == "image" and isinstance(v, UploadFile):
+                if v.content_type not in [
+                    "image/jpeg",
+                    "image/jpg",
+                    "image/png",
+                    "image/gif",
+                ]:
+                    raise http_exception.BadRequestException(
+                        detail="Invalid image type. Only JPEG, JPG, PNG, and GIF are allowed."
+                    )
+                if hasattr(v, "size") and v.size > 5 * 1024 * 1024:
+                    raise http_exception.BadRequestException(
+                        detail="File size exceeds the 5 MB limit."
+                    )
+                upload_result = await cloudinary_client.upload_file(v)
+                updated_dict[k] = upload_result["url"]
+            else:
+                updated_dict[k] = v
+                
+    if not updated_dict:
+        raise http_exception.BadRequestException(
+            detail="No valid fields provided for update."
+        )
+
+    # print("Updating these details:", updated_dict)
+
+    await ledger_repo.update_one(
+        {
+            "_id": ledger_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+            "is_deleted": False,
+        },
+        {"$set": updated_dict, "$currentDate": {"updated_at": True}},
+    )
+
+    updated_ledger = await ledger_repo.findOne(
+        {
+            "_id": ledger_id,
+            "user_id": current_user.user_id,
+            "company_id": userSettings["current_company_id"],
+            "is_deleted": False,
+        }
+    )
+    print("Updated Ledger:", updated_ledger)
+
+    return {
+        "success": True,
+        "message": "Customer Details updated successfully",
+    }
+
+
 @ledger.get(
     "/view/{ledger_id}",
     response_class=ORJSONResponse,
@@ -502,6 +596,47 @@ async def view_ledger(
                     "mailing_country": 0,
                     "mailing_pincode": 0,
                     "accounts": 0,
+                },
+            },
+        ]
+    ).to_list(length=1)
+
+    print(f"Result: {result}")
+    return {
+        "success": True,
+        "message": "Customer Data Fetched Successfully...",
+        "data": result,
+    }
+
+
+@ledger.get(
+    "/get/{ledger_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_ledger(
+    ledger_id: str,
+    company_id: str = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "admin" and current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    result = await ledger_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "user_id": current_user.user_id,
+                    "company_id": userSettings["current_company_id"],
+                    "_id": ledger_id,
+                    "is_deleted": False,
                 },
             },
         ]

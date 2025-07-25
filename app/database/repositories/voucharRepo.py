@@ -84,7 +84,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         }
 
         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
-        sort_stage = sort_options.get(sort_key, {"date": -1})
+        sort_stage = sort_options.get(sort_key,  {"date": 1, "created_at": -1})
 
         pipeline = [
             {"$match": filter_params},

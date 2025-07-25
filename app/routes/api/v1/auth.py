@@ -356,7 +356,7 @@ async def delete_user_company(
 
     if user_settings["current_company_id"] != company_id:
         raise http_exception.ResourceNotFoundException(
-            detail="The company you are trying to delete does not belong to you."
+            detail="First switch to the company you want to delete."
         )
 
     voucher_docs = await vouchar_repo.findMany({"company_id": company_id})

@@ -803,7 +803,7 @@ async def updateVoucharWithGST(
     vouchar: GSTVoucherUpdate,
     current_user: TokenData = Depends(get_current_user),
 ):
-    print('Updating GST Vouchar with', vouchar)
+    print("Updating GST Vouchar with", vouchar)
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
@@ -1031,13 +1031,13 @@ async def updateVoucharWithGST(
             if companySettings["features"]["enable_gst"] and party_ledger:
                 # If GST is enabled, ensure vouchar updated with GST details
                 if vouchar.voucher_type == "Purchase":
-                    if not party_ledger['gstin']:
+                    if not party_ledger["gstin"]:
                         raise http_exception.BadRequestException(
                             detail="Party ledger does not have GSTIN. Please update the party ledger."
                         )
 
                     # Extract Party GSTIN
-                    partyStateCode = party_ledger['gstin'][:2]
+                    partyStateCode = party_ledger["gstin"][:2]
 
                     vouchar_gst_data = {
                         "voucher_id": vouchar_id,
@@ -1050,7 +1050,9 @@ async def updateVoucharWithGST(
                             else ""
                         ),
                         "party_gstin": (
-                            party_ledger['gstin'] if hasattr(party_ledger, "gstin") else ""
+                            party_ledger["gstin"]
+                            if hasattr(party_ledger, "gstin")
+                            else ""
                         ),
                         "item_gst_details": [
                             {
@@ -1090,11 +1092,11 @@ async def updateVoucharWithGST(
                             detail="Company does not have GSTIN. Please update the company details."
                         )
                     companyStateCode = companyExists["gstin"][:2]
-                    if not party_ledger['gstin']:
+                    if not party_ledger["gstin"]:
                         companyStateCode = companyExists["state"]
                         partyStateCode = party_ledger["mailing_state"]
                     else:
-                        partyStateCode = party_ledger['gstin'][:2]
+                        partyStateCode = party_ledger["gstin"][:2]
 
                     vouchar_gst_data = {
                         "voucher_id": vouchar_id,
@@ -1107,7 +1109,9 @@ async def updateVoucharWithGST(
                             else ""
                         ),
                         "party_gstin": (
-                            party_ledger['gstin'] if hasattr(party_ledger, "gstin") else ""
+                            party_ledger["gstin"]
+                            if hasattr(party_ledger, "gstin")
+                            else ""
                         ),
                         "item_gst_details": [
                             {
@@ -1240,8 +1244,14 @@ async def getVouchar(
                 {
                     "$lookup": {
                         "from": "Inventory",
-                        "localField": "_id",
-                        "foreignField": "vouchar_id",
+                        "let": {"vouchar_id": "$_id"},
+                        "pipeline": [
+                            {
+                                "$match": {
+                                    "$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}
+                                }
+                            }
+                        ],
                         "as": "inventory",
                     }
                 },
@@ -1258,8 +1268,14 @@ async def getVouchar(
                 {
                     "$lookup": {
                         "from": "VoucherGST",
-                        "localField": "_id",
-                        "foreignField": "voucher_id",
+                        "let": {"vouchar_id": "$_id"},
+                        "pipeline": [
+                            {
+                                "$match": {
+                                    "$expr": {"$eq": ["$voucher_id", "$$vouchar_id"]}
+                                }
+                            }
+                        ],
                         "as": "voucher_gst",
                     }
                 },
@@ -1328,7 +1344,12 @@ async def getVouchar(
                                                     },
                                                     "gst_amount": {
                                                         "$ifNull": [
-                                                            {"$subtract":[ "$$gst.total_amount","$$gst.taxable_value",]},
+                                                            {
+                                                                "$subtract": [
+                                                                    "$$gst.total_amount",
+                                                                    "$$gst.taxable_value",
+                                                                ]
+                                                            },
                                                             None,
                                                         ]
                                                     },
@@ -1344,9 +1365,30 @@ async def getVouchar(
                 {
                     "$lookup": {
                         "from": "Accounting",
-                        "localField": "_id",
-                        "foreignField": "vouchar_id",
+                        "let": {"vouchar_id": "$_id"},
+                        "pipeline": [
+                            {
+                                "$match": {
+                                    "$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}
+                                }
+                            }
+                        ],
                         "as": "accounting_entries",
+                    }
+                },
+                {
+                    "$lookup": {
+                        "from": "Ledger",
+                        "let": {"ledger_id": "$party_name_id"},
+                        "pipeline": [
+                            {"$match": {"$expr": {"$eq": ["$_id", "$$ledger_id"]}}}
+                        ],
+                        "as": "party_details",
+                    }
+                },
+                {
+                    "$unwind": {
+                        "path": "$party_details",
                     }
                 },
                 {
@@ -1374,8 +1416,14 @@ async def getVouchar(
                 {
                     "$lookup": {
                         "from": "Inventory",
-                        "localField": "_id",
-                        "foreignField": "vouchar_id",
+                        "let": {"vouchar_id": "$_id"},
+                        "pipeline": [
+                            {
+                                "$match": {
+                                    "$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}
+                                }
+                            }
+                        ],
                         "as": "inventory",
                     }
                 },
@@ -1392,9 +1440,30 @@ async def getVouchar(
                 {
                     "$lookup": {
                         "from": "Accounting",
-                        "localField": "_id",
-                        "foreignField": "vouchar_id",
+                        "let": {"vouchar_id": "$_id"},
+                        "pipeline": [
+                            {
+                                "$match": {
+                                    "$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}
+                                }
+                            }
+                        ],
                         "as": "accounting_entries",
+                    }
+                },
+                {
+                    "$lookup": {
+                        "from": "Ledger",
+                        "let": {"ledger_id": "$party_name_id"},
+                        "pipeline": [
+                            {"$match": {"$expr": {"$eq": ["$_id", "$$ledger_id"]}}}
+                        ],
+                        "as": "party_details",
+                    }
+                },
+                {
+                    "$unwind": {
+                        "path": "$party_details",
                     }
                 },
             ]
@@ -1452,45 +1521,7 @@ async def getTimeline(
         end_date=end_date,
         sort=sort,
         current_user=current_user,
-        # is_deleted=is_deleted,
     )
-
-    # # Fetch invoice/voucher details, flattening inventory and merging vouchar fields
-    # timeline_data = await vouchar_repo.collection.aggregate(
-    #     [
-    #         {
-    #             "$match": {
-    #                 "company_id": userSettings["current_company_id"],
-    #                 "user_id": current_user.user_id,
-    #             }
-    #         },
-    #         {
-    #             "$lookup": {
-    #                 "from": "Inventory",
-    #                 "localField": "_id",
-    #                 "foreignField": "vouchar_id",
-    #                 "as": "inventory",
-    #             }
-    #         },
-    #         {"$unwind": "$inventory"},
-    #         {
-    #             "$addFields": {
-    #                 "inventory.company_id": "$company_id",
-    #                 "inventory.user_id": "$user_id",
-    #                 "inventory.date": "$date",
-    #                 "inventory.voucher_number": "$voucher_number",
-    #                 "inventory.voucher_type": "$voucher_type",
-    #                 "inventory.narration": "$narration",
-    #                 "inventory.party_name": "$party_name",
-    #                 "inventory.place_of_supply": "$place_of_supply",
-    #                 "inventory.created_at": "$created_at",
-    #                 "inventory.updated_at": "$updated_at",
-    #             }
-    #         },
-    #         {"$replaceRoot": {"newRoot": "$inventory"}},
-    #         {"$sort": {"date": -1, "created_at": -1}},
-    #     ]
-    # ).to_list(length=None)
 
     return {
         "success": True,
@@ -1740,7 +1771,7 @@ async def print_invoice_gst(
 
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     # Fetch invoice/voucher details
@@ -1832,7 +1863,7 @@ async def print_invoice_gst(
     ).to_list(length=1)
 
     if not invoice_data:
-        raise http_exception.ResourceNotFoundException()
+        raise http_exception.ResourceNotFoundException(detail="Vouchar not found.")
 
     invoice = invoice_data[0]
 
@@ -2055,6 +2086,9 @@ async def print_invoice_gst(
         rendered_pages = await render_paginated_html(
             template_path, template_vars, items, items_per_page=17
         )
+        # return HTMLResponse(
+        #     content=rendered_download_html, status_code=status.HTTP_200_OK
+        # )
 
         return {
             "success": True,
