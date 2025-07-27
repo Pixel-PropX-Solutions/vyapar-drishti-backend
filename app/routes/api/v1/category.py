@@ -10,6 +10,7 @@ from app.database.models.Category import CategoryCreate
 from app.database.repositories.categoryRepo import category_repo
 from app.database.repositories.stockItemRepo import stock_item_repo
 from app.database.repositories.UserSettingsRepo import user_settings_repo
+import sys
 
 from app.utils.cloudinary_client import cloudinary_client
 
@@ -123,7 +124,7 @@ async def view_all_category(
     parent: str = None,
     search: str = None,
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=60),
+    limit: int = Query(10, le=sys.maxsize),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
     current_user: TokenData = Depends(get_current_user),

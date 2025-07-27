@@ -3,6 +3,7 @@ from typing import Any, Generic, List, TypeVar, Union
 from uuid import UUID
 
 from pydantic import BaseModel, model_validator, validator
+import sys
 
 T = TypeVar("T")
 
@@ -35,8 +36,8 @@ class Page(BaseModel):
 
     @validator("page", "limit", pre=True)
     def validate_limit(cls, value):
-        if value > 100:
-            raise ValueError("Limit cannot exceed 100")
+        if value > sys.maxsize:
+            raise ValueError(f"Limit cannot exceed {sys.maxsize}")
         return value
 
     @validator("page", "limit", pre=True)

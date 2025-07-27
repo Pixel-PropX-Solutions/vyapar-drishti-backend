@@ -18,6 +18,7 @@ from app.database.models.InventoryGroup import InventoryGroup
 from typing import Optional
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 from fastapi import Query
+import sys
 
 
 inventory_group_router = APIRouter()
@@ -100,7 +101,7 @@ async def view_all_group(
     current_user: TokenData = Depends(get_current_user),
     search: str = None,
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=20),
+    limit: int = Query(10, le=sys.maxsize),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):

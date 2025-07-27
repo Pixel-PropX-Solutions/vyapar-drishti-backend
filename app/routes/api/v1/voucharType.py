@@ -17,6 +17,7 @@ from typing import Optional
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from fastapi import Query
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
+import sys
 
 
 VoucharType = APIRouter()
@@ -76,7 +77,7 @@ async def view_all_vouchar_type(
     company_id: str = Query(...),
     search: str = None,
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=60),
+    limit: int = Query(10, le=sys.maxsize),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):

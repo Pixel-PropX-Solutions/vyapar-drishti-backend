@@ -38,6 +38,7 @@ from jinja2 import Template
 import aiofiles
 from num2words import num2words
 from math import ceil
+import sys
 
 Vouchar = APIRouter()
 
@@ -1167,7 +1168,7 @@ async def view_all_vouchar(
     start_date: str = None,
     end_date: str = None,
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=60),
+    limit: int = Query(10, le=sys.maxsize),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):
@@ -1494,7 +1495,7 @@ async def getTimeline(
     start_date: str = "",
     end_date: str = "",
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=110),
+    limit: int = Query(10, le=sys.maxsize),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):

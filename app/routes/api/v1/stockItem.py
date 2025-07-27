@@ -16,6 +16,7 @@ from app.database.models.StockItem import StockItem
 from app.utils.cloudinary_client import cloudinary_client
 import re
 from typing import Any, Dict, Optional
+import sys
 
 
 Product = APIRouter()
@@ -563,7 +564,7 @@ async def view_all_product(
     group: str = None,
     # is_deleted: bool = False,
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=60),
+    limit: int = Query(10, le=sys.maxsize),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):

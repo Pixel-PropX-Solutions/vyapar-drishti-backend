@@ -20,6 +20,7 @@ import app.http_exception as http_exception
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 from fastapi import Query
 from app.utils.cloudinary_client import cloudinary_client
+import sys
 
 
 accounting_group_router = APIRouter()
@@ -99,7 +100,7 @@ async def view_all_group(
     parent: str = Query(None),
     is_deleted: bool = False,
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=20),
+    limit: int = Query(10, le=sys.maxsize),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
     current_user: TokenData = Depends(get_current_user),
