@@ -327,7 +327,7 @@ async def updateCategory(
 
 
 @category_router.delete(
-    "/delete/category/${category_id}",
+    "/delete/category/{category_id}",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
@@ -352,12 +352,13 @@ async def deleteCategory(
             "_id": category_id,
             "user_id": current_user.user_id,
             "company_id": user_settings["current_company_id"],
-            "is_deleted": False,
         }
     )
 
     if not category_exists:
-        raise http_exception.ResourceNotFoundException(detail="Category Not Found")
+        raise http_exception.ResourceNotFoundException(
+            detail="Category Not Found or Already Deleted."
+        )
 
     # Check if the category is associated with any products or items
     associated_items = await stock_item_repo.findOne(
@@ -372,7 +373,6 @@ async def deleteCategory(
         raise http_exception.ResourceConflictException(
             detail="Category is associated with products or items."
         )
-
     # Proceed to delete the category
     await category_repo.deleteOne(
         {
@@ -381,7 +381,6 @@ async def deleteCategory(
             "company_id": user_settings["current_company_id"],
         },
     )
-
 
     return {"success": True, "message": "Category Deleted Successfully"}
 

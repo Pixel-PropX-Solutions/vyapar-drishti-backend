@@ -559,6 +559,7 @@ async def view_all_product(
     company_id: str = Query(None),
     search: str = None,
     category: str = None,
+    stock_status: str = None,
     group: str = None,
     # is_deleted: bool = False,
     page_no: int = Query(1, ge=1),
@@ -584,13 +585,13 @@ async def view_all_product(
         search=search,
         company_id=userSettings["current_company_id"],
         category=category,
+        stock_status=stock_status,
         pagination=page_request,
         group=group,
         sort=sort,
         current_user=current_user,
         # is_deleted=is_deleted,
     )
-    print("View all result", result)
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
 

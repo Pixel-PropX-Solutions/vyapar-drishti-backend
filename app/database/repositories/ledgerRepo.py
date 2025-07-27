@@ -157,7 +157,9 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
                     }
                 },
                 {
-                    "$addFields": {"total_amount": {"$sum": "$accounts.amount"}},
+                    "$addFields": {
+                        "total_amount": {"$abs": {"$sum": "$accounts.amount"}}
+                    },
                 },
                 {
                     "$addFields": {

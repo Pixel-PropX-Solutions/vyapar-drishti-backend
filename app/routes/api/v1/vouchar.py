@@ -1494,7 +1494,7 @@ async def getTimeline(
     start_date: str = "",
     end_date: str = "",
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=60),
+    limit: int = Query(10, le=110),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):
@@ -2550,6 +2550,30 @@ async def delete_vouchar(
         raise http_exception.ResourceNotFoundException(
             detail="No Invoice Found. Please delete appropriate invoice."
         )
+        
+    query = {
+        "company_id": userSettings["current_company_id"],
+        "user_id": current_user.user_id,
+        "voucher_type": voucharExists["voucher_type"],
+    }
+
+    counter = await vouchar_counter_repo.findOne(query)
+    pad_length = counter["pad_length"] or 4  # Default padding length if not set
+    separator = counter["separator"]
+    padded_number = str(counter["current_number"]-1).zfill(pad_length)
+    if counter["suffix"]:
+        formatted_number = f"{counter['prefix']}{separator}{padded_number}{separator}{counter['suffix']}"
+    else:
+        formatted_number = f"{counter['prefix']}{separator}{padded_number}"
+    
+    if voucharExists["voucher_number"] == formatted_number:
+        # Update the counter only if the voucher number matches the expected format
+        await vouchar_counter_repo.update_one(
+            query,
+            {"$inc": {"current_number": -1}},
+        )
+        
+        
 
     # Delete all accounting entries associated with the vouchers
     await accounting_repo.deleteAll({"vouchar_id": vouchar_id})

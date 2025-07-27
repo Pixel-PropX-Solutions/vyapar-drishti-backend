@@ -233,13 +233,13 @@ async def createCompany(
                 "enable_inventory": True,
                 "currency": "INR",
                 "financial_year": (
-                    books_begin_from
-                    if books_begin_from
-                    else (
-                        datetime.today().year
+                    (
+                        f"{datetime.today().year}-04-01"
                         if datetime.today().month >= 4
-                        else datetime.today().year - 1
+                        else f"{datetime.today().year - 1}-04-01"
                     )
+                    if not books_begin_from
+                    else books_begin_from
                 ),
                 "gstin": gstin,
                 "gst_registration_type": "Regular",  # Default or can be passed
@@ -399,17 +399,21 @@ async def get_all_company(
                 "is_deleted": False,
             }
         },
-         {
-                "$lookup": {
-                    "from": "CompanySettings",
-                    "let": {"company_id": "$_id"},
-                    "pipeline": [
-                        {"$match": {"$expr": {"$eq": ["$company_id", "$$company_id"]}}}
-                    ],
-                    "as": "company_settings",
-                }
-            },
-            {"$unwind": {"path": "$company_settings", }},
+        {
+            "$lookup": {
+                "from": "CompanySettings",
+                "let": {"company_id": "$_id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$company_id", "$$company_id"]}}}
+                ],
+                "as": "company_settings",
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$company_settings",
+            }
+        },
         # {
         #     "$lookup": {
         #         "from": "CompanySettings",
@@ -627,7 +631,7 @@ async def updateCompany(
         {"_id": company_id, "user_id": current_user.user_id},
         {"$set": update_fields},
     )
-   
+
     if res is not None:
         settings_dict = {
             "company_name": name,

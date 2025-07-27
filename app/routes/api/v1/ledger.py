@@ -482,7 +482,7 @@ async def update_ledger_details(
                 updated_dict[k] = upload_result["url"]
             else:
                 updated_dict[k] = v
-                
+
     if not updated_dict:
         raise http_exception.BadRequestException(
             detail="No valid fields provided for update."
@@ -555,7 +555,7 @@ async def view_ledger(
                 }
             },
             {
-                "$addFields": {"total_amount": {"$sum": "$accounts.amount"}},
+                "$addFields": {"total_amount": {"$abs": {"$sum": "$accounts.amount"}}},
             },
             {
                 "$addFields": {

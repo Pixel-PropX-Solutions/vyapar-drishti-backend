@@ -30,7 +30,6 @@ class InventoryGroupRepo(BaseMongoDbCrud[InventoryGroupDB]):
         search: str,
         pagination: PageRequest,
         sort: Sort,
-        parent: str = None,
         company_id: str = None,
         current_user_id: str = None,
     ):
@@ -41,12 +40,6 @@ class InventoryGroupRepo(BaseMongoDbCrud[InventoryGroupDB]):
                 {"email": {"$regex": f"^{search}", "$options": "i"}},
                 {
                     "inventory_group_name": {
-                        "$regex": f"^{search}",
-                        "$options": "i",
-                    }
-                },
-                {
-                    "parent": {
                         "$regex": f"^{search}",
                         "$options": "i",
                     }
@@ -63,7 +56,6 @@ class InventoryGroupRepo(BaseMongoDbCrud[InventoryGroupDB]):
         
         sort_fields_mapping = {
             "name": "inventory_group_name",
-            "parent": "parent",
             "created_at": "created_at",
             # "gst_supply_type": "gst_supply_type",
         }
@@ -92,8 +84,6 @@ class InventoryGroupRepo(BaseMongoDbCrud[InventoryGroupDB]):
                         "image": 1,
                         "description": 1,
                         "is_deleted": 1,
-                        "parent": 1,
-                        "parent_id": 1,
                         "gst_nature_of_goods": 1,
                         "gst_hsn_code": 1,
                         "gst_taxability": 1,

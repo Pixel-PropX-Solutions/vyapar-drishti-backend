@@ -35,6 +35,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         search: str,
         category: str,
         company_id: str,
+        stock_status: str,
         group: str,
         pagination: PageRequest,
         sort: Sort,
@@ -42,13 +43,13 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         # is_deleted: bool = False,
     ):
         # Stats filter: only user_id, is_deleted, company_id
-        
+
         stats_filter_params = {
             "user_id": current_user.user_id,
             "is_deleted": False,
             "company_id": company_id,
         }
-        print("stats_filter_params", stats_filter_params)
+
         stats_pipeline = [
             {"$match": stats_filter_params},
             {
@@ -110,11 +111,48 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                             ]
                         }
                     },
+                    "purchase_value": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        {"$toLower": "$voucher.voucher_type"},
+                                        "purchase",
+                                    ]
+                                },
+                                {
+                                    "$abs": {
+                                        "$multiply": [
+                                            "$inventory_entries.quantity",
+                                            "$inventory_entries.rate",
+                                        ]
+                                    },
+                                },
+                                0,
+                            ]
+                        }
+                    },
                     "sales_qty": {
                         "$sum": {
                             "$cond": [
                                 {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
                                 {"$abs": "$inventory_entries.quantity"},
+                                0,
+                            ]
+                        }
+                    },
+                    "sales_value": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
+                                {
+                                    "$abs": {
+                                        "$multiply": [
+                                            "$inventory_entries.quantity",
+                                            "$inventory_entries.rate",
+                                        ]
+                                    },
+                                },
                                 0,
                             ]
                         }
@@ -126,19 +164,60 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "low_stock_alert": 1,
                     "purchase_qty": 1,
                     "sales_qty": 1,
+                    "purchase_value": 1,
+                    "sales_value": 1,
                     "current_stock": {"$subtract": ["$purchase_qty", "$sales_qty"]},
-                    "negative_stock": {"$cond": [
-                        {"$lte": [{"$subtract": ["$purchase_qty", "$sales_qty"]}, 0]}, 1, 0
-                    ]},
-                    "low_stock": {"$cond": [
-                        {"$and": [
-                            {"$gt": [{"$subtract": ["$purchase_qty", "$sales_qty"]}, 0]},
-                            {"$lte": [{"$subtract": ["$purchase_qty", "$sales_qty"]}, "$low_stock_alert"]}
-                        ]}, 1, 0
-                    ]},
-                    "positive_stock": {"$cond": [
-                        {"$gte": [{"$subtract": ["$purchase_qty", "$sales_qty"]}, "$low_stock_alert"]}, 1, 0
-                    ]},
+                    "negative_stock": {
+                        "$cond": [
+                            {"$lte": [{"$subtract": ["$purchase_qty", "$sales_qty"]}, 0]},
+                            1,
+                            0,
+                        ]
+                    },
+                    "low_stock": {
+                        "$cond": [
+                            {
+                                "$and": [
+                                    {
+                                        "$gt": [
+                                            {
+                                                "$subtract": [
+                                                    "$purchase_qty",
+                                                    "$sales_qty",
+                                                ]
+                                            },
+                                            0,
+                                        ]
+                                    },
+                                    {
+                                        "$lte": [
+                                            {
+                                                "$subtract": [
+                                                    "$purchase_qty",
+                                                    "$sales_qty",
+                                                ]
+                                            },
+                                            "$low_stock_alert",
+                                        ]
+                                    },
+                                ]
+                            },
+                            1,
+                            0,
+                        ]
+                    },
+                    "positive_stock": {
+                        "$cond": [
+                            {
+                                "$gte": [
+                                    {"$subtract": ["$purchase_qty", "$sales_qty"]},
+                                    "$low_stock_alert",
+                                ]
+                            },
+                            1,
+                            0,
+                        ]
+                    },
                 }
             },
         ]
@@ -149,6 +228,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             "is_deleted": False,
             "company_id": company_id,
         }
+
         if search not in ["", None]:
             try:
                 safe_search = re.escape(search)
@@ -161,8 +241,10 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                 ]
             except re.error:
                 pass
+
         if category not in ["", None]:
             filter_params["category"] = category
+
         if group not in ["", None]:
             filter_params["group"] = group
 
@@ -180,8 +262,8 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {
                 "$lookup": {
                     "from": "Category",
-                    "localField": "category",
-                    "foreignField": "category_name",
+                    "localField": "category_id",
+                    "foreignField": "_id",
                     "as": "category",
                 }
             },
@@ -286,7 +368,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                         "purchase",
                                     ]
                                 },
-                                "$inventory_entries.created_at",
+                                "$voucher.date",
                                 None,
                             ]
                         }
@@ -344,29 +426,33 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "sales_qty": "$sales_qty",
                     "sales_value": "$sales_value",
                     "last_restock_date": "$last_restock_date",
-                    "negative": {
+                    "stock_status": {
                         "$cond": [
                             {"$lt": ["$current_stock", 0]},
-                            {"$abs": "$current_stock"},
-                            0,
-                        ]
-                    },
-                    "low_stock": {
-                        "$cond": [
-                            {"$lt": ["$current_stock", "$low_stock_alert"]},
-                            "$current_stock",
-                            0,
-                        ]
-                    },
-                    "positive_stock": {
-                        "$cond": [
-                            {"$gt": ["$current_stock", 0]},
-                            "$current_stock",
-                            0,
+                            "negative",
+                            {
+                                "$cond": [
+                                    {"$eq": ["$current_stock", 0]},
+                                    "zero",
+                                    {
+                                        "$cond": [
+                                            {
+                                                "$lt": [
+                                                    "$current_stock",
+                                                    "$low_stock_alert",
+                                                ]
+                                            },
+                                            "low",
+                                            "positive",
+                                        ]
+                                    },
+                                ]
+                            },
                         ]
                     },
                 }
             },
+            {"$match": {"$expr": {"$eq": ["$stock_status", stock_status]}}},
             {
                 "$facet": {
                     "docs": [
@@ -378,13 +464,35 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             },
         ]
 
+        unique_categories_pipeline = [
+            {
+                "$match": {
+                    "user_id": current_user.user_id,
+                    "is_deleted": False,
+                    "company_id": company_id,
+                }
+            },
+            {"$group": {"_id": "$category_name"}},
+            {"$project": {"_id": 0, "category": "$_id"}},
+            {"$sort": {"category": 1}},
+        ]
+
         # Run stats pipeline first (no search/category/group filters)
         stats_res = [doc async for doc in self.collection.aggregate(stats_pipeline)]
         res = [doc async for doc in self.collection.aggregate(pipeline)]
+        categories_res = [
+            doc
+            async for doc in category_repo.collection.aggregate(
+                unique_categories_pipeline
+            )
+        ]
         docs = res[0]["docs"]
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
+        unique_categories = [entry["category"] for entry in categories_res]
 
         # Aggregate stats for all products of user in company
+        purchase_value = sum((doc.get("purchase_value") or 0) for doc in stats_res)
+        sales_value = sum((doc.get("sales_value") or 0) for doc in stats_res)
         positive_stock = sum((doc.get("positive_stock") or 0) for doc in stats_res)
         negative_stock = sum((doc.get("negative_stock") or 0) for doc in stats_res)
         low_stock = sum((doc.get("low_stock") or 0) for doc in stats_res)
@@ -395,10 +503,12 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                 page=pagination.paging.page,
                 limit=pagination.paging.limit,
                 total=count,
+                sale_value=sales_value,
+                purchase_value=purchase_value,
                 positive_stock=positive_stock,
                 negative_stock=negative_stock,
                 low_stock=low_stock,
-                unique=[],
+                unique=unique_categories,
             ),
         )
 
@@ -456,6 +566,119 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
 
         pipeline = [
             {"$match": filter_params},
+            {
+                "$lookup": {
+                    "from": "Category",
+                    "let": {"category_id": "$category_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$_id", "$$category_id"]}}}
+                    ],
+                    "as": "category",
+                }
+            },
+            {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
+            {
+                "$lookup": {
+                    "from": "Group",
+                    "let": {"group_id": "$group_id"},
+                    "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$group_id"]}}}],
+                    "as": "group",
+                }
+            },
+            {"$unwind": {"path": "$group", "preserveNullAndEmptyArrays": True}},
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "let": {"stock_item_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$item_id", "$$stock_item_id"]}}}
+                    ],
+                    "as": "inventory_entries",
+                }
+            },
+            {
+                "$unwind": {
+                    "path": "$inventory_entries",
+                    "preserveNullAndEmptyArrays": True,
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Voucher",
+                    "let": {"inventory_voucher_id": "$inventory_entries.vouchar_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$_id", "$$inventory_voucher_id"]}}}
+                    ],
+                    "as": "voucher",
+                }
+            },
+            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "company_id": {"$first": "$company_id"},
+                    "stock_item_name": {"$first": "$stock_item_name"},
+                    "unit": {"$first": "$unit"},
+                    "category": {"$first": "$category"},
+                    "alias_name": {"$first": "$alias_name"},
+                    "image": {"$first": "$image"},
+                    "description": {"$first": "$description"},
+                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    "opening_balance": {"$first": "$opening_balance"},
+                    "opening_rate": {"$first": "$opening_rate"},
+                    "opening_value": {"$first": "$opening_value"},
+                    "low_stock_alert": {"$first": "$low_stock_alert"},
+                    "created_at": {"$first": "$created_at"},
+                    "updated_at": {"$first": "$updated_at"},
+                    "group": {"$first": "$group"},
+                    "purchase_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        {"$toLower": "$voucher.voucher_type"},
+                                        "purchase",
+                                    ]
+                                },
+                                "$inventory_entries.quantity",
+                                0,
+                            ]
+                        }
+                    },
+                    "purchase_value": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$eq": [
+                                        {"$toLower": "$voucher.voucher_type"},
+                                        "purchase",
+                                    ]
+                                },
+                                "$inventory_entries.amount",
+                                0,
+                            ]
+                        }
+                    },
+                    "sales_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
+                                {"$abs": "$inventory_entries.quantity"},
+                                0,
+                            ]
+                        }
+                    },
+                    "sales_value": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
+                                {"$abs": "$inventory_entries.amount"},
+                                0,
+                            ]
+                        }
+                    },
+                }
+            },
             {"$sort": sort_stage},
             {
                 "$project": {
@@ -465,18 +688,27 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "user_id": 1,
                     "unit": 1,
                     "alias_name": 1,
-                    "category": 1,
-                    "category_id": 1,
-                    "group": 1,
-                    "group_id": 1,
+                    "category": {"$ifNull": ["$category.category_name", None]},
+                    "group": {"$ifNull": ["$group.inventory_group_name", None]},
                     "image": 1,
                     "description": 1,
-                    # "gst_nature_of_goods": 1,
                     "gst_hsn_code": 1,
-                    # "gst_taxability": 1,
+                    "opening_balance": 1,
+                    "opening_rate": 1,
+                    "opening_value": 1,
                     "low_stock_alert": 1,
                     "created_at": 1,
                     "updated_at": 1,
+                    "current_stock": {
+                        "$subtract": [
+                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
+                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                        ]
+                    },
+                    "purchase_qty": "$purchase_qty",
+                    "purchase_value": "$purchase_value",
+                    "sales_qty": "$sales_qty",
+                    "sales_value": "$sales_value",
                 }
             },
             {
@@ -524,14 +756,14 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                 unique_categories_pipeline
             )
         ]
-        print("categories_res", categories_res)
+
         group_res = [
             doc
             async for doc in inventory_group_repo.collection.aggregate(
                 unique_groups_pipeline
             )
         ]
-        print("group_res", group_res)
+
         docs = res[0]["docs"]
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
 

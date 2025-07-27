@@ -18,7 +18,7 @@ class CloudinaryClient:
     async def upload_file(self, file: UploadFile) -> Dict:
         try:
             # Upload to Cloudinary
-            result = upload(file.file, resource_type="auto", filename=file.filename)
+            result = upload(file.file, resource_type="auto", filename=file.filename, folder='Vyapar_Drishti')
 
             # Generate secure URL
             url, _ = cloudinary_url(

@@ -13,6 +13,7 @@ from app.oauth2 import get_current_user
 from app.utils.cloudinary_client import cloudinary_client
 from app.database.repositories.inventoryGroupRepo import inventory_group_repo
 from app.database.repositories.UserSettingsRepo import user_settings_repo
+from app.database.repositories.stockItemRepo import stock_item_repo
 from app.database.models.InventoryGroup import InventoryGroup
 from typing import Optional
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
@@ -32,14 +33,15 @@ async def createGroup(
     company_id: str = Form(...),  # Company ID to which the group belongs
     description: Optional[str] = Form(None),  # Description of the group
     image: UploadFile = File(None),  # Optional image for the group
-    parent: str = Form(None),
     # gst_nature_of_goods: Optional[str] = Form(None),
     # gst_hsn_code: Optional[str] = Form(None),
     # gst_taxability: Optional[str] = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
-        raise http_exception.CredentialsInvalidException(detail="User is not authorized to create groups.")
+        raise http_exception.CredentialsInvalidException(
+            detail="User is not authorized to create groups."
+        )
 
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
 
@@ -70,13 +72,11 @@ async def createGroup(
         "inventory_group_name": inventory_group_name,
         "user_id": current_user.user_id,
         "company_id": userSettings["current_company_id"],
-        "parent": parent,
         "description": description,
         "image": image_url,
         # "gst_nature_of_goods": gst_nature_of_goods,
         # "gst_hsn_code": gst_hsn_code,
         # "gst_taxability": gst_taxability,
-        "parent_id": parent,
         "is_deleted": False,
     }
 
@@ -99,7 +99,6 @@ async def view_all_group(
     company_id: str,
     current_user: TokenData = Depends(get_current_user),
     search: str = None,
-    parent: str = Query(None),
     page_no: int = Query(1, ge=1),
     limit: int = Query(10, le=20),
     sortField: str = "created_at",
@@ -123,7 +122,6 @@ async def view_all_group(
 
     result = await inventory_group_repo.viewAllGroup(
         search=search,
-        parent=parent,
         company_id=userSettings["current_company_id"],
         current_user_id=current_user.user_id,
         pagination=page_request,
@@ -178,9 +176,9 @@ async def view_all_groups(
         raise http_exception.CredentialsInvalidException(
             detail="You do not have permission to perform this action."
         )
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please contact support."
@@ -200,7 +198,6 @@ async def view_all_groups(
                     "_id": 1,
                     "inventory_group_name": 1,
                     "description": 1,
-                    "parent": 1,
                 }
             },
         ]
@@ -220,7 +217,6 @@ async def updateGroup(
     group_id: str = "",
     inventory_group_name: str = Form(...),
     company_id: str = Form(...),
-    parent: str = Form(None),
     description: str = Form(None),
     image: UploadFile = File(None),
     # gst_nature_of_goods: Optional[str] = Form(None),
@@ -232,9 +228,9 @@ async def updateGroup(
         raise http_exception.CredentialsInvalidException(
             detail="User is not authorized to update groups."
         )
-    
+
     userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
-    
+
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please contact support."
@@ -275,8 +271,6 @@ async def updateGroup(
         "is_deleted": False,
         "description": description,
         "inventory_group_name": inventory_group_name,
-        "parent": parent,
-        "parent_id": parent,
         # "gst_nature_of_goods": gst_nature_of_goods,
         # "gst_hsn_code": gst_hsn_code,
         # "gst_taxability": gst_taxability,
@@ -301,7 +295,7 @@ async def updateGroup(
 
 
 @inventory_group_router.delete(
-    "/delete/group/${group_id}",
+    "/delete/group/{group_id}",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
@@ -335,20 +329,20 @@ async def deleteGroup(
         )
 
     # Check if the group is associated with any transactions or entries
-    associated_entries = await ledger_repo.findOne(
+    associated_items = await stock_item_repo.findOne(
         {
-            "parent_id": group_id,
+            "group_id": group_id,
             "user_id": current_user.user_id,
             "company_id": userSettings["current_company_id"],
-        },
+        }
     )
 
-    if associated_entries is not None:
-        raise http_exception.OperationNotAllowedException(
-            detail="Cannot delete group as it is associated with existing Customers or Transactions."
+    if associated_items:
+        raise http_exception.ResourceConflictException(
+            detail="Group is associated with products or items."
         )
 
-    await accounting_group_repo.deleteOne(
+    await inventory_group_repo.deleteOne(
         {
             "_id": group_id,
             "user_id": current_user.user_id,

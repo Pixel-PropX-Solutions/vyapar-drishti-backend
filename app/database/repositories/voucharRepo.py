@@ -238,7 +238,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     {"voucher_number": {"$regex": safe_search, "$options": "i"}},
                     {"voucher_type": {"$regex": safe_search, "$options": "i"}},
                     {"item": {"$regex": safe_search, "$options": "i"}},
-                    {"place_of_supply": {"$regex": safe_search, "$options": "i"}},
                     {"party_name": {"$regex": safe_search, "$options": "i"}},
                 ]
             except re.error:
