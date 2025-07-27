@@ -65,6 +65,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {
                 "$unwind": {
                     "path": "$inventory_entries",
+                    "preserveNullAndEmptyArrays": True,
                 }
             },
             {
@@ -77,11 +78,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "as": "voucher",
                 }
             },
-            {
-                "$unwind": {
-                    "path": "$voucher",
-                }
-            },
+            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
             {
                 "$group": {
                     "_id": "$_id",
@@ -169,7 +166,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "current_stock": {"$subtract": ["$purchase_qty", "$sales_qty"]},
                     "negative_stock": {
                         "$cond": [
-                            {"$lte": [{"$subtract": ["$purchase_qty", "$sales_qty"]}, 0]},
+                            {"$lt": [{"$subtract": ["$purchase_qty", "$sales_qty"]}, 0]},
                             1,
                             0,
                         ]
@@ -179,7 +176,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                             {
                                 "$and": [
                                     {
-                                        "$gt": [
+                                        "$gte": [
                                             {
                                                 "$subtract": [
                                                     "$purchase_qty",
@@ -209,7 +206,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "positive_stock": {
                         "$cond": [
                             {
-                                "$gte": [
+                                "$gt": [
                                     {"$subtract": ["$purchase_qty", "$sales_qty"]},
                                     "$low_stock_alert",
                                 ]
@@ -290,6 +287,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {
                 "$unwind": {
                     "path": "$inventory_entries",
+                    "preserveNullAndEmptyArrays": True,
                 }
             },
             {
@@ -305,6 +303,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {
                 "$unwind": {
                     "path": "$voucher",
+                    "preserveNullAndEmptyArrays": True,
                 }
             },
             {
@@ -452,7 +451,6 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     },
                 }
             },
-            {"$match": {"$expr": {"$eq": ["$stock_status", stock_status]}}},
             {
                 "$facet": {
                     "docs": [
@@ -707,8 +705,22 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     },
                     "purchase_qty": "$purchase_qty",
                     "purchase_value": "$purchase_value",
+                    "avg_purchase_rate": {
+                        "$cond": [
+                            {"$gt": ["$purchase_qty", 0]},
+                            {"$divide": ["$purchase_value", "$purchase_qty"]},
+                            0,
+                        ]
+                    },
                     "sales_qty": "$sales_qty",
                     "sales_value": "$sales_value",
+                    "avg_sales_rate": {
+                        "$cond": [
+                            {"$gt": ["$sales_qty", 0]},
+                            {"$divide": ["$sales_value", "$sales_qty"]},
+                            0,
+                        ]
+                    },
                 }
             },
             {
