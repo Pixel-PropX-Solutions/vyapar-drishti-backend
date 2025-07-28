@@ -128,21 +128,21 @@
                                 {{ party.name }}
                             </div>
                             <div style="margin-bottom: 3px !important; font-size: 12px !important;">
-                                {{ party.mailing_address|default("No Street Address") }}
+                                {{ party.mailing_address }}
                             </div>
                             <div style="margin-bottom: 3px !important; font-size: 12px !important;"> {{
                                 party.mailing_state
                                 }}, {{
                                 party.mailing_country }}
                                 -
-                                {{ party.mailing_pincode|default('Pin Code') }}</div>
-                            <div style="margin-bottom: 3px !important; font-size: 12px !important;"><strong>Phone
+                                {{ party.mailing_pincode }}</div>
+                            <!-- <div style="margin-bottom: 3px !important; font-size: 12px !important;"><strong>Phone
                                     :</strong>
                                 +{{
                                 party.phone.code
                                 }}&nbsp;{{
                                 party.phone.number }}
-                            </div>
+                            </div> -->
                             <div style="margin-bottom: 3px !important; font-size: 12px !important;">
                                 <strong>Email
                                     :</strong> {{ party.email }}

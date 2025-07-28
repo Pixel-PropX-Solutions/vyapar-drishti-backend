@@ -702,6 +702,7 @@ async def createVoucharWithGST(
                                     if companyStateCode != partyStateCode
                                     else 0
                                 ),  # IGST amount
+                                "total_amount": item.amount + item.gst_amount,
                             }
                             for item in vouchar.items
                         ],
@@ -759,6 +760,7 @@ async def createVoucharWithGST(
                                     if companyStateCode != partyStateCode
                                     else 0
                                 ),  # IGST amount
+                                "total_amount": item.amount + item.gst_amount,
                             }
                             for item in vouchar.items
                         ],
@@ -1077,6 +1079,7 @@ async def updateVoucharWithGST(
                                     if companyStateCode != partyStateCode
                                     else 0
                                 ),  # IGST amount
+                                "total_amount": item.amount + item.gst_amount,
                             }
                             for item in vouchar.items
                         ],
@@ -1867,12 +1870,15 @@ async def print_invoice_gst(
         raise http_exception.ResourceNotFoundException(detail="Vouchar not found.")
 
     invoice = invoice_data[0]
+    # print("Invoice Data:", invoice)
 
     # Prepare item rows
     items = []
     voucher_gst = invoice.get("voucher_gst", [{}])
 
     item_gst_details = voucher_gst[0].get("item_gst_details", [])
+    # print()
+    # print("Item GST Details:", item_gst_details)
 
     # Build a mapping from item_id to GST details
     item_gst_map = {str(gst.get("item_id", "")): gst for gst in item_gst_details}
@@ -1980,12 +1986,12 @@ async def print_invoice_gst(
             "vehicle_number": invoice.get("vehicle_number", ""),
             "mode_of_transport": invoice.get("mode_of_transport", ""),
             "place_of_supply": invoice.get("place_of_supply", ""),
-            "additional_charges": 12.34,
+            # "additional_charges": 0.0,
             "totals": totals,
         },
         "party": {
             "name": invoice.get("party_details", {}).get("ledger_name", ""),
-            "address": invoice.get("party_details", {}).get("mailing_address", ""),
+            "mailing_address": invoice.get("party_details", {}).get("mailing_address", ""),
             "mailing_state": invoice.get("party_details", {}).get("mailing_state", ""),
             "mailing_country": invoice.get("party_details", {}).get(
                 "mailing_country", ""
@@ -2551,7 +2557,7 @@ async def delete_vouchar(
         raise http_exception.ResourceNotFoundException(
             detail="No Invoice Found. Please delete appropriate invoice."
         )
-        
+
     query = {
         "company_id": userSettings["current_company_id"],
         "user_id": current_user.user_id,
@@ -2561,20 +2567,20 @@ async def delete_vouchar(
     counter = await vouchar_counter_repo.findOne(query)
     pad_length = counter["pad_length"] or 4  # Default padding length if not set
     separator = counter["separator"]
-    padded_number = str(counter["current_number"]-1).zfill(pad_length)
+    padded_number = str(counter["current_number"] - 1).zfill(pad_length)
     if counter["suffix"]:
-        formatted_number = f"{counter['prefix']}{separator}{padded_number}{separator}{counter['suffix']}"
+        formatted_number = (
+            f"{counter['prefix']}{separator}{padded_number}{separator}{counter['suffix']}"
+        )
     else:
         formatted_number = f"{counter['prefix']}{separator}{padded_number}"
-    
+
     if voucharExists["voucher_number"] == formatted_number:
         # Update the counter only if the voucher number matches the expected format
         await vouchar_counter_repo.update_one(
             query,
             {"$inc": {"current_number": -1}},
         )
-        
-        
 
     # Delete all accounting entries associated with the vouchers
     await accounting_repo.deleteAll({"vouchar_id": vouchar_id})

@@ -338,6 +338,17 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
                                         },
                                     ]
                                 },
+                                "status": {
+                                    "$arrayElemAt": [
+                                        "$vouchars.status",
+                                        {
+                                            "$indexOfArray": [
+                                                "$vouchars._id",
+                                                "$$account.vouchar_id",
+                                            ]
+                                        },
+                                    ]
+                                },
                                 "voucher_number": {
                                     "$arrayElemAt": [
                                         "$vouchars.voucher_number",

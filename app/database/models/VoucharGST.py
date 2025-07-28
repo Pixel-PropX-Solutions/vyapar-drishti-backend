@@ -15,23 +15,6 @@ class GSTItemDetail(BaseModel):
     igst: Optional[float] = 0.0
     total_amount: float = 0.0
 
-    @root_validator(pre=True)
-    def set_total_amount(cls, values):
-        cgst = values.get("cgst", 0.0)
-        sgst = values.get("sgst", 0.0)
-        igst = values.get("igst", 0.0)
-        taxable_value = values.get("taxable_value", 0.0)
-
-        if cgst and sgst:
-            amount = taxable_value + cgst + sgst
-        elif igst:
-            amount = taxable_value + igst
-        else:
-            amount = taxable_value
-
-        values["total_amount"] = round(amount, 2)
-        return values
-
 
 # class GSTLedgerDetail(BaseModel):
 #     ledger_name: str
