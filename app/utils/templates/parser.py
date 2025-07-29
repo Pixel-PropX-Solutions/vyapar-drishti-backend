@@ -1,15 +1,10 @@
 """------------------------------------------------------------------------------------------------------------------------
                                                     TEMPLATE MODULE
-------------------------------------------------------------------------------------------------------------------------"""
+------------------------------------------------------------------------------------------------------------------------
+"""
 
 from datetime import datetime
 from app.Config import ENV_PROJECT
-
-# import pytz
-
-
-# def Date_Time(Time_Zone):
-#     return datetime.now(pytz.timezone(Time_Zone)).strftime("%d/%m/%Y %H:%M:%S")
 
 
 class Template:
@@ -44,6 +39,7 @@ class Template:
         self.directory = "app/utils/templates/mail/"
         self.domain = domain
         self.onboard_html = self.directory + "onboard.html"
+        self.password_request_html = self.directory + "password_request.html"
         self.forgot_password = self.directory + "forgot_password.html"
         self.subdomain = "dev" if env == "dev" else ""
 
@@ -81,19 +77,19 @@ class Template:
 
     # --------------------------------------------------------------------------------------------------------------------------
 
-    def Recovery(self, link, agenda=""):
+    def ForgotPassword(self, link, agenda=""):
         """
-        RECOVERY_TEMPLATE
+        FORGOT_PASSWORD_TEMPLATE
         --------------------
         ...
         """
 
         # parser arguments
 
-        parser = {"link": link}
+        parser = {"link": link, "domain": self.domain}
 
         # return merchant password reset alert html
-        if agenda == "forgot":
+        if agenda == "forgot_password":
             return self.render_template(
                 self.forgot_password,
                 parser,
@@ -109,6 +105,28 @@ class Template:
             "role": role,
         }
         return self.render_template(self.onboard_html, parser)
+
+    def PasswordRequest(self, name, role, email, password):
+        """PASSWORD_REQUEST
+        --------------------
+        Generates a password request email template with the provided details.
+        Parameters:
+        - name: Name of the user.
+        - role: Role of the user (e.g., admin, user).
+        - email: Email address of the user.
+        - password: Password for the user.
+        Returns:
+        - Rendered HTML string for the password request email.
+        """
+
+        parser = {
+            "link": "https://" + self.subdomain + role + self.domain,
+            "name": name,
+            "email": email,
+            "password": password,
+            "role": role,
+        }
+        return self.render_template(self.password_request_html, parser)
 
 
 """------------------------------------------------------------------------------------------------------------------------
