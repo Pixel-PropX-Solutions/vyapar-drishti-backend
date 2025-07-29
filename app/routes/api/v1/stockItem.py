@@ -194,7 +194,7 @@ async def get_product(
             },
             {
                 "$unwind": {
-                    "path": "$inventory_entries",
+                    "path": "$inventory_entries", "preserveNullAndEmptyArrays": True
                 }
             },
             {
@@ -209,7 +209,7 @@ async def get_product(
             },
             {
                 "$unwind": {
-                    "path": "$voucher",
+                    "path": "$voucher", "preserveNullAndEmptyArrays": True
                 }
             },
             {
@@ -307,6 +307,9 @@ async def get_product(
                     "description": 1,
                     "gst_nature_of_goods": 1,
                     "gst_hsn_code": 1,
+                    "opening_balance": 1,
+                    "opening_rate": 1,
+                    "opening_value": 1,
                     "gst_taxability": 1,
                     "low_stock_alert": 1,
                     "created_at": 1,
