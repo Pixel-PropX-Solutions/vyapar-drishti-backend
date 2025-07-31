@@ -14,7 +14,7 @@ from .crud.base_mongo_crud import BaseMongoDbCrud
 class RefreshTokenRepository(BaseMongoDbCrud[RefreshTokenDB]):
     def __init__(self):
         super().__init__(
-            ENV_PROJECT.MONGO_DATABASE, "token", unique_attributes=["refresh_token", 'user_id', 'user_type']
+            ENV_PROJECT.MONGO_DATABASE, "token", unique_attributes=["refresh_token", 'user_id', 'user_type', 'device_type']
         )
 
     async def new(self, data: RefreshTokenCreate):

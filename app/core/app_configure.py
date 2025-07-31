@@ -58,6 +58,7 @@ def configure_middleware(app: FastAPI):
             process_time = round(round((time.time() - start_time) * 1000, 2))
             response.headers["X-Process-Time"] = str(process_time) + " ms"
             logger.info("{0} took time {1} ms", request.url.path, process_time)
+            logger.info(f"Request started: {request.method} {request.url.path} from {request.client.host} using {request.headers.get('user-agent', 'unknown')}")
             return response
         except Exception as e:
             logger.error(traceback.print_exc())

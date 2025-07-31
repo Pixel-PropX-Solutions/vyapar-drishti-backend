@@ -80,7 +80,7 @@ async def get_counter(
         )
 
     query = {
-        "company_id": userSettings["current_company_id"],
+        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
         "user_id": current_user.user_id,
         "voucher_type": voucher_type,
     }
@@ -127,7 +127,7 @@ async def update_counter(
         )
 
     query = {
-        "company_id": userSettings["current_company_id"],
+        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
         "user_id": current_user.user_id,
         "voucher_type": request.voucher_type,
         "financial_year": request.financial_year,
@@ -169,7 +169,7 @@ async def reset_counter(
         )
 
     query = {
-        "company_id": userSettings["current_company_id"],
+        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
         "user_id": current_user.user_id,
         "voucher_type": voucher_type,
         "financial_year": financial_year,

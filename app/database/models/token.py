@@ -11,6 +11,8 @@ class RefreshTokenCreate(BaseModel):
     refresh_token: str
     user_id: str
     user_type: UserTypeEnum
+    device_type: str
+    token_version: int = 1  
 
 
 class RefreshTokenDB(RefreshTokenCreate):

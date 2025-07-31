@@ -72,7 +72,7 @@ async def createGroup(
     group_data = {
         "inventory_group_name": inventory_group_name,
         "user_id": current_user.user_id,
-        "company_id": userSettings["current_company_id"],
+        "company_id": current_user.current_company_id or userSettings["current_company_id"],
         "description": description,
         "image": image_url,
         # "gst_nature_of_goods": gst_nature_of_goods,
@@ -123,7 +123,7 @@ async def view_all_group(
 
     result = await inventory_group_repo.viewAllGroup(
         search=search,
-        company_id=userSettings["current_company_id"],
+        company_id=current_user.current_company_id or userSettings["current_company_id"],
         current_user_id=current_user.user_id,
         pagination=page_request,
         sort=sort,
@@ -157,7 +157,7 @@ async def view_group(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         }
     )
 
@@ -241,7 +241,7 @@ async def updateGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         },
     )
@@ -283,7 +283,7 @@ async def updateGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         },
         {"$set": update_fields},
@@ -321,7 +321,7 @@ async def deleteGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         },
     )
     if groupExists is None:
@@ -334,7 +334,7 @@ async def deleteGroup(
         {
             "group_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         }
     )
 
@@ -347,7 +347,7 @@ async def deleteGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         },
     )
 

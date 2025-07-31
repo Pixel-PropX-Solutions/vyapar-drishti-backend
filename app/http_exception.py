@@ -105,3 +105,18 @@ class InvalidSubscription(HTTPException):
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail=detail,
         )
+
+
+class UnknownDeviceException(HTTPException):
+    """
+    Exception raised when the user tries to loggen in from unknown device.
+    """
+
+    def __init__(
+        self,
+        detail="Unknown or unsecured device.",
+    ):
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=detail,
+        )

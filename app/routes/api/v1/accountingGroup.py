@@ -72,7 +72,7 @@ async def createGroup(
     group_data = {
         "accounting_group_name": accounting_group_name,
         "user_id": current_user.user_id,
-        "company_id": userSettings["current_company_id"],
+        "company_id": current_user.current_company_id or userSettings["current_company_id"],
         "description": description,
         "image": image_url,
         "is_deleted": False,
@@ -124,7 +124,7 @@ async def view_all_group(
         search=search,
         # state=state,
         parent=parent,
-        company_id=userSettings["current_company_id"],
+        company_id=current_user.current_company_id or userSettings["current_company_id"],
         is_deleted=is_deleted,
         current_user_id=current_user.user_id,
         pagination=page_request,
@@ -194,7 +194,7 @@ async def view_group(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         }
     )
 
@@ -233,7 +233,7 @@ async def view_all_groups(
                 "$match": {
                     "$or": [
                         {
-                            "company_id": userSettings["current_company_id"],
+                            "company_id": current_user.current_company_id or userSettings["current_company_id"],
                             "user_id": current_user.user_id,
                         },
                         {
@@ -289,7 +289,7 @@ async def updateGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         },
     )
@@ -330,7 +330,7 @@ async def updateGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         },
         {"$set": update_fields},
     )
@@ -380,7 +380,7 @@ async def deleteGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         },
     )
     if groupExists is None:
@@ -393,7 +393,7 @@ async def deleteGroup(
         {
             "parent_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         },
     )
 
@@ -406,7 +406,7 @@ async def deleteGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id":current_user.current_company_id or  userSettings["current_company_id"],
         },
     )
 

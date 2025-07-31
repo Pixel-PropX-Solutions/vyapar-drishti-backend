@@ -84,7 +84,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         }
 
         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
-        sort_stage = sort_options.get(sort_key,  {"date": 1, "created_at": -1})
+        sort_stage = sort_options.get(sort_key, {"date": 1, "created_at": -1})
 
         pipeline = [
             {"$match": filter_params},
@@ -218,6 +218,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         self,
         search: str,
         type: str,
+        party_name: str,
         company_id: str,
         pagination: PageRequest,
         sort: Sort,
@@ -230,18 +231,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             "user_id": current_user.user_id,
             "company_id": company_id,
         }
-
-        if search not in ["", None]:
-            try:
-                safe_search = re.escape(search)
-                filter_params["$or"] = [
-                    {"voucher_number": {"$regex": safe_search, "$options": "i"}},
-                    {"voucher_type": {"$regex": safe_search, "$options": "i"}},
-                    {"item": {"$regex": safe_search, "$options": "i"}},
-                    {"party_name": {"$regex": safe_search, "$options": "i"}},
-                ]
-            except re.error:
-                pass
 
         if type not in ["", None]:
             filter_params["voucher_type"] = type
@@ -289,6 +278,39 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             {"$replaceRoot": {"newRoot": "$inventory"}},
             {"$sort": sort_stage},
             {
+                "$match": {
+                    **(
+                        {
+                            "$or": [
+                                {
+                                    "voucher_number": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "party_name": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "item": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                            ]
+                        }
+                        if search not in ["", None]
+                        else {}
+                    ),
+                    **(
+                        {"party_name": party_name} if party_name not in ["", None] else {}
+                    ),
+                }
+            },
+            {
                 "$facet": {
                     "docs": [
                         {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
@@ -299,8 +321,47 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             },
         ]
 
+        party_name_pipeline = [
+            {
+                "$match": {
+                    "user_id": current_user.user_id,
+                    "company_id": company_id,
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "localField": "_id",
+                    "foreignField": "vouchar_id",
+                    "as": "inventory",
+                }
+            },
+            {"$unwind": "$inventory"},
+            {
+                "$addFields": {
+                    "inventory.company_id": "$company_id",
+                    "inventory.user_id": "$user_id",
+                    "inventory.date": "$date",
+                    "inventory.voucher_number": "$voucher_number",
+                    "inventory.voucher_type": "$voucher_type",
+                    "inventory.narration": "$narration",
+                    "inventory.party_name": "$party_name",
+                    "inventory.place_of_supply": "$place_of_supply",
+                    "inventory.created_at": "$created_at",
+                    "inventory.updated_at": "$updated_at",
+                }
+            },
+            {"$replaceRoot": {"newRoot": "$inventory"}},
+            {"$group": {"_id": "$party_name"}},
+            {"$project": {"_id": 0, "party_name": "$_id"}},
+            {"$sort": {"party_name": 1}},
+        ]
+
         res = [doc async for doc in self.collection.aggregate(pipeline)]
+        party_res = [doc async for doc in self.collection.aggregate(party_name_pipeline)]
         docs = res[0]["docs"]
+        unique_parties = [entry["party_name"] for entry in party_res]
+
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
 
         return PaginatedResponse(
@@ -309,7 +370,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                 page=pagination.paging.page,
                 limit=pagination.paging.limit,
                 total=count,
-                unique=[],
+                unique=unique_parties,
             ),
         )
 

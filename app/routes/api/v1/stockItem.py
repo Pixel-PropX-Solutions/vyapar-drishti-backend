@@ -81,7 +81,7 @@ async def create_product(
     product_data = {
         # required fields
         "stock_item_name": stock_item_name,
-        "company_id": userSettings["current_company_id"],
+        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
         "unit": unit,
         "unit_id": unit_id,
         "is_deleted": False,
@@ -109,7 +109,7 @@ async def create_product(
     if response:
         gstr_data = {
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "item": stock_item_name,
             "item_id": response.stock_item_id,
             "hsn_code": gst_hsn_code,
@@ -158,7 +158,7 @@ async def get_product(
                 "$match": {
                     "_id": product_id,
                     "user_id": current_user.user_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                     # "is_deleted": False,
                 }
             },
@@ -368,7 +368,7 @@ async def get_product_details(
                 "$match": {
                     "_id": product_id,
                     "user_id": current_user.user_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                     # "is_deleted": False,
                 }
             },
@@ -404,7 +404,7 @@ async def get_product_details(
             },
             {
                 "$unwind": {
-                    "path": "$inventory_entries",
+                    "path": "$inventory_entries","preserveNullAndEmptyArrays": True
                 }
             },
             {
@@ -419,7 +419,7 @@ async def get_product_details(
             },
             {
                 "$unwind": {
-                    "path": "$voucher",
+                    "path": "$voucher","preserveNullAndEmptyArrays": True
                 }
             },
             {
@@ -545,7 +545,6 @@ async def get_product_details(
         ]
     ).to_list(length=1)
 
-    print("Product Details:", product)
 
     if product:
         return {"success": True, "data": product}
@@ -587,7 +586,7 @@ async def view_all_product(
 
     result = await stock_item_repo.viewAllProduct(
         search=search,
-        company_id=userSettings["current_company_id"],
+        company_id=current_user.current_company_id or userSettings["current_company_id"],
         category=category,
         stock_status=stock_status,
         pagination=page_request,
@@ -631,7 +630,7 @@ async def view_all_stock_items(
 
     result = await stock_item_repo.view_all_stock_items(
         search=search,
-        company_id=userSettings["current_company_id"],
+        company_id=current_user.current_company_id or userSettings["current_company_id"],
         category=category,
         pagination=page_request,
         group=group,
@@ -666,7 +665,7 @@ async def get_products_with_id(
         [
             {
                 "$match": {
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 }
@@ -739,7 +738,7 @@ async def update_product(
 
     companySettings = await company_settings_repo.findOne(
         {
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )
@@ -753,7 +752,7 @@ async def update_product(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         },
     )
 
@@ -806,7 +805,7 @@ async def update_product(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         },
         {"$set": update_fields},
     )
@@ -814,7 +813,7 @@ async def update_product(
         gstExists = await gst_rate_repo.findOne(
             {
                 "user_id": current_user.user_id,
-                "company_id": userSettings["current_company_id"],
+                "company_id": current_user.current_company_id or userSettings["current_company_id"],
                 "item_id": product_id,
             }
         )
@@ -824,7 +823,7 @@ async def update_product(
             res = await gst_rate_repo.update_one(
                 {
                     "user_id": current_user.user_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                     "item_id": product_id,
                 },
                 {
@@ -852,7 +851,7 @@ async def update_product(
             # Create new GST rate if it doesn't exist
             gstr_data = {
                 "user_id": current_user.user_id,
-                "company_id": userSettings["current_company_id"],
+                "company_id": current_user.current_company_id or userSettings["current_company_id"],
                 "item": stock_item_name,
                 "item_id": product_id,
                 "hsn_code": gst_hsn_code,
@@ -909,7 +908,7 @@ async def update_product_details(
 
     companySettings = await company_settings_repo.findOne(
         {
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )
@@ -924,7 +923,7 @@ async def update_product_details(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         },
     )
 
@@ -934,40 +933,28 @@ async def update_product_details(
         )
 
     updated_dict = {}
-    print()
-    print("data received", product_details)
-
+   
     for k, v in dict(product_details).items():
         updated_dict[k] = v
-
-    print()
-    print("Updated Product Details:", updated_dict)
-    print()
 
     await stock_item_repo.update_one(
         {
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         },
         {"$set": updated_dict, "$currentDate": {"updated_at": True}},
     )
 
-    updated_product = await stock_item_repo.findOne(
+    await stock_item_repo.findOne(
         {
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         }
     )
-    print("Update Product Response:", updated_product)
-
-    # if not updated_product:
-    #     raise http_exception.ResourceAlreadyExistsException(
-    #         detail="Product Already Exists"
-    #     )
 
     return {
         "success": True,
@@ -1000,7 +987,7 @@ async def delete_product(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         }
     )
 
@@ -1028,7 +1015,7 @@ async def delete_product(
                     "_id": product_id,
                     "user_id": current_user.user_id,
                     "is_deleted": False,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                 },
             )
 

@@ -486,12 +486,13 @@ async def get_company(
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
         )
+   
     # if not userSettings.current_company_id:
     pipeline = [
         {
             "$match": {
                 "user_id": current_user.user_id,
-                "_id": userSettings["current_company_id"],
+                "_id": current_user.current_company_id or userSettings["current_company_id"],
                 # "is_selected": True,
                 "is_deleted": False,
             }

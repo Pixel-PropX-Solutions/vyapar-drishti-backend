@@ -36,7 +36,9 @@ class OAuth2PasswordBearerWithCookie(OAuth2):
             return {"access_token": access_token, "refresh_token": refresh_token}
         else:
             if self.auto_error:
-                raise http_exception.CredentialsInvalidException()
+                raise http_exception.CredentialsInvalidException(
+                    detail="Not authenticated. Please login again."
+                )
             else:
                 return None
 
@@ -45,10 +47,6 @@ oauth2_scheme = OAuth2PasswordBearerWithCookie(
     tokenUrl=ENV_PROJECT.BASE_API_V1 + "/auth/login",
     scheme_name="User Authentication",
 )
-# oauth2_scheme_user = OAuth2PasswordBearer(
-#     tokenUrl=ENV_PROJECT.BASE_API_V1 + "/auth/tenant/login",
-#     scheme_name="User Authentication",
-# )
 
 
 async def create_refresh_token(data: TokenData):
@@ -69,33 +67,58 @@ async def verify_refresh_token(refresh_token: str) -> TokenData:
         user_id: str = payload.get("user_id", None)
         user_type: str = payload.get("user_type", None)
         scope: str = payload.get("scope", None)
+        device_type: str = payload.get("device_type")  # ⬅️ Important
+        if not all([user_id, user_type, scope, device_type]):
+            raise http_exception.CredentialsInvalidException(
+                detail="Invalid refresh token payload."
+            )
+
         token_in_db = await refresh_token_repo.findOne({"refresh_token": refresh_token})
+
         if not token_in_db:
-            raise http_exception.CredentialsInvalidException()
+            raise http_exception.CredentialsInvalidException(
+                detail="Refresh token not found in database."
+            )
         if user_id is None or user_type is None or scope is None:
-            raise http_exception.CredentialsInvalidException
-        token_data = TokenData(user_id=user_id, user_type=user_type, scope=scope)
+            raise http_exception.CredentialsInvalidException(
+                detail="Invalid refresh token payload."
+            )
+        token_data = TokenData(
+            user_id=user_id,
+            user_type=user_type,
+            scope=scope,
+            device_type=device_type,
+        )
         return token_data
     except JWTError:
-        raise http_exception.CredentialsInvalidException
+        raise http_exception.CredentialsInvalidException(
+            detail="Invalid refresh token. Please login again."
+        )
 
 
 async def create_access_token(
-    data: TokenData, old_refresh_token: str = None
+    data: TokenData,
+    device_type: str,
+    old_refresh_token: str = None,
 ) -> BaseToken:
     to_encode = data.model_dump()
-    to_encode.update()
+    to_encode.update(
+        {"device_type": data.device_type, "token_version": data.token_version}
+    )  # include token_version
     access_token = jwt.encode(
         to_encode, ENV_PROJECT.ACCESS_TOKEN_SECRET, algorithm="HS256"
     )
     refresh_token = await create_refresh_token(data=data)
+
     refresh_token_data: RefreshTokenCreate = RefreshTokenCreate(
-        refresh_token=refresh_token, user_id=data.user_id, user_type=data.user_type
+        refresh_token=refresh_token,
+        user_id=data.user_id,
+        user_type=data.user_type,
+        device_type=device_type,
+        token_version=data.token_version,
     )
-    if old_refresh_token is None:
-        await refresh_token_repo.deleteAll({"user_id": data.user_id})
-        res = await refresh_token_repo.new(data=refresh_token_data)
-    else:
+
+    if old_refresh_token:
         res = await refresh_token_repo.update_one(
             {"refresh_token": old_refresh_token, "user_id": data.user_id},
             {
@@ -106,7 +129,19 @@ async def create_access_token(
             },
         )
         if res.matched_count == 0:
-            raise http_exception.CredentialsInvalidException()
+            raise http_exception.CredentialsInvalidException(
+                detail="Old refresh token not found."
+            )
+    else:
+        # 🧼 First delete any existing token for this user/device_type
+        await refresh_token_repo.deleteOne(
+            {
+                "user_id": data.user_id,
+                "user_type": data.user_type,
+                "device_type": device_type,
+            }
+        )
+        res = await refresh_token_repo.new(data=refresh_token_data)
     if res:
         token: BaseToken = BaseToken(
             access_token=access_token, refresh_token=refresh_token, scope=data.scope
@@ -117,7 +152,124 @@ async def create_access_token(
 
 async def get_new_access_token(refresh_token: str):
     token_data = await verify_refresh_token(refresh_token)
-    return await create_access_token(token_data, old_refresh_token=refresh_token)
+    return await create_access_token(
+        data=token_data,
+        old_refresh_token=refresh_token,
+        device_type=token_data.device_type,  # ✅ Pass the decoded device_type
+    )
+
+
+async def create_forgot_password_access_token(data: TokenData):
+    to_encode = data.model_dump()
+    expire = datetime.datetime.now() + datetime.timedelta(
+        minutes=ENV_PROJECT.EMAIL_CONFIRMATION_TOKEN_EXPIRE_MINUTES
+    )
+    to_encode.update({"exp": expire})
+    access_token = jwt.encode(
+        to_encode, ENV_PROJECT.FORGOT_PASSWORD_TOKEN_SECRET, algorithm="HS256"
+    )
+    return access_token
+
+
+async def verify_forgot_password_access_token(token: str) -> TokenData:
+    try:
+        payload = jwt.decode(
+            token,
+            ENV_PROJECT.FORGOT_PASSWORD_TOKEN_SECRET,
+            algorithms=["HS256"],
+        )
+        user_id = payload.get("user_id", None)
+        user_type: str = payload.get("user_type", None)
+        scope: str = payload.get("scope", None)
+        if user_id is None or user_type is None or scope != "forgot_password":
+            raise http_exception.CredentialsInvalidException(
+                detail="Invalid forgot password token payload."
+            )
+        token_data = TokenData(user_id=user_id, user_type=user_type, scope=scope)
+        return token_data
+    except JWTError:
+        raise http_exception.CredentialsInvalidException(
+            detail="Invalid forgot password token. Please request a new one."
+        )
+
+
+async def verify_access_token(token: str) -> TokenData:
+    try:
+        payload = jwt.decode(token, ENV_PROJECT.ACCESS_TOKEN_SECRET, algorithms=["HS256"])
+        user_id = payload.get("user_id", None)
+        user_type: str = payload.get("user_type", None)
+        device_type: str = payload.get("device_type", None)
+        scope: str = payload.get("scope", None)
+        current_company_id = payload.get("current_company_id", None)
+        token_version = payload.get("token_version", 1)
+        if (
+            user_id is None
+            or user_type is None
+            or scope is None
+            or scope != "login"
+            or device_type is None
+        ):
+            raise http_exception.CredentialsInvalidException(
+                detail="Invalid access token payload."
+            )
+        token_data = TokenData(
+            user_id=user_id,
+            user_type=user_type,
+            device_type=device_type,
+            scope=scope,
+            current_company_id=current_company_id,
+            token_version=token_version,
+        )
+        return token_data
+    except JWTError:
+        raise http_exception.CredentialsInvalidException(
+            detail="Invalid access token. Please login again."
+        )
+
+
+async def get_current_user(
+    tokens: dict = Depends(oauth2_scheme),
+) -> TokenData:
+    token: TokenData = await verify_access_token(tokens["access_token"])
+    print("Current User Token:", token)
+    # Check token_version in DB
+    db_token = await refresh_token_repo.findOne(
+        {
+            "user_id": token.user_id,
+            "device_type": token.device_type,
+            "user_type": token.user_type,
+        },
+        {"token_version"},
+    )
+    print("DB Token Version:", db_token)
+    if not db_token or db_token.get("token_version", 1) != token.token_version:
+        raise http_exception.CredentialsInvalidException(
+            detail="Token is invalid or has been revoked."
+        )
+    return token
+
+
+async def get_refresh_token(tokens: dict = Depends(oauth2_scheme)) -> str:
+    return tokens["refresh_token"]
+
+
+def set_cookies(response: Response, access_token: str, refresh_token: str):
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=ENV_PROJECT.LOGIN_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        secure=True,
+        samesite="none",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        max_age=ENV_PROJECT.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
+        secure=True,
+        samesite="none",
+    )
 
 
 # async def send_whatsapp_message(message: str, to_number: str):
@@ -188,83 +340,3 @@ async def get_new_access_token(refresh_token: str):
 #         return token_data
 #     except JWTError:
 #         raise http_exception.TOKEN_CREDENTIALS_INVALID
-
-
-async def create_forgot_password_access_token(data: TokenData):
-    to_encode = data.model_dump()
-    expire = datetime.datetime.now() + datetime.timedelta(
-        minutes=ENV_PROJECT.EMAIL_CONFIRMATION_TOKEN_EXPIRE_MINUTES
-    )
-    to_encode.update({"exp": expire})
-    access_token = jwt.encode(
-        to_encode, ENV_PROJECT.FORGOT_PASSWORD_TOKEN_SECRET, algorithm="HS256"
-    )
-    return access_token
-
-
-async def verify_forgot_password_access_token(token: str) -> TokenData:
-    try:
-        payload = jwt.decode(
-            token,
-            ENV_PROJECT.FORGOT_PASSWORD_TOKEN_SECRET,
-            algorithms=["HS256"],
-        )
-        user_id = payload.get("user_id", None)
-        user_type: str = payload.get("user_type", None)
-        scope: str = payload.get("scope", None)
-        if user_id is None or user_type is None or scope != "forgot_password":
-            raise http_exception.CredentialsInvalidException()
-        token_data = TokenData(user_id=user_id, user_type=user_type, scope=scope)
-        return token_data
-    except JWTError:
-        raise http_exception.CredentialsInvalidException()
-
-
-async def verify_access_token(token: str) -> TokenData:
-    try:
-        payload = jwt.decode(token, ENV_PROJECT.ACCESS_TOKEN_SECRET, algorithms=["HS256"])
-        user_id = payload.get("user_id", None)
-        user_type: str = payload.get("user_type", None)
-        scope: str = payload.get("scope", None)
-        if user_id is None or user_type is None or scope is None or scope != "login":
-            raise http_exception.CredentialsInvalidException()
-        token_data = TokenData(user_id=user_id, user_type=user_type, scope=scope)
-        return token_data
-    except JWTError:
-        raise http_exception.CredentialsInvalidException()
-
-
-async def get_current_user(
-    tokens: dict = Depends(oauth2_scheme),
-) -> TokenData:
-    token: TokenData = await verify_access_token(tokens["access_token"])
-    return token
-
-    # tenant = await tenant_repo.findOneById(token.id)
-    # if not tenant:
-    #     raise http_exception.TOKEN_CREDENTIALS_INVALID
-    # del tenant["password"]
-    # return TenantOut(id=tenant["_id"], **tenant)
-
-
-async def get_refresh_token(tokens: dict = Depends(oauth2_scheme)) -> str:
-    return tokens["refresh_token"]
-
-
-def set_cookies(response: Response, access_token: str, refresh_token: str):
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        max_age=ENV_PROJECT.LOGIN_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        secure=True,
-        samesite="none",
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        max_age=ENV_PROJECT.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
-        secure=True,
-        samesite="none",
-    )

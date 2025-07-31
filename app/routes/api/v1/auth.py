@@ -3,6 +3,7 @@ from fastapi.responses import ORJSONResponse
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from app.Config import ENV_PROJECT
 from app.database.models.user import User, UserCreate
+
 # from app.database.models.OTP import OTP
 from loguru import logger
 from pydantic import BaseModel
@@ -25,7 +26,11 @@ from app.oauth2 import (
 )
 from app.utils import generatePassword, hashing
 from app.utils.generatePassword import generatePassword
-from app.routes.api.v1.userSettings import extract_device_info, initialize_user_settings
+from app.routes.api.v1.userSettings import (
+    extract_device_info,
+    initialize_user_settings,
+    classify_client,
+)
 
 from app.Config import ENV_PROJECT
 from app.utils.mailer_module import template
@@ -44,6 +49,7 @@ from app.database.repositories.inventoryGroupRepo import inventory_group_repo
 from app.database.repositories.ledgerRepo import ledger_repo
 from app.database.repositories.stockItemRepo import stock_item_repo
 from app.database.repositories.token import refresh_token_repo
+
 # from app.database.repositories.otpRepo import otp_repo
 from app.database.repositories.UnitOMeasureRepo import units_repo
 from app.database.repositories.user import user_repo
@@ -52,6 +58,7 @@ from app.database.repositories.voucharRepo import vouchar_repo
 from typing import Optional
 from app.schema.enums import UserTypeEnum
 from datetime import datetime
+from user_agents import parse
 
 
 auth = APIRouter()
@@ -89,9 +96,8 @@ class Email_Body(BaseModel):
 #             "password": ENV_PROJECT.ADMIN_PASSWORD,
 #             "_id": "",
 #         }
-        
-        
-        
+
+
 #     elif user_type in [UserTypeEnum.USER]:
 #         otp_record = await otp_repo.findOne(
 #             {"phone_number": creds.username, "otp": creds.password}
@@ -124,7 +130,7 @@ async def login(
         user = {
             "password": ENV_PROJECT.ADMIN_PASSWORD,
             "_id": "",
-        } 
+        }
     elif user_type in [UserTypeEnum.USER]:
         user = await user_repo.findOne(
             {"email": creds.username},
@@ -135,36 +141,118 @@ async def login(
         raise http_exception.ResourceNotFoundException(
             detail="User not found. Please check your username."
         )
-
-    if hashing.verify_hash(creds.password, user["password"]):
-        token_data = TokenData(
-            user_id=user["_id"], user_type=user_type.value, scope="login"
+    db_password = user.get("password")
+    user_settings = await user_settings_repo.findOne({"user_id": user["_id"]})
+    company_id = user_settings.get("current_company_id") if user_settings else None
+    client_info = classify_client(request.headers.get("user-agent", "unknown"))
+    if client_info.get("device_type") in ["Unknown", "Bot"]:
+        raise http_exception.UnknownDeviceException(
+            detail="Try accessing via another device. This device is compromised or not supported."
         )
-        token_generated = await create_access_token(token_data)
-        set_cookies(response, token_generated.access_token, token_generated.refresh_token)
-
-        await user_settings_repo.update_one(
-            {"user_id": user["_id"]},
+    # Check if the user is logged in from the same device type
+    existing_token = await refresh_token_repo.findOne(
+        {
+            "user_id": user["_id"],
+            "user_type": user_type,
+            "device_type": client_info.get("device_type"),
+        }
+    )
+    if existing_token:
+        await refresh_token_repo.update_one(
             {
-                "$set": {
-                    "last_login": datetime.now(),
-                    "last_login_ip": request.client.host,
-                    "last_login_device": extract_device_info(
-                        request.headers.get("user-agent", "unknown")
-                    ),
-                }
+                "user_id": user["_id"],
+                "user_type": user_type,
+                "device_type": client_info.get("device_type"),
+            },
+            {"$inc": {"token_version": 1}},
+        )
+        db_token = await refresh_token_repo.findOne(
+            {
+                "user_id": user["_id"],
+                "user_type": user_type,
+                "device_type": client_info.get("device_type"),
             },
         )
-        # await otp_repo.delete_one({"phone_number": creds.username, "otp": creds.password})
-        return {
-            "ok": True,
-            "accessToken": token_generated.access_token,
-            "refreshToken": token_generated.refresh_token,
-        }
+        print("DB Token:", db_token)
+        new_token_version = db_token.get("token_version", 1)
+        if hashing.verify_hash(creds.password, db_password):
+            token_data = TokenData(
+                user_id=user["_id"],
+                user_type=user_type.value,
+                scope="login",
+                current_company_id=company_id,  # ✅ include this
+                device_type=client_info.get("device_type"),
+                token_version=new_token_version,  # Use updated token_version
+            )
+            token_generated = await create_access_token(
+                token_data,
+                device_type=client_info.get("device_type"),
+                old_refresh_token=None,
+            )
+            set_cookies(
+                response, token_generated.access_token, token_generated.refresh_token
+            )
+
+            await user_settings_repo.update_one(
+                {"user_id": user["_id"]},
+                {
+                    "$set": {
+                        "last_login": datetime.now(),
+                        "last_login_ip": request.client.host,
+                        "last_login_device": client_info.get("info"),
+                    }
+                },
+            )
+            # await otp_repo.delete_one({"phone_number": creds.username, "otp": creds.password})
+            return {
+                "ok": True,
+                "accessToken": token_generated.access_token,
+                "refreshToken": token_generated.refresh_token,
+            }
+        else:
+            raise http_exception.CredentialsInvalidException(
+                detail="Invalid username or password. Please try again."
+            )
     else:
-        raise http_exception.CredentialsInvalidException(
-            detail="Invalid username or password. Please try again."
-        )
+        token_version = 1
+        if hashing.verify_hash(creds.password, db_password):
+            token_data = TokenData(
+                user_id=user["_id"],
+                user_type=user_type.value,
+                scope="login",
+                current_company_id=company_id,  # ✅ include this
+                device_type=client_info.get("device_type"),
+                token_version=token_version,  # Use updated token_version
+            )
+            token_generated = await create_access_token(
+                token_data,
+                device_type=client_info.get("device_type"),
+                old_refresh_token=None,
+            )
+            set_cookies(
+                response, token_generated.access_token, token_generated.refresh_token
+            )
+
+            await user_settings_repo.update_one(
+                {"user_id": user["_id"]},
+                {
+                    "$set": {
+                        "last_login": datetime.now(),
+                        "last_login_ip": request.client.host,
+                        "last_login_device": client_info.get("info"),
+                    }
+                },
+            )
+            # await otp_repo.delete_one({"phone_number": creds.username, "otp": creds.password})
+            return {
+                "ok": True,
+                "accessToken": token_generated.access_token,
+                "refreshToken": token_generated.refresh_token,
+            }
+        else:
+            raise http_exception.CredentialsInvalidException(
+                detail="Invalid username or password. Please try again."
+            )
 
 
 @auth.post("/register", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
@@ -206,10 +294,26 @@ async def register(
         role=user_res.user_type.value,
     )
 
+    client_info = classify_client(request.headers.get("user-agent", "unknown"))
+    if client_info.get("device_type") in ["Unknown", "Bot"]:
+        raise http_exception.UnknownDeviceException(
+            detail="Try accessing via another device. This device is compromised or not supported."
+        )
+
     token_data = TokenData(
-        user_id=user_res.id, user_type=user_res.user_type.value, scope="login"
+        user_id=user_res.id,
+        user_type=user_res.user_type.value,
+        scope="login",
+        current_company_id=None,
+        device_type=client_info.get("device_type"),
+        token_version=1,
     )
-    token_generated = await create_access_token(token_data)
+
+    token_generated = await create_access_token(
+        token_data,
+        device_type=client_info.get("device_type"),
+        old_refresh_token=None,
+    )
     set_cookies(response, token_generated.access_token, token_generated.refresh_token)
     return {
         "ok": True,
@@ -247,7 +351,7 @@ async def get_current_user_details(
                 ],
             }
         else:
-            raise http_exception.ResourceNotFoundException(detail="User not found")
+            raise http_exception.CredentialsInvalidException(detail="Invalid user type.")
 
     user_pipeline = [
         {"$match": {"_id": current_user.user_id}},
@@ -577,8 +681,25 @@ async def token_refresh(
 
 
 @auth.post("/logout", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
-async def logout(response: Response, refresh_token: str = Depends(get_refresh_token)):
-    await refresh_token_repo.deleteOne({"refresh_token": refresh_token})
+async def logout(
+    request: Request,
+    response: Response,
+    refresh_token: str = Depends(get_refresh_token),
+):
+    client_info = classify_client(request.headers.get("user-agent", "unknown"))
+
+    if client_info.get("device_type") in ["Unknown", "Bot"]:
+        raise http_exception.UnknownDeviceException(
+            detail="Try accessing via another device. This device is compromised or not supported."
+        )
+
+    await refresh_token_repo.deleteOne(
+        {
+            "refresh_token": refresh_token,
+            "device_type": client_info.get("device_type"),
+        }
+    )
+
     response.set_cookie(
         key="access_token",
         value="",
@@ -589,6 +710,14 @@ async def logout(response: Response, refresh_token: str = Depends(get_refresh_to
     )
     response.set_cookie(
         key="refresh_token",
+        value="",
+        httponly=True,
+        max_age=0,
+        secure=True,
+        samesite="none",
+    )
+    response.set_cookie(
+        key="current_company_id",
         value="",
         httponly=True,
         max_age=0,

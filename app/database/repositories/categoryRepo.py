@@ -57,7 +57,48 @@ class CategoryRepo(BaseMongoDbCrud[CategoryDB]):
 
         pipeline = [
             {"$match": filter_params},
-            {"$sort": sort_stage},
+            {
+                "$lookup": {
+                    "from": "StockItem",
+                    "let": {"category_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$category_id", "$$category_id"]}}}
+                    ],
+                    "as": "stock_items",
+                }
+            },
+            {
+                "$unwind": {
+                    "path": "$stock_items",
+                    "preserveNullAndEmptyArrays": True,
+                }
+            },
+            # {
+            #     "$addFields": {
+            #         "stock_items_count": {
+            #             "$cond": {
+            #                 "if": {"$isArray": "$stock_items"},
+            #                 "then": {"$size": "$stock_items"},
+            #                 "else": 0,
+            #             }
+            #         }
+            #     }
+            # },
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "user_id": {"$first": "$user_id"},
+                    "company_id": {"$first": "$company_id"},
+                    "category_name": {"$first": "$category_name"},
+                    "description": {"$first": "$description"},
+                    "image": {"$first": "$image"},
+                    # "stock_items_count": {"$first": "$stock_items_count"},
+                    "stock_items": {"$push": "$stock_items"},
+                    "is_deleted": {"$first": "$is_deleted"},
+                    "created_at": {"$first": "$created_at"},
+                    "updated_at": {"$first": "$updated_at"},
+                }
+            },
             {
                 "$project": {
                     "_id": 1,
@@ -66,11 +107,26 @@ class CategoryRepo(BaseMongoDbCrud[CategoryDB]):
                     "category_name": 1,
                     "description": 1,
                     "image": 1,
+                    "stock_items_count": {
+                        "$cond": {
+                            "if": {"$isArray": "$stock_items"},
+                            "then": {"$size": "$stock_items"},
+                            "else": 0,
+                        }
+                    },
+                    "stock_items": {
+                        "$cond": {
+                            "if": {"$isArray": "$stock_items"},
+                            "then": "$stock_items",
+                            "else": [],
+                        }
+                    },
                     "is_deleted": 1,
                     "created_at": 1,
                     "updated_at": 1,
                 }
             },
+            {"$sort": sort_stage},
             {
                 "$facet": {
                     "docs": [

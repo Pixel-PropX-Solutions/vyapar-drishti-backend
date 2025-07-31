@@ -74,7 +74,7 @@ async def create_ledger(
         {
             "ledger_name": name,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         }
     )
 
@@ -108,7 +108,7 @@ async def create_ledger(
     ledger_data = {
         "ledger_name": name,
         "user_id": current_user.user_id,
-        "company_id": userSettings["current_company_id"],
+        "company_id": current_user.current_company_id or userSettings["current_company_id"],
         "is_deleted": False,
         "phone": phone_data,
         "email": email,
@@ -179,7 +179,7 @@ async def view_all_ledger(
         search=search,
         state=state,
         parent=parent,
-        company_id=userSettings["current_company_id"],
+        company_id=current_user.current_company_id or userSettings["current_company_id"],
         is_deleted=is_deleted,
         current_user_id=current_user.user_id,
         pagination=page_request,
@@ -211,7 +211,7 @@ async def view_all_ledgers(
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                     "is_deleted": False,
                     "parent": {"$in": ["Debtors", "Creditors"]},
                 },
@@ -250,7 +250,7 @@ async def view_ledgers_with_type(
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                     "parent": type,
                     "is_deleted": False,
                 },
@@ -289,7 +289,7 @@ async def view_ledgers_transaction_type(
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                     "parent": {"$in": type},
                 },
             },
@@ -351,7 +351,7 @@ async def update_ledger(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         }
     )
@@ -411,7 +411,7 @@ async def update_ledger(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         },
         {"$set": update_fields},
@@ -433,7 +433,6 @@ async def update_ledger_details(
     ledger_details: Dict[str, Any] = Body(...),
     current_user: TokenData = Depends(get_current_user),
 ):
-    print("Updating Ledger Details:", ledger_details)
     if current_user.user_type != "admin" and current_user.user_type != "user":
         raise http_exception.CredentialsInvalidException(
             detail="Invalid user type. Only admin and user types are allowed."
@@ -450,7 +449,7 @@ async def update_ledger_details(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         }
     )
@@ -488,13 +487,12 @@ async def update_ledger_details(
             detail="No valid fields provided for update."
         )
 
-    # print("Updating these details:", updated_dict)
 
     await ledger_repo.update_one(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         },
         {"$set": updated_dict, "$currentDate": {"updated_at": True}},
@@ -504,11 +502,10 @@ async def update_ledger_details(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         }
     )
-    print("Updated Ledger:", updated_ledger)
 
     return {
         "success": True,
@@ -541,7 +538,7 @@ async def view_ledger(
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                     "_id": ledger_id,
                     "is_deleted": False,
                 },
@@ -601,7 +598,6 @@ async def view_ledger(
         ]
     ).to_list(length=1)
 
-    print(f"Result: {result}")
     return {
         "success": True,
         "message": "Customer Data Fetched Successfully...",
@@ -634,7 +630,7 @@ async def get_ledger(
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                     "_id": ledger_id,
                     "is_deleted": False,
                 },
@@ -642,7 +638,6 @@ async def get_ledger(
         ]
     ).to_list(length=1)
 
-    print(f"Result: {result}")
     return {
         "success": True,
         "message": "Customer Data Fetched Successfully...",
@@ -691,7 +686,7 @@ async def view_ledger_invoices(
         current_user=current_user,
         pagination=page_request,
         sort=sort,
-        company_id=userSettings["current_company_id"],
+        company_id=current_user.current_company_id or userSettings["current_company_id"],
     )
 
     return {
@@ -719,7 +714,7 @@ async def check_ledger_name(
         {
             "ledger_name": ledger_name,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         }
     )
@@ -731,7 +726,7 @@ async def check_ledger_name(
                 {
                     "$match": {
                         "user_id": current_user.user_id,
-                        "company_id": userSettings["current_company_id"],
+                        "company_id": current_user.current_company_id or userSettings["current_company_id"],
                         "is_deleted": False,
                     }
                 },
@@ -782,7 +777,7 @@ async def delete_ledger(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         }
     )
 
@@ -796,7 +791,7 @@ async def delete_ledger(
         {
             "party_name_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         }
     )
 
@@ -809,7 +804,7 @@ async def delete_ledger(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
         },
     )
 

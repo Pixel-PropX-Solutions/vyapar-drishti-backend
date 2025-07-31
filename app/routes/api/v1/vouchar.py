@@ -125,7 +125,7 @@ async def createVouchar(
 
     vouchar_data = {
         "user_id": current_user.user_id,
-        "company_id": userSettings["current_company_id"],
+        "company_id": current_user.current_company_id or userSettings["current_company_id"],
         "date": vouchar.date,
         "voucher_number": vouchar.voucher_number,
         "voucher_type": vouchar.voucher_type,
@@ -186,7 +186,7 @@ async def createVouchar(
                     )
                     party_ledger = await ledger_repo.findOne(
                         {
-                            "company_id": userSettings["current_company_id"],
+                            "company_id": current_user.current_company_id or userSettings["current_company_id"],
                             "ledger_name": ledger,
                             "user_id": current_user.user_id,
                         }
@@ -250,7 +250,7 @@ async def createVouchar(
             await vouchar_counter_repo.update_one(
                 {
                     "voucher_type": vouchar.voucher_type,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 },
                 {"$inc": {"current_number": 1}},
@@ -262,7 +262,7 @@ async def createVouchar(
             await vouchar_counter_repo.update_one(
                 {
                     "voucher_type": vouchar.voucher_type,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 },
                 {"$inc": {"current_number": -1}},
@@ -349,7 +349,7 @@ async def updateVouchar(
         {
             "_id": vouchar_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or  userSettings["current_company_id"],
         },
         {"$set": vouchar_data},
     )
@@ -491,7 +491,6 @@ async def createVoucharWithGST(
     vouchar: VoucherWithGSTCreate,
     current_user: TokenData = Depends(get_current_user),
 ):
-    print("Creating VOuchar with GST", vouchar)
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
@@ -503,7 +502,7 @@ async def createVoucharWithGST(
         )
 
     companyExists = await company_repo.findOne(
-        {"_id": userSettings["current_company_id"], "user_id": current_user.user_id}
+        {"_id": current_user.current_company_id or  userSettings["current_company_id"], "user_id": current_user.user_id}
     )
 
     if not companyExists:
@@ -515,7 +514,7 @@ async def createVoucharWithGST(
 
     companySettings = await company_settings_repo.findOne(
         {
-            "company_id": userSettings["current_company_id"],
+            "company_id":  current_user.current_company_id or userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )
@@ -527,7 +526,7 @@ async def createVoucharWithGST(
 
     vouchar_data = {
         "user_id": current_user.user_id,
-        "company_id": userSettings["current_company_id"],
+        "company_id":  current_user.current_company_id or userSettings["current_company_id"],
         "date": vouchar.date,
         "voucher_number": vouchar.voucher_number,
         "voucher_type": vouchar.voucher_type,
@@ -588,7 +587,7 @@ async def createVoucharWithGST(
                     )
                     party_ledger = await ledger_repo.findOne(
                         {
-                            "company_id": userSettings["current_company_id"],
+                            "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                             "ledger_name": ledger,
                             "user_id": current_user.user_id,
                         }
@@ -650,7 +649,7 @@ async def createVoucharWithGST(
 
             party_ledger = await ledger_repo.findOne(
                 {
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                     "ledger_name": vouchar.party_name,
                     "user_id": current_user.user_id,
                 }
@@ -669,7 +668,7 @@ async def createVoucharWithGST(
 
                     vouchar_gst_data = {
                         "voucher_id": response.vouchar_id,
-                        "company_id": userSettings["current_company_id"],
+                        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                         "user_id": current_user.user_id,
                         "is_gst_applicable": True,
                         "place_of_supply": (
@@ -727,7 +726,7 @@ async def createVoucharWithGST(
 
                     vouchar_gst_data = {
                         "voucher_id": response.vouchar_id,
-                        "company_id": userSettings["current_company_id"],
+                        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                         "user_id": current_user.user_id,
                         "is_gst_applicable": True,
                         "place_of_supply": (
@@ -772,7 +771,7 @@ async def createVoucharWithGST(
             await vouchar_counter_repo.update_one(
                 {
                     "voucher_type": vouchar.voucher_type,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 },
                 {"$inc": {"current_number": 1}},
@@ -806,7 +805,6 @@ async def updateVoucharWithGST(
     vouchar: GSTVoucherUpdate,
     current_user: TokenData = Depends(get_current_user),
 ):
-    print("Updating GST Vouchar with", vouchar)
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
@@ -818,7 +816,7 @@ async def updateVoucharWithGST(
         )
 
     companyExists = await company_repo.findOne(
-        {"_id": userSettings["current_company_id"], "user_id": current_user.user_id}
+        {"_id":  current_user.current_company_id or userSettings["current_company_id"], "user_id": current_user.user_id}
     )
 
     companyStateCode = companyExists.get("gstin", None)[:2]
@@ -830,7 +828,7 @@ async def updateVoucharWithGST(
 
     companySettings = await company_settings_repo.findOne(
         {
-            "company_id": userSettings["current_company_id"],
+            "company_id":  current_user.current_company_id or  userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )
@@ -889,7 +887,7 @@ async def updateVoucharWithGST(
         {
             "_id": vouchar_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id":  current_user.current_company_id or  userSettings["current_company_id"],
         },
         {"$set": vouchar_data},
     )
@@ -1025,7 +1023,7 @@ async def updateVoucharWithGST(
                 )
             party_ledger = await ledger_repo.findOne(
                 {
-                    "company_id": userSettings["current_company_id"],
+                    "company_id":  current_user.current_company_id or  userSettings["current_company_id"],
                     "ledger_name": vouchar.party_name,
                     "user_id": current_user.user_id,
                 }
@@ -1044,7 +1042,7 @@ async def updateVoucharWithGST(
 
                     vouchar_gst_data = {
                         "voucher_id": vouchar_id,
-                        "company_id": userSettings["current_company_id"],
+                        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                         "user_id": current_user.user_id,
                         "is_gst_applicable": True,
                         "place_of_supply": (
@@ -1104,7 +1102,7 @@ async def updateVoucharWithGST(
 
                     vouchar_gst_data = {
                         "voucher_id": vouchar_id,
-                        "company_id": userSettings["current_company_id"],
+                        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                         "user_id": current_user.user_id,
                         "is_gst_applicable": True,
                         "place_of_supply": (
@@ -1190,7 +1188,7 @@ async def view_all_vouchar(
 
     result = await vouchar_repo.viewAllVouchar(
         search=search,
-        company_id=userSettings["current_company_id"],
+        company_id= current_user.current_company_id or userSettings["current_company_id"],
         type=type,
         pagination=page_request,
         start_date=start_date,
@@ -1225,7 +1223,7 @@ async def getVouchar(
 
     companySettings = await company_settings_repo.findOne(
         {
-            "company_id": userSettings["current_company_id"],
+            "company_id":  current_user.current_company_id or userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )
@@ -1241,7 +1239,7 @@ async def getVouchar(
                 {
                     "$match": {
                         "_id": vouchar_id,
-                        "company_id": userSettings["current_company_id"],
+                        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                         "user_id": current_user.user_id,
                     }
                 },
@@ -1413,7 +1411,7 @@ async def getVouchar(
                 {
                     "$match": {
                         "_id": vouchar_id,
-                        "company_id": userSettings["current_company_id"],
+                        "company_id":  current_user.current_company_id or userSettings["current_company_id"],
                         "user_id": current_user.user_id,
                     }
                 },
@@ -1495,6 +1493,7 @@ async def getTimeline(
     company_id: str = Query(""),
     search: str = "",
     type: str = "",
+    party_name: str = "",
     start_date: str = "",
     end_date: str = "",
     page_no: int = Query(1, ge=1),
@@ -1518,8 +1517,9 @@ async def getTimeline(
 
     result = await vouchar_repo.viewTimeline(
         search=search,
-        company_id=userSettings["current_company_id"],
+        company_id= current_user.current_company_id or userSettings["current_company_id"],
         type=type,
+        party_name=party_name,
         pagination=page_request,
         start_date=start_date,
         end_date=end_date,
@@ -1559,7 +1559,7 @@ async def print_invoice(
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 }
             },
@@ -1784,7 +1784,7 @@ async def print_invoice_gst(
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 }
             },
@@ -2134,7 +2134,7 @@ async def print_receipt(
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id":  current_user.current_company_id or userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 }
             },
@@ -2446,7 +2446,7 @@ async def get_vouchar(
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or  userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 }
@@ -2548,7 +2548,7 @@ async def delete_vouchar(
     voucharExists = await vouchar_repo.findOne(
         {
             "_id": vouchar_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or  userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )
@@ -2559,7 +2559,7 @@ async def delete_vouchar(
         )
 
     query = {
-        "company_id": userSettings["current_company_id"],
+        "company_id":  current_user.current_company_id or userSettings["current_company_id"],
         "user_id": current_user.user_id,
         "voucher_type": voucharExists["voucher_type"],
     }
@@ -2591,7 +2591,7 @@ async def delete_vouchar(
     await vouchar_repo.deleteOne(
         {
             "_id": vouchar_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or  userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )
@@ -2622,7 +2622,7 @@ async def delete_gst_vouchar(
     voucharExists = await vouchar_repo.findOne(
         {
             "_id": vouchar_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id":  current_user.current_company_id or userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )
@@ -2650,7 +2650,7 @@ async def delete_gst_vouchar(
     await vouchar_repo.deleteOne(
         {
             "_id": vouchar_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id":  current_user.current_company_id or userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )

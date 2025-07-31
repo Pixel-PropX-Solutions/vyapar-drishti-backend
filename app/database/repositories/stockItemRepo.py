@@ -8,7 +8,6 @@ from app.schema.token import TokenData
 from .crud.base_mongo_crud import BaseMongoDbCrud
 from app.database.repositories.crud.base import (
     PageRequest,
-    Meta,
     PaginatedResponse,
     SortingOrder,
     Sort,
@@ -163,10 +162,25 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "sales_qty": 1,
                     "purchase_value": 1,
                     "sales_value": 1,
-                    "current_stock": {"$subtract": ["$purchase_qty", "$sales_qty"]},
+                    "current_stock": {
+                        "$subtract": [
+                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
+                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                        ]
+                    },
                     "negative_stock": {
                         "$cond": [
-                            {"$lt": [{"$subtract": ["$purchase_qty", "$sales_qty"]}, 0]},
+                            {
+                                "$lt": [
+                                    {
+                                        "$subtract": [
+                                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
+                                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                                        ]
+                                    },
+                                    0,
+                                ]
+                            },
                             1,
                             0,
                         ]
@@ -179,8 +193,19 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                         "$gte": [
                                             {
                                                 "$subtract": [
-                                                    "$purchase_qty",
-                                                    "$sales_qty",
+                                                    {
+                                                        "$sum": {
+                                                            "$ifNull": [
+                                                                "$purchase_qty",
+                                                                0,
+                                                            ]
+                                                        }
+                                                    },
+                                                    {
+                                                        "$sum": {
+                                                            "$ifNull": ["$sales_qty", 0]
+                                                        }
+                                                    },
                                                 ]
                                             },
                                             0,
@@ -190,8 +215,19 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                         "$lte": [
                                             {
                                                 "$subtract": [
-                                                    "$purchase_qty",
-                                                    "$sales_qty",
+                                                    {
+                                                        "$sum": {
+                                                            "$ifNull": [
+                                                                "$purchase_qty",
+                                                                0,
+                                                            ]
+                                                        }
+                                                    },
+                                                    {
+                                                        "$sum": {
+                                                            "$ifNull": ["$sales_qty", 0]
+                                                        }
+                                                    },
                                                 ]
                                             },
                                             "$low_stock_alert",
@@ -207,7 +243,12 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                         "$cond": [
                             {
                                 "$gt": [
-                                    {"$subtract": ["$purchase_qty", "$sales_qty"]},
+                                    {
+                                        "$subtract": [
+                                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
+                                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                                        ]
+                                    },
                                     "$low_stock_alert",
                                 ]
                             },
@@ -225,19 +266,6 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             "is_deleted": False,
             "company_id": company_id,
         }
-
-        if search not in ["", None]:
-            try:
-                safe_search = re.escape(search)
-                filter_params["$or"] = [
-                    {"stock_item_name": {"$regex": safe_search, "$options": "i"}},
-                    {"alias_name": {"$regex": safe_search, "$options": "i"}},
-                    {"category": {"$regex": safe_search, "$options": "i"}},
-                    {"group": {"$regex": safe_search, "$options": "i"}},
-                    {"description": {"$regex": safe_search, "$options": "i"}},
-                ]
-            except re.error:
-                pass
 
         if category not in ["", None]:
             filter_params["category"] = category
@@ -427,28 +455,125 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "last_restock_date": "$last_restock_date",
                     "stock_status": {
                         "$cond": [
-                            {"$lt": ["$current_stock", 0]},
+                            {
+                                "$lt": [
+                                    {
+                                        "$subtract": [
+                                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
+                                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                                        ]
+                                    },
+                                    0,
+                                ]
+                            },
                             "negative",
                             {
                                 "$cond": [
-                                    {"$eq": ["$current_stock", 0]},
-                                    "zero",
                                     {
-                                        "$cond": [
+                                        "$and": [
                                             {
-                                                "$lt": [
-                                                    "$current_stock",
+                                                "$gte": [
+                                                    {
+                                                        "$subtract": [
+                                                            {
+                                                                "$sum": {
+                                                                    "$ifNull": [
+                                                                        "$purchase_qty",
+                                                                        0,
+                                                                    ]
+                                                                }
+                                                            },
+                                                            {
+                                                                "$sum": {
+                                                                    "$ifNull": [
+                                                                        "$sales_qty",
+                                                                        0,
+                                                                    ]
+                                                                }
+                                                            },
+                                                        ]
+                                                    },
+                                                    0,
+                                                ]
+                                            },
+                                            {
+                                                "$lte": [
+                                                    {
+                                                        "$subtract": [
+                                                            {
+                                                                "$sum": {
+                                                                    "$ifNull": [
+                                                                        "$purchase_qty",
+                                                                        0,
+                                                                    ]
+                                                                }
+                                                            },
+                                                            {
+                                                                "$sum": {
+                                                                    "$ifNull": [
+                                                                        "$sales_qty",
+                                                                        0,
+                                                                    ]
+                                                                }
+                                                            },
+                                                        ]
+                                                    },
                                                     "$low_stock_alert",
                                                 ]
                                             },
-                                            "low",
-                                            "positive",
                                         ]
                                     },
+                                    "low",
+                                    "positive",
                                 ]
                             },
                         ]
                     },
+                }
+            },
+            {
+                "$match": {
+                    **(
+                        {
+                            "$or": [
+                                {
+                                    "stock_item_name": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "description": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "category": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "group": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "alias_name": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                            ]
+                        }
+                        if search not in ["", None]
+                        else {}
+                    ),
+                    **(
+                        {"stock_status": stock_status} if stock_status not in ["", None] else {}
+                    ),
                 }
             },
             {
@@ -495,9 +620,22 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         negative_stock = sum((doc.get("negative_stock") or 0) for doc in stats_res)
         low_stock = sum((doc.get("low_stock") or 0) for doc in stats_res)
 
-        return PaginatedResponse(
+        class Meta1(Page):
+            total: int
+            unique: List[Any]
+            purchase_value: float = None
+            sale_value: float = None
+            positive_stock: float = None
+            negative_stock: float = None
+            low_stock: float = None
+
+        class PaginatedResponse1(BaseModel):
+            docs: List[Any]
+            meta: Meta1
+
+        return PaginatedResponse1(
             docs=docs,
-            meta=Meta(
+            meta=Meta1(
                 page=pagination.paging.page,
                 limit=pagination.paging.limit,
                 total=count,

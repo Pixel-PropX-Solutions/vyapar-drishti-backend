@@ -62,7 +62,7 @@ async def createCategory(
     category_data = {
         "category_name": category_name,
         "user_id": current_user.user_id,
-        "company_id": user_settings["current_company_id"],
+        "company_id": current_user.current_company_id or user_settings["current_company_id"],
         "is_deleted": False,
         "image": image_url,
         "description": description,
@@ -102,7 +102,7 @@ async def getCategory(
         {
             "_id": category_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         },
     )
@@ -121,7 +121,6 @@ async def getCategory(
 )
 async def view_all_category(
     company_id: str,
-    parent: str = None,
     search: str = None,
     page_no: int = Query(1, ge=1),
     limit: int = Query(10, le=sys.maxsize),
@@ -148,7 +147,7 @@ async def view_all_category(
     result = await category_repo.viewAllCategories(
         search=search,
         pagination=page_request,
-        company_id=user_settings["current_company_id"],
+        company_id=current_user.current_company_id or user_settings["current_company_id"],
         sort=sort,
         current_user=current_user,
     )
@@ -179,7 +178,7 @@ async def view_all_categories(
         [
             {
                 "$match": {
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 }
@@ -230,7 +229,7 @@ async def view_default_category(
         [
             {
                 "$match": {
-                    "company_id": userSettings["current_company_id"],
+                    "company_id":current_user.current_company_id or  userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                 },
             },
@@ -278,7 +277,7 @@ async def updateCategory(
         {
             "_id": category_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         },
     )
@@ -315,7 +314,7 @@ async def updateCategory(
         {
             "_id": category_id,
             "user_id": current_user.user_id,
-            "company_id": userSettings["current_company_id"],
+            "company_id": current_user.current_company_id or userSettings["current_company_id"],
             "is_deleted": False,
         },
         {"$set": update_fields},
@@ -352,7 +351,7 @@ async def deleteCategory(
         {
             "_id": category_id,
             "user_id": current_user.user_id,
-            "company_id": user_settings["current_company_id"],
+            "company_id": current_user.current_company_id or user_settings["current_company_id"],
         }
     )
 
@@ -366,7 +365,7 @@ async def deleteCategory(
         {
             "category_id": category_id,
             "user_id": current_user.user_id,
-            "company_id": user_settings["current_company_id"],
+            "company_id":current_user.current_company_id or  user_settings["current_company_id"],
         }
     )
 
@@ -379,7 +378,7 @@ async def deleteCategory(
         {
             "_id": category_id,
             "user_id": current_user.user_id,
-            "company_id": user_settings["current_company_id"],
+            "company_id": current_user.current_company_id or user_settings["current_company_id"],
         },
     )
 

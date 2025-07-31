@@ -48,7 +48,7 @@ async def createVoucharType(
     vouchar_type_data = {
         "vouchar_type_name": name,
         "user_id": current_user.user_id,
-        "company_id": userSettings["current_company_id"],
+        "company_id":  current_user.current_company_id or userSettings["current_company_id"],
         "parent": parent,
         "numbering_method": numbering_method,
         "is_deemedpositive": is_deemedpositive,
@@ -97,7 +97,7 @@ async def view_all_vouchar_type(
 
     result = await vouchar_type_repo.viewAllVoucharType(
         search=search,
-        company_id=userSettings["current_company_id"],
+        company_id= current_user.current_company_id or userSettings["current_company_id"],
         pagination=page_request,
         sort=sort,
         current_user=current_user,
@@ -130,7 +130,7 @@ async def get_all_vouchar_type(
                     "is_deleted": False,
                     "$or": [
                         {
-                            "company_id": userSettings["current_company_id"],
+                            "company_id":  current_user.current_company_id or userSettings["current_company_id"],
                             "user_id": current_user.user_id,
                         },
                         {
