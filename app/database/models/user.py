@@ -29,3 +29,4 @@ class UserCreate(BaseModel):
     name: Name
     email: str
     phone: PhoneNumber
+    password: str

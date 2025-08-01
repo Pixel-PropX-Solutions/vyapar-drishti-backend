@@ -120,3 +120,18 @@ class UnknownDeviceException(HTTPException):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=detail,
         )
+
+
+class AlreadyVerifiedException(HTTPException):
+    """
+    Exception raised when the user tries to verify an already verified email.
+    """
+
+    def __init__(
+        self,
+        detail="Email is already verified.",
+    ):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail,
+        )

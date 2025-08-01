@@ -193,11 +193,12 @@ async def verify_email_access_token(token: str) -> TokenData:
         user_id = payload.get("user_id", None)
         user_type: str = payload.get("user_type", None)
         scope: str = payload.get("scope", None)
-        if user_id is None or user_type is None or scope != "verify_email":
+        device_type: str = payload.get("device_type", None)
+        if user_id is None or user_type is None or device_type is None or scope != "verify_email":
             raise http_exception.CredentialsInvalidException(
                 detail="Invalid email verification token payload."
             )
-        token_data = TokenData(user_id=user_id, user_type=user_type, scope=scope)
+        token_data = TokenData(user_id=user_id, user_type=user_type, scope=scope, device_type=device_type)
         return token_data
     except JWTError:
         raise http_exception.CredentialsInvalidException(

@@ -52,6 +52,7 @@ from app.database.repositories.inventoryGroupRepo import inventory_group_repo
 from app.database.repositories.ledgerRepo import ledger_repo
 from app.database.repositories.stockItemRepo import stock_item_repo
 from app.database.repositories.token import refresh_token_repo
+from app.Config import ENV_PROJECT
 
 # from app.database.repositories.otpRepo import otp_repo
 from app.database.repositories.UnitOMeasureRepo import units_repo
@@ -269,12 +270,17 @@ async def register(
     if userExists is not None:
         raise http_exception.ResourceConflictException()
 
-    password = await generatePassword.createPassword()
+    client_info = classify_client(request.headers.get("user-agent", "unknown"))
+    if client_info.get("device_type") in ["Unknown", "Bot"]:
+        raise http_exception.UnknownDeviceException(
+            detail="Try accessing via another device. This device is compromised or not supported."
+        )
 
     token_data = TokenData(
-        user_id=userExists["_id"],
-        user_type=userExists["user_type"],
+        user_id=user.email,
+        user_type="user",
         scope="verify_email",
+        device_type=client_info.get("device_type"),
     )
 
     token_generated = await create_email_verify_access_token(
@@ -282,7 +288,7 @@ async def register(
     )  # 3 days
 
     verification_link = (
-        f"https://example.com/verify?token={token_generated}&email={user.email}"
+        f"{ENV_PROJECT.FRONTEND_DOMAIN}verify?token={token_generated}&email={user.email}"
     )
 
     mail.send(
@@ -297,7 +303,13 @@ async def register(
     inserted_dict = {}
 
     keys = ["password", "email", "phone", "user_type", "name"]
-    values = [hash_password(password=password), user.email, user.phone, "user", user.name]
+    values = [
+        hash_password(password=user.password),
+        user.email,
+        user.phone,
+        "user",
+        user.name,
+    ]
 
     for k, v in zip(keys, values):
         inserted_dict[k] = v
@@ -305,62 +317,72 @@ async def register(
     user_res = await user_repo.new(User(**inserted_dict))
 
     ip_address = request.client.host
-    device_info = request.headers.get("user-agent", "unknown")
 
     await initialize_user_settings(
         user_id=user_res.id,
         last_login_ip=ip_address,
-        last_login_device=device_info,
+        last_login_device=client_info.get("info"),
         role=user_res.user_type.value,
     )
 
-    client_info = classify_client(request.headers.get("user-agent", "unknown"))
-    if client_info.get("device_type") in ["Unknown", "Bot"]:
-        raise http_exception.UnknownDeviceException(
-            detail="Try accessing via another device. This device is compromised or not supported."
-        )
+    # client_info = classify_client(request.headers.get("user-agent", "unknown"))
+    # if client_info.get("device_type") in ["Unknown", "Bot"]:
+    #     raise http_exception.UnknownDeviceException(
+    #         detail="Try accessing via another device. This device is compromised or not supported."
+    #     )
 
-    token_data = TokenData(
-        user_id=user_res.id,
-        user_type=user_res.user_type.value,
-        scope="login",
-        current_company_id=None,
-        device_type=client_info.get("device_type"),
-        token_version=1,
-    )
+    # token_data = TokenData(
+    #     user_id=user_res.id,
+    #     user_type=user_res.user_type.value,
+    #     scope="login",
+    #     current_company_id=None,
+    #     device_type=client_info.get("device_type"),
+    #     token_version=1,
+    # )
 
-    token_generated = await create_access_token(
-        token_data,
-        device_type=client_info.get("device_type"),
-        old_refresh_token=None,
-    )
-    set_cookies(response, token_generated.access_token, token_generated.refresh_token)
+    # token_generated = await create_access_token(
+    #     token_data,
+    #     device_type=client_info.get("device_type"),
+    #     old_refresh_token=None,
+    # )
+    # set_cookies(response, token_generated.access_token, token_generated.refresh_token)
     return {
         "ok": True,
-        "accessToken": token_generated.access_token,
-        "refreshToken": token_generated.refresh_token,
+        "message": "User registered successfully. Please verify your email.",
+        # "accessToken": token_generated.access_token,
+        # "refreshToken": token_generated.refresh_token,
     }
 
 
 @auth.post("/verify/email", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
-async def verify_email(email: str, token: TokenData):
+async def verify_email(email: str, token: str):
     """Verify email endpoint."""
     # Check if the user exists
     userExists = await user_repo.findOne(
-        {"email": email, "is_verified": False}, {"_id", "email", "user_type", "name"}
+        {"email": email}, {"_id", "email", "user_type", "name", "is_verified"}
     )
 
     if not userExists:
         raise http_exception.ResourceNotFoundException(
-            detail="User not found or already verified."
+            detail="User not found. Please register first."
         )
 
+    if userExists["is_verified"]:
+        raise http_exception.AlreadyVerifiedException(
+            detail="Email is already verified."
+        )
+
+    verified_token = await verify_email_access_token(token)
     # Verify the token
-    if not verify_email_access_token(token):
+    if not verified_token:
         raise http_exception.CredentialsInvalidException(
             detail="Invalid email verification token. Please request a new one."
         )
 
+    if verified_token.user_id != email:
+        raise http_exception.CredentialsInvalidException(
+            detail="Email verification token does not match the provided email."
+        )
 
     await user_repo.update_one(
         {"_id": userExists["_id"], "email": email},
