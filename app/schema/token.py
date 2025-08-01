@@ -13,7 +13,7 @@ class TokenData(BaseModel):
     user_id: str
     # email: str
     user_type: Literal["admin", "user"] = "user"
-    scope: Literal["login", "forgot_password"] = "login"
+    scope: Literal["login", "forgot_password", "verify_email"] = "login"
     current_company_id: Optional[str] = None  # ✅ new
     device_type: str
     token_version: Optional[int] = 1  # Add token_version for versioning

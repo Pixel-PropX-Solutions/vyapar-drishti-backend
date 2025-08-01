@@ -14,6 +14,7 @@ class User(BaseModel):
     password: str
     user_type: Optional[UserTypeEnum] = UserTypeEnum.USER
     is_deleted: bool = False
+    is_verified: bool = False
 
 # db.users.dropIndex("email_1")
 # db.users.createIndex({ phone: 1 }, { unique: true })

@@ -162,7 +162,7 @@ async def get_new_access_token(refresh_token: str):
 async def create_forgot_password_access_token(data: TokenData):
     to_encode = data.model_dump()
     expire = datetime.datetime.now() + datetime.timedelta(
-        minutes=ENV_PROJECT.EMAIL_CONFIRMATION_TOKEN_EXPIRE_MINUTES
+        minutes=ENV_PROJECT.EMAIL_CONFIRMATION_TOKEN_EXPIRE_MINUTES * 10
     )
     to_encode.update({"exp": expire})
     access_token = jwt.encode(
@@ -170,6 +170,39 @@ async def create_forgot_password_access_token(data: TokenData):
     )
     return access_token
 
+
+async def create_email_verify_access_token(data: TokenData, timeout: int = 10):
+    to_encode = data.model_dump()
+    expire = datetime.datetime.now() + datetime.timedelta(
+        minutes=ENV_PROJECT.EMAIL_CONFIRMATION_TOKEN_EXPIRE_MINUTES * timeout
+    )
+    to_encode.update({"exp": expire})
+    access_token = jwt.encode(
+        to_encode, ENV_PROJECT.FORGOT_PASSWORD_TOKEN_SECRET, algorithm="HS256"
+    )
+    return access_token
+
+
+async def verify_email_access_token(token: str) -> TokenData:
+    try:
+        payload = jwt.decode(
+            token,
+            ENV_PROJECT.FORGOT_PASSWORD_TOKEN_SECRET,
+            algorithms=["HS256"],
+        )
+        user_id = payload.get("user_id", None)
+        user_type: str = payload.get("user_type", None)
+        scope: str = payload.get("scope", None)
+        if user_id is None or user_type is None or scope != "verify_email":
+            raise http_exception.CredentialsInvalidException(
+                detail="Invalid email verification token payload."
+            )
+        token_data = TokenData(user_id=user_id, user_type=user_type, scope=scope)
+        return token_data
+    except JWTError:
+        raise http_exception.CredentialsInvalidException(
+            detail="Invalid forgot password token. Please request a new one."
+        )
 
 async def verify_forgot_password_access_token(token: str) -> TokenData:
     try:

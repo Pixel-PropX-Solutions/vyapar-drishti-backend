@@ -18,6 +18,8 @@ from app.database import mongodb
 from app.oauth2 import (
     create_access_token,
     create_forgot_password_access_token,
+    create_email_verify_access_token,
+    verify_email_access_token,
     # create_signup_access_token,
     get_new_access_token,
     verify_forgot_password_access_token,
@@ -268,9 +270,19 @@ async def register(
         raise http_exception.ResourceConflictException()
 
     password = await generatePassword.createPassword()
-    
+
+    token_data = TokenData(
+        user_id=userExists["_id"],
+        user_type=userExists["user_type"],
+        scope="verify_email",
+    )
+
+    token_generated = await create_email_verify_access_token(
+        token_data, timeout=4320
+    )  # 3 days
+
     verification_link = (
-        "https://example.com/verify?token=123456&email=" + user.email
+        f"https://example.com/verify?token={token_generated}&email={user.email}"
     )
 
     mail.send(
@@ -328,6 +340,34 @@ async def register(
         "accessToken": token_generated.access_token,
         "refreshToken": token_generated.refresh_token,
     }
+
+
+@auth.post("/verify/email", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
+async def verify_email(email: str, token: TokenData):
+    """Verify email endpoint."""
+    # Check if the user exists
+    userExists = await user_repo.findOne(
+        {"email": email, "is_verified": False}, {"_id", "email", "user_type", "name"}
+    )
+
+    if not userExists:
+        raise http_exception.ResourceNotFoundException(
+            detail="User not found or already verified."
+        )
+
+    # Verify the token
+    if not verify_email_access_token(token):
+        raise http_exception.CredentialsInvalidException(
+            detail="Invalid email verification token. Please request a new one."
+        )
+
+
+    await user_repo.update_one(
+        {"_id": userExists["_id"], "email": email},
+        {"$set": {"is_verified": True, "updated_at": datetime.now()}},
+    )
+
+    return {"success": True, "message": "Email verified successfully"}
 
 
 @auth.get("/current/user", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
@@ -805,7 +845,7 @@ async def forgot_password(email: str):
         "message": "Password sent to email successfully",
         "link": forgot_password_link,
     }
-    
+
 
 @auth.post(
     "/change/password", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
