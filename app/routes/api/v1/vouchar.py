@@ -311,6 +311,7 @@ async def updateVouchar(
         )
     vouchar_data = {
         "date": vouchar.date,
+        "voucher_number": vouchar.voucher_number,
         "narration": vouchar.narration,
         "party_name": vouchar.party_name,
         "party_name_id": vouchar.party_name_id,
@@ -360,7 +361,6 @@ async def updateVouchar(
             existing_acc = await accounting_repo.collection.aggregate(
                 [{"$match": {"vouchar_id": vouchar_id}}]
             ).to_list(None)
-
             existing_acc_ids = {str(acc.get("_id")) for acc in existing_acc}
 
             # Track the item entry_ids received in the update
@@ -849,6 +849,7 @@ async def updateVoucharWithGST(
 
     vouchar_data = {
         "date": vouchar.date,
+        "voucher_number": vouchar.voucher_number,
         "narration": vouchar.narration,
         "party_name": vouchar.party_name,
         "party_name_id": vouchar.party_name_id,

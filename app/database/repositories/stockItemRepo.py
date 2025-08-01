@@ -34,10 +34,10 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         search: str,
         category: str,
         company_id: str,
-        stock_status: str,
         group: str,
         pagination: PageRequest,
         sort: Sort,
+        stock_status: str = "",
         current_user: TokenData = Depends(get_current_user),
         # is_deleted: bool = False,
     ):
@@ -190,7 +190,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                             {
                                 "$and": [
                                     {
-                                        "$gte": [
+                                        "$gt": [
                                             {
                                                 "$subtract": [
                                                     {
@@ -212,7 +212,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                         ]
                                     },
                                     {
-                                        "$lte": [
+                                        "$lt": [
                                             {
                                                 "$subtract": [
                                                     {
@@ -576,6 +576,19 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     ),
                 }
             },
+        ]
+
+        # Only add stock_status match if stock_status is not empty
+        if stock_status not in ["", None]:
+            pipeline.append(
+                {
+                    "$match": {
+                        "stock_status": stock_status,
+                    }
+                }
+            )
+
+        pipeline.append(
             {
                 "$facet": {
                     "docs": [
@@ -584,8 +597,8 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     ],
                     "count": [{"$count": "count"}],
                 }
-            },
-        ]
+            }
+        )
 
         unique_categories_pipeline = [
             {

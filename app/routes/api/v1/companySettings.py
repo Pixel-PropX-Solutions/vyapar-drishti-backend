@@ -43,6 +43,7 @@ async def initialize_company_settings(
             "gst_registration_type": config.get("gst_registration_type", None),
             "place_of_supply": config.get("place_of_supply", None),
         },
+        "bank_details": config.get("bank_details", None),
         "is_deleted": False,
     }
     await company_settings_repo.new(CompanySettings(**company_settings))

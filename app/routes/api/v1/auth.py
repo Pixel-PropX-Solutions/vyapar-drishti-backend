@@ -4,6 +4,7 @@ from fastapi.security.oauth2 import OAuth2PasswordRequestForm
 from app.Config import ENV_PROJECT
 from app.database.models.user import User, UserCreate
 
+
 # from app.database.models.OTP import OTP
 from loguru import logger
 from pydantic import BaseModel
@@ -16,10 +17,10 @@ from app.database import mongodb
 
 from app.oauth2 import (
     create_access_token,
-    # create_forgot_password_access_token,
+    create_forgot_password_access_token,
     # create_signup_access_token,
     get_new_access_token,
-    # verify_forgot_password_access_token,
+    verify_forgot_password_access_token,
     # verify_signup_access_token,
     get_refresh_token,
     set_cookies,
@@ -754,14 +755,83 @@ async def logout(
 #     return {"ok": True, "message": "OTP sent"}
 
 
-# @auth.post("/send/otp2", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
-# async def send_otp2(response: Response, phone_number: str):
-#     password = await generatePassword.createPassword()
-#     mail.send(
-#         "Welcome to Vyapar Drishti",
-#         user.email,
-#         template.Onboard(role="user", email=user.email, password=password),
-#     )
-#     message = f"Your OTP code is: {password}\nPlease use this code to complete your registration."
-#     send_whatsapp_message(message, phone_number)
-#     return {"ok": True}
+@auth.post(
+    "/send/password", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+)
+async def send_password(
+    response: Response, email: str, password: str, name: str = "User"
+):
+    mail.send(
+        "Welcome to Vyapar Drishti",
+        email,
+        template.PasswordRequest(
+            name="User", role="user", email=email, password=password
+        ),
+    )
+    return {"success": True, "message": "Password sent to email successfully"}
+
+
+@auth.post(
+    "/forgot/password", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+)
+async def forgot_password(email: str):
+    """Endpoint to initiate the forgot password process."""
+    # Check if the user exists
+    userExists = await user_repo.findOne(
+        {"email": email}, {"_id", "email", "user_type", "name"}
+    )
+    if not userExists:
+        raise http_exception.ResourceNotFoundException(detail="User not found")
+
+    # print("User found:", userExists)
+
+    token_data = TokenData(
+        user_id=userExists["_id"],
+        user_type=userExists["user_type"],
+        scope="forgot_password",
+    )
+
+    token_generated = await create_forgot_password_access_token(token_data)
+
+    forgot_password_link = f"{ENV_PROJECT.FRONTEND_DOMAIN}/reset-password?token={token_generated}&email={userExists['email']}"
+
+    mail.send(
+        "Forgot Password Request",
+        userExists["email"],
+        template.ForgotPassword(link=forgot_password_link, agenda="forgot_password"),
+    )
+    return {
+        "success": True,
+        "message": "Password sent to email successfully",
+        "link": forgot_password_link,
+    }
+    
+
+@auth.post(
+    "/change/password", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+)
+async def change_password(email: str, new_password: str, token: TokenData):
+    """Change password endpoint."""
+    # Check if the user exists
+    userExists = await user_repo.findOne(
+        {"email": email}, {"_id", "email", "user_type", "name"}
+    )
+
+    if not userExists:
+        raise http_exception.ResourceNotFoundException(detail="User not found")
+
+    # Verify the token
+    if not verify_forgot_password_access_token(token):
+        raise http_exception.CredentialsInvalidException(
+            detail="Invalid forgot password token. Please request a new one."
+        )
+
+    # Hash the new password
+    hashed_password = hash_password(password=new_password)
+
+    await user_repo.update_one(
+        {"_id": userExists["_id"], "email": email},
+        {"$set": {"password": hashed_password}},
+    )
+
+    return {"success": True, "message": "Password changed successfully"}
