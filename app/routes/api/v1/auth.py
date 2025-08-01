@@ -267,11 +267,18 @@ async def register(
         raise http_exception.ResourceConflictException()
 
     password = await generatePassword.createPassword()
+    
+    verification_link = (
+        "https://example.com/verify?token=123456&email=" + user.email
+    )
 
     mail.send(
         "Welcome to Vyapar Drishti",
         user.email,
-        template.Onboard(role="user", email=user.email, password=password),
+        template.Onboard(
+            name=user.name.first,
+            verification_link=verification_link,
+        ),
     )
 
     inserted_dict = {}

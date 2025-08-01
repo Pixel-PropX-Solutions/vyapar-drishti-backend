@@ -1,6 +1,7 @@
 """------------------------------------------------------------------------------------------------------------------------
                                                     TEMPLATE MODULE
-------------------------------------------------------------------------------------------------------------------------"""
+------------------------------------------------------------------------------------------------------------------------
+"""
 
 from datetime import datetime
 from app.Config import ENV_PROJECT
@@ -101,12 +102,10 @@ class Template:
 
     # --------------------------------------------------------------------------------------------------------------------------
 
-    def Onboard(self, role, email, password):
+    def Onboard(self, verification_link, name):
         parser = {
-            "link": "https://" + self.subdomain + role + self.domain,
-            "email": email,
-            "password": password,
-            "role": role,
+            "verify_link": verification_link,
+            "name": name,
         }
         return self.render_template(self.onboard_html, parser)
 
