@@ -1,6 +1,8 @@
+import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status, Response, Header
 from fastapi.responses import ORJSONResponse
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
+from jinja2 import Template
 from app.Config import ENV_PROJECT
 from app.database.models.user import User, UserCreate
 
@@ -75,6 +77,11 @@ class TenantID(BaseModel):
 
 class Email_Body(BaseModel):
     email: str
+    
+class ResetPassword(BaseModel):
+    email: str
+    new_password: str
+    token: str
 
 
 # class OTPdata(BaseModel):
@@ -147,6 +154,11 @@ async def login(
         )
     db_password = user.get("password")
     user_settings = await user_settings_repo.findOne({"user_id": user["_id"]})
+    if not user_settings:
+        raise http_exception.ResourceNotFoundException(
+            detail="User settings not found. Please contact support."
+        )
+
     company_id = user_settings.get("current_company_id") if user_settings else None
     client_info = classify_client(request.headers.get("user-agent", "unknown"))
     if client_info.get("device_type") in ["Unknown", "Bot"]:
@@ -830,9 +842,11 @@ async def send_password(
 
 
 @auth.post(
-    "/forgot/password", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+    "/forgot/password/{email}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
 )
-async def forgot_password(email: str):
+async def forgot_password(request: Request, email: str):
     """Endpoint to initiate the forgot password process."""
     # Check if the user exists
     userExists = await user_repo.findOne(
@@ -841,12 +855,24 @@ async def forgot_password(email: str):
     if not userExists:
         raise http_exception.ResourceNotFoundException(detail="User not found")
 
-    # print("User found:", userExists)
+    user_settings = await user_settings_repo.findOne({"user_id": userExists["_id"]})
+    if not user_settings:
+        raise http_exception.ResourceNotFoundException(
+            detail="User settings not found. Please contact support."
+        )
+
+    client_info = classify_client(request.headers.get("user-agent", "unknown"))
+
+    if client_info.get("device_type") in ["Unknown", "Bot"]:
+        raise http_exception.UnknownDeviceException(
+            detail="Try accessing via another device. This device is compromised or not supported."
+        )
 
     token_data = TokenData(
         user_id=userExists["_id"],
         user_type=userExists["user_type"],
         scope="forgot_password",
+        device_type=client_info.get("device_type"),
     )
 
     token_generated = await create_forgot_password_access_token(token_data)
@@ -854,42 +880,156 @@ async def forgot_password(email: str):
     forgot_password_link = f"{ENV_PROJECT.FRONTEND_DOMAIN}/reset-password?token={token_generated}&email={userExists['email']}"
 
     mail.send(
-        "Forgot Password Request",
+        "Password Reset Request",
         userExists["email"],
         template.ForgotPassword(link=forgot_password_link, agenda="forgot_password"),
     )
     return {
         "success": True,
-        "message": "Password sent to email successfully",
+        "message": "Password reset email sent successfully.",
         "link": forgot_password_link,
     }
 
 
 @auth.post(
-    "/change/password", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+    "/reset/password", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
-async def change_password(email: str, new_password: str, token: TokenData):
-    """Change password endpoint."""
+async def reset_password(
+    request: Request, response: Response, data: ResetPassword
+):
+    """Reset password endpoint."""
     # Check if the user exists
     userExists = await user_repo.findOne(
-        {"email": email}, {"_id", "email", "user_type", "name"}
+        {"email": data.email}, {"_id", "email", "user_type", "name"}
     )
 
     if not userExists:
         raise http_exception.ResourceNotFoundException(detail="User not found")
 
+    user_settings = await user_settings_repo.findOne({"user_id": userExists["_id"]})
+    if not user_settings:
+        raise http_exception.ResourceNotFoundException(
+            detail="User settings not found. Please contact support."
+        )
+
     # Verify the token
-    if not verify_forgot_password_access_token(token):
+    if not verify_forgot_password_access_token(data.token):
         raise http_exception.CredentialsInvalidException(
             detail="Invalid forgot password token. Please request a new one."
         )
 
     # Hash the new password
-    hashed_password = hash_password(password=new_password)
+    hashed_password = hash_password(password=data.new_password)
+
+    if not hashed_password:
+        raise http_exception.CredentialsInvalidException(
+            detail="Failed to hash the new password. Please try again."
+        )
 
     await user_repo.update_one(
-        {"_id": userExists["_id"], "email": email},
+        {"_id": userExists["_id"], "email": data.email},
         {"$set": {"password": hashed_password}},
     )
 
-    return {"success": True, "message": "Password changed successfully"}
+    company_id = user_settings.get("current_company_id") if user_settings else None
+    client_info = classify_client(request.headers.get("user-agent", "unknown"))
+
+    if client_info.get("device_type") in ["Unknown", "Bot"]:
+        raise http_exception.UnknownDeviceException(
+            detail="Try accessing via another device. This device is compromised or not supported."
+        )
+
+    # Check if the user is logged in from the same device type
+    existing_token = await refresh_token_repo.findOne(
+        {
+            "user_id": userExists["_id"],
+            "user_type": userExists["user_type"],
+            "device_type": client_info.get("device_type"),
+        }
+    )
+
+    if existing_token:
+        await refresh_token_repo.update_one(
+            {
+                "user_id": userExists["_id"],
+                "user_type": userExists["user_type"],
+                "device_type": client_info.get("device_type"),
+            },
+            {"$inc": {"token_version": 1}},
+        )
+        db_token = await refresh_token_repo.findOne(
+            {
+                "user_id": userExists["_id"],
+                "user_type": userExists["user_type"],
+                "device_type": client_info.get("device_type"),
+            },
+        )
+
+        new_token_version = db_token.get("token_version", 1)
+        token_data = TokenData(
+            user_id=userExists["_id"],
+            user_type=userExists["user_type"],
+            scope="login",
+            current_company_id=company_id,  # ✅ include this
+            device_type=client_info.get("device_type"),
+            token_version=new_token_version,  # Use updated token_version
+        )
+
+        token_generated = await create_access_token(
+            token_data,
+            device_type=client_info.get("device_type"),
+            old_refresh_token=None,
+        )
+
+        set_cookies(response, token_generated.access_token, token_generated.refresh_token)
+
+        await user_settings_repo.update_one(
+            {"user_id": userExists["_id"]},
+            {
+                "$set": {
+                    "last_login": datetime.now(),
+                    "last_login_ip": request.client.host,
+                    "last_login_device": client_info.get("info"),
+                }
+            },
+        )
+        return {
+            "success": True,
+            "accessToken": token_generated.access_token,
+            "refreshToken": token_generated.refresh_token,
+            "message": "Password changed successfully",
+        }
+
+    else:
+        token_version = 1
+        token_data = TokenData(
+            user_id=userExists["_id"],
+            user_type=userExists["user_type"],
+            scope="login",
+            current_company_id=company_id,  # ✅ include this
+            device_type=client_info.get("device_type"),
+            token_version=token_version,  # Use updated token_version
+        )
+        token_generated = await create_access_token(
+            token_data,
+            device_type=client_info.get("device_type"),
+            old_refresh_token=None,
+        )
+        set_cookies(response, token_generated.access_token, token_generated.refresh_token)
+
+        await user_settings_repo.update_one(
+            {"user_id": userExists["_id"]},
+            {
+                "$set": {
+                    "last_login": datetime.now(),
+                    "last_login_ip": request.client.host,
+                    "last_login_device": client_info.get("info"),
+                }
+            },
+        )
+        return {
+            "success": True,
+            "accessToken": token_generated.access_token,
+            "refreshToken": token_generated.refresh_token,
+            "message": "Password changed successfully",
+        }
