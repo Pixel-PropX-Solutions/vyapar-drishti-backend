@@ -8,7 +8,7 @@ class InventoryItem(BaseModel):
     vouchar_id: str  # Foreign key to trn_voucher._id
     item: str
     item_id: str
-    quantity: int  # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
+    quantity: float  # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
     rate: float
     amount: float  # Total amount for the item in the voucher(Sales, purchase), negative for sale or positive for purchase
 
@@ -33,7 +33,7 @@ class InventoryItemCreate(BaseModel):
     vouchar_id: str  # Foreign key to trn_voucher._id
     item: str
     item_id: str
-    quantity: int  # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
+    quantity: float  # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
     rate: float
     amount: float  # Total amount for the item in the voucher(Sales, purchase), negative for sale or positive for purchase
 

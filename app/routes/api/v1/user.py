@@ -376,7 +376,11 @@ async def createCompany(
         for ledger in ledger_data:
             await ledger_repo.new(Ledger(**ledger))
 
-    return {"success": True, "message": "Company Created Successfully"}
+    return {
+        "success": True,
+        "message": "Company Created Successfully",
+        "data": response.company_id,
+    }
 
 
 @user.get("/all/company", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
@@ -486,22 +490,22 @@ async def get_company(
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
         )
-   
-    # if not userSettings.current_company_id:
+
     pipeline = [
         {
             "$match": {
                 "user_id": current_user.user_id,
-                "_id": current_user.current_company_id or userSettings["current_company_id"],
-                # "is_selected": True,
-                "is_deleted": False,
+                "_id": current_user.current_company_id
+                or userSettings["current_company_id"],
             }
         },
         {
             "$lookup": {
                 "from": "CompanySettings",
-                "localField": "_id",
-                "foreignField": "company_id",
+                "let": {"company_id": "$_id"},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$company_id", "$$company_id"]}}}
+                ],
                 "as": "company_settings",
             }
         },
@@ -523,7 +527,6 @@ async def get_company(
                 "financial_year_start": 1,
                 "books_begin_from": 1,
                 "gstin": 1,
-                # "is_selected": 1,
                 "website": 1,
                 "created_at": 1,
                 "updated_at": 1,
@@ -536,17 +539,17 @@ async def get_company(
             }
         },
     ]
-    company = await company_repo.collection.aggregate(pipeline=pipeline).to_list(None)
-    if company:
-        return {
-            "success": True,
-            "message": "Company Fetched Successfully",
-            "data": company,
-        }
-    else:
-        raise http_exception.ResourceNotFoundException(
-            # detail="Company Not Found. Please create a company first."
-        )
+
+    company = await company_repo.collection.aggregate(pipeline=pipeline).to_list(length=1)
+
+    if company is None:
+        raise http_exception.ResourceNotFoundException(detail="Company not Found.")
+
+    return {
+        "success": True,
+        "message": "Company Fetched Successfully",
+        "data": company,
+    }
 
 
 @user.put(

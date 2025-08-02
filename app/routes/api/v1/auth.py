@@ -177,9 +177,10 @@ async def login(
                 "device_type": client_info.get("device_type"),
             },
         )
-        print("DB Token:", db_token)
+
         new_token_version = db_token.get("token_version", 1)
         if hashing.verify_hash(creds.password, db_password):
+
             token_data = TokenData(
                 user_id=user["_id"],
                 user_type=user_type.value,
@@ -188,11 +189,13 @@ async def login(
                 device_type=client_info.get("device_type"),
                 token_version=new_token_version,  # Use updated token_version
             )
+
             token_generated = await create_access_token(
                 token_data,
                 device_type=client_info.get("device_type"),
                 old_refresh_token=None,
             )
+
             set_cookies(
                 response, token_generated.access_token, token_generated.refresh_token
             )
@@ -247,12 +250,13 @@ async def login(
                     }
                 },
             )
-            # await otp_repo.delete_one({"phone_number": creds.username, "otp": creds.password})
+
             return {
                 "ok": True,
                 "accessToken": token_generated.access_token,
                 "refreshToken": token_generated.refresh_token,
             }
+
         else:
             raise http_exception.CredentialsInvalidException(
                 detail="Invalid username or password. Please try again."
@@ -325,32 +329,9 @@ async def register(
         role=user_res.user_type.value,
     )
 
-    # client_info = classify_client(request.headers.get("user-agent", "unknown"))
-    # if client_info.get("device_type") in ["Unknown", "Bot"]:
-    #     raise http_exception.UnknownDeviceException(
-    #         detail="Try accessing via another device. This device is compromised or not supported."
-    #     )
-
-    # token_data = TokenData(
-    #     user_id=user_res.id,
-    #     user_type=user_res.user_type.value,
-    #     scope="login",
-    #     current_company_id=None,
-    #     device_type=client_info.get("device_type"),
-    #     token_version=1,
-    # )
-
-    # token_generated = await create_access_token(
-    #     token_data,
-    #     device_type=client_info.get("device_type"),
-    #     old_refresh_token=None,
-    # )
-    # set_cookies(response, token_generated.access_token, token_generated.refresh_token)
     return {
         "ok": True,
         "message": "User registered successfully. Please verify your email.",
-        # "accessToken": token_generated.access_token,
-        # "refreshToken": token_generated.refresh_token,
     }
 
 
@@ -368,9 +349,7 @@ async def verify_email(email: str, token: str):
         )
 
     if userExists["is_verified"]:
-        raise http_exception.AlreadyVerifiedException(
-            detail="Email is already verified."
-        )
+        raise http_exception.AlreadyVerifiedException(detail="Email is already verified.")
 
     verified_token = await verify_email_access_token(token)
     # Verify the token
@@ -513,6 +492,7 @@ async def get_current_user_details(
     status_code=status.HTTP_200_OK,
 )
 async def delete_user_company(
+    response: Response,
     company_id: str,
     current_user: TokenData = Depends(get_current_user),
 ):
@@ -630,6 +610,14 @@ async def delete_user_company(
                 }
             },
         )
+        response.set_cookie(
+            key="current_company_id",
+            value=first_company["_id"],
+            httponly=True,
+            max_age=0,
+            secure=True,
+            samesite="none",
+        )
 
     return {
         "success": True,
@@ -729,6 +717,14 @@ async def delete_user(
     )
     response.set_cookie(
         key="refresh_token",
+        value="",
+        httponly=True,
+        max_age=0,
+        secure=True,
+        samesite="none",
+    )
+    response.set_cookie(
+        key="current_company_id",
         value="",
         httponly=True,
         max_age=0,
