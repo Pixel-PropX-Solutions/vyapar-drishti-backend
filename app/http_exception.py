@@ -23,6 +23,18 @@ class CredentialsInvalidException(HTTPException):
         )
 
 
+class InvalidPasswordException(HTTPException):
+    """
+    Exception raised when the password provided by the user is invalid.
+    """
+
+    def __init__(self, detail: str = "Invalid password provided."):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
 class ResourceNotFoundException(HTTPException):
     """
     Exception raised when a requested resource is not found.

@@ -7,15 +7,18 @@ from fastapi import (
     Form,
     UploadFile,
     status,
+    Request,
+    Response,
 )
 from app.database.repositories.user import user_repo
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel
 import app.http_exception as http_exception
+from app.routes.api.v1.userSettings import classify_client
 from app.routes.api.v1.voucharCounter import initialize_voucher_counters
 from app.routes.api.v1.companySettings import initialize_company_settings
 from app.schema.token import TokenData
-from app.oauth2 import get_current_user
+from app.oauth2 import create_access_token, get_current_user, set_cookies
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.database.repositories.ledgerRepo import ledger_repo, Ledger
 from app.utils.cloudinary_client import cloudinary_client
@@ -107,6 +110,8 @@ async def update_user(
     "/create/company", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
 async def createCompany(
+    request: Request,
+    response: Response,
     name: str = Form(...),
     number: str = Form(None),
     code: str = Form(None),
@@ -132,6 +137,18 @@ async def createCompany(
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
+
+    user_settings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+    if user_settings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    client_info = classify_client(request.headers.get("user-agent", "unknown"))
+    if client_info.get("device_type") in ["Unknown", "Bot"]:
+        raise http_exception.UnknownDeviceException(
+            detail="Try accessing via another device. This device is compromised or not supported."
+        )
 
     image_url = None
     if image:
@@ -191,14 +208,14 @@ async def createCompany(
         "is_deleted": False,
     }
 
-    response = await company_repo.new(Company(**company_data))
+    res = await company_repo.new(Company(**company_data))
 
-    if not response:
+    if not res:
         raise http_exception.ResourceAlreadyExistsException(
             detail="Company Already Exists. Please try with different company name."
         )
 
-    if response:
+    if res:
         qr_url = None
         if qr_code_url:
             if qr_code_url.content_type not in [
@@ -218,13 +235,13 @@ async def createCompany(
             qr_url = upload_result["url"]
 
         await initialize_voucher_counters(
-            user_id=current_user.user_id, company_id=response.company_id
+            user_id=current_user.user_id, company_id=res.company_id
         )
 
         # Initialize company settings with the provided data
         await initialize_company_settings(
             user_id=current_user.user_id,
-            company_id=response.company_id,
+            company_id=res.company_id,
             config={
                 "company_name": name,
                 "country": country,
@@ -255,22 +272,23 @@ async def createCompany(
             },
         )
 
-        await user_settings_repo.update_one(
-            {"user_id": current_user.user_id},
-            {
-                "$set": {
-                    "current_company_id": response.company_id,
-                    "current_company_name": name,
-                    "updated_at": datetime.now(),
-                }
-            },
-        )
+        if user_settings["current_company_id"] is None:
+            await user_settings_repo.update_one(
+                {"user_id": current_user.user_id},
+                {
+                    "$set": {
+                        "current_company_id": res.company_id,
+                        "current_company_name": name,
+                        "updated_at": datetime.now(),
+                    }
+                },
+            )
 
         ledger_data = [
             {
                 "ledger_name": "Purchases",
                 "user_id": current_user.user_id,
-                "company_id": response.company_id,
+                "company_id": res.company_id,
                 "is_deleted": False,
                 "phone": None,
                 "email": None,
@@ -296,7 +314,7 @@ async def createCompany(
             {
                 "ledger_name": "Sales",
                 "user_id": current_user.user_id,
-                "company_id": response.company_id,
+                "company_id": res.company_id,
                 "is_deleted": False,
                 "phone": None,
                 "email": None,
@@ -322,7 +340,7 @@ async def createCompany(
             {
                 "ledger_name": "Cash",
                 "user_id": current_user.user_id,
-                "company_id": response.company_id,
+                "company_id": res.company_id,
                 "is_deleted": False,
                 "phone": None,
                 "email": None,
@@ -348,7 +366,7 @@ async def createCompany(
             {
                 "ledger_name": "Bank",
                 "user_id": current_user.user_id,
-                "company_id": response.company_id,
+                "company_id": res.company_id,
                 "is_deleted": False,
                 "phone": None,
                 "email": None,
@@ -376,10 +394,26 @@ async def createCompany(
         for ledger in ledger_data:
             await ledger_repo.new(Ledger(**ledger))
 
+    new_token_data = TokenData(
+        user_id=current_user.user_id,
+        user_type=current_user.user_type,
+        scope=current_user.scope,
+        current_company_id=res.company_id,
+        device_type=client_info.get("device_type"),
+    )
+
+    token_pair = await create_access_token(
+        new_token_data, device_type=client_info.get("device_type")
+    )
+
+    set_cookies(response, token_pair.access_token, token_pair.refresh_token)
+
     return {
         "success": True,
         "message": "Company Created Successfully",
-        "data": response.company_id,
+        "data": res.company_id,
+        "accessToken": token_pair.access_token,
+        "refreshToken": token_pair.refresh_token,
     }
 
 
@@ -750,37 +784,3 @@ async def updateCompanyDetails(
         # "data": updatedCompany,
     }
 
-
-# @user.put(
-#     "/set/company/{company_id}",
-#     response_class=ORJSONResponse,
-#     status_code=status.HTTP_200_OK,
-# )
-# async def updateCurrentCompany(
-#     company_id: str,
-#     current_user: TokenData = Depends(get_current_user),
-# ):
-#     if current_user.user_type != "user" and current_user.user_type != "admin":
-#         raise http_exception.CredentialsInvalidException()
-
-#     companyExists = await company_repo.findOne(
-#         {"_id": company_id, "user_id": current_user.user_id, "is_deleted": False},
-#     )
-
-#     if companyExists is None:
-#         raise http_exception.ResourceNotFoundException()
-
-#     await company_repo.update_many(
-#         {"user_id": current_user.user_id, "is_deleted": False},
-#         {"$set": {"is_selected": False}},
-#     )
-
-#     await company_repo.update_one(
-#         {"_id": company_id, "user_id": current_user.user_id},
-#         {"$set": {"is_selected": True}},
-#     )
-
-#     return {
-#         "success": True,
-#         "message": "Current Company selected Successfully",
-#     }

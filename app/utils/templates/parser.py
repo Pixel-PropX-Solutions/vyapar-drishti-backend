@@ -38,6 +38,7 @@ class Template:
         # Initialise html paths
         self.directory = "app/utils/templates/mail/"
         self.domain = domain
+        self.domain_login = domain + "/login"
         self.onboard_html = self.directory + "onboard.html"
         self.password_request_html = self.directory + "password_request.html"
         self.forgot_password = self.directory + "forgot_password.html"
@@ -86,7 +87,7 @@ class Template:
 
         # parser arguments
 
-        parser = {"link": link, "domain": self.domain}
+        parser = {"link": link, "domain": self.domain, "domain_login": self.domain_login}
 
         # return merchant password reset alert html
         if agenda == "forgot_password":
@@ -101,6 +102,8 @@ class Template:
         parser = {
             "verify_link": verification_link,
             "name": name,
+            "domain": self.domain,
+            "domain_login": self.domain_login,
         }
         return self.render_template(self.onboard_html, parser)
 

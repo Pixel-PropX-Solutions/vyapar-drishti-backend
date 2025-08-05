@@ -1,3 +1,4 @@
+import asyncio
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status, Response, Header
 from fastapi.responses import ORJSONResponse
@@ -22,6 +23,7 @@ from app.oauth2 import (
     create_forgot_password_access_token,
     create_email_verify_access_token,
     verify_email_access_token,
+    verify_access_token,
     # create_signup_access_token,
     get_new_access_token,
     verify_forgot_password_access_token,
@@ -77,7 +79,8 @@ class TenantID(BaseModel):
 
 class Email_Body(BaseModel):
     email: str
-    
+
+
 class ResetPassword(BaseModel):
     email: str
     new_password: str
@@ -152,19 +155,24 @@ async def login(
         raise http_exception.ResourceNotFoundException(
             detail="User not found. Please check your username."
         )
-    db_password = user.get("password")
+
+    db_password = user["password"]
+
     user_settings = await user_settings_repo.findOne({"user_id": user["_id"]})
+
     if not user_settings:
         raise http_exception.ResourceNotFoundException(
             detail="User settings not found. Please contact support."
         )
 
     company_id = user_settings.get("current_company_id") if user_settings else None
+
     client_info = classify_client(request.headers.get("user-agent", "unknown"))
     if client_info.get("device_type") in ["Unknown", "Bot"]:
         raise http_exception.UnknownDeviceException(
             detail="Try accessing via another device. This device is compromised or not supported."
         )
+
     # Check if the user is logged in from the same device type
     existing_token = await refresh_token_repo.findOne(
         {
@@ -173,7 +181,9 @@ async def login(
             "device_type": client_info.get("device_type"),
         }
     )
+
     if existing_token:
+
         await refresh_token_repo.update_one(
             {
                 "user_id": user["_id"],
@@ -182,6 +192,7 @@ async def login(
             },
             {"$inc": {"token_version": 1}},
         )
+
         db_token = await refresh_token_repo.findOne(
             {
                 "user_id": user["_id"],
@@ -229,8 +240,8 @@ async def login(
                 "refreshToken": token_generated.refresh_token,
             }
         else:
-            raise http_exception.CredentialsInvalidException(
-                detail="Invalid username or password. Please try again."
+            raise http_exception.InvalidPasswordException(
+                detail="Invalid password. Please try again."
             )
     else:
         token_version = 1
@@ -270,8 +281,8 @@ async def login(
             }
 
         else:
-            raise http_exception.CredentialsInvalidException(
-                detail="Invalid username or password. Please try again."
+            raise http_exception.InvalidPasswordException(
+                detail="Invalid password. Please try again."
             )
 
 
@@ -504,6 +515,7 @@ async def get_current_user_details(
     status_code=status.HTTP_200_OK,
 )
 async def delete_user_company(
+    request: Request,
     response: Response,
     company_id: str,
     current_user: TokenData = Depends(get_current_user),
@@ -520,7 +532,7 @@ async def delete_user_company(
             detail="User Settings Not Found. Please contact support."
         )
 
-    if user_settings["current_company_id"] != company_id:
+    if current_user.current_company_id != company_id:
         raise http_exception.ResourceNotFoundException(
             detail="First switch to the company you want to delete."
         )
@@ -528,112 +540,110 @@ async def delete_user_company(
     voucher_docs = await vouchar_repo.findMany({"company_id": company_id})
     voucher_ids = [doc["_id"] for doc in voucher_docs]
 
-    # Delete all accounting entries associated with the vouchers
-    await accounting_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}})
-
-    # Delete all the inventory entries associated with the vouchers
-    await inventory_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}})
-
-    # Delete all the vouchers associated with the company
-    await vouchar_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete all the accounting groups associated with the company
-    await accounting_group_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete all the categories associated with the company
-    await category_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete all the voucher counters associated with the company
-    await vouchar_counter_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete all the voucher types associated with the company
-    await vouchar_type_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete all the GST rates associated with the company
-    await gst_rate_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete all the inventory groups associated with the company
-    await inventory_group_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete all the ledgers associated with the company
-    await ledger_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete all the stock items associated with the company
-    await stock_item_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete all the units of measure associated with the company
-    await units_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete all the voucher GST entries associated with the company
-    await vouchar_gst_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
-    )
-
-    # Delete the company settings
-    await company_settings_repo.deleteAll(
-        {"company_id": company_id, "user_id": current_user.user_id}
+    # Delete related data
+    await asyncio.gather(
+        accounting_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}}),
+        inventory_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}}),
+        vouchar_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
+        accounting_group_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
+        category_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
+        vouchar_counter_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
+        vouchar_type_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
+        gst_rate_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
+        inventory_group_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
+        ledger_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
+        stock_item_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
+        units_repo.deleteAll({"company_id": company_id, "user_id": current_user.user_id}),
+        vouchar_gst_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
+        company_settings_repo.deleteAll(
+            {"company_id": company_id, "user_id": current_user.user_id}
+        ),
     )
 
     # Delete the company
     await company_repo.deleteOne({"_id": company_id, "user_id": current_user.user_id})
 
-    # Check if the user has any other companies
+    # Find fallback company
     remaining_companies = await company_repo.collection.aggregate(
         [
             {"$match": {"user_id": current_user.user_id, "is_deleted": False}},
         ]
     ).to_list(None)
 
-    if not remaining_companies:
-        # If no remaining companies, remove the current company from user settings
-        await user_settings_repo.update_one(
-            {"user_id": current_user.user_id},
-            {"$set": {"current_company_id": "", "current_company_name": ""}},
-        )
+    fallback_company = remaining_companies[0] if remaining_companies else None
+
+    if fallback_company:
+        if user_settings["current_company_id"] == company_id:
+            # Update user_settings with fallback company
+            await user_settings_repo.update_one(
+                {"user_id": current_user.user_id},
+                {
+                    "$set": {
+                        "current_company_id": fallback_company["_id"],
+                        "current_company_name": fallback_company["company_name"],
+                    }
+                },
+            )
+
     else:
-        # If there are remaining companies, set the first one as the current company
-        first_company = remaining_companies[0]
+        # No fallback, clear user_settings
         await user_settings_repo.update_one(
             {"user_id": current_user.user_id},
             {
                 "$set": {
-                    "current_company_id": first_company["_id"],
-                    "current_company_name": first_company["company_name"],
+                    "current_company_id": "",
+                    "current_company_name": "",
                 }
             },
         )
-        response.set_cookie(
-            key="current_company_id",
-            value=first_company["_id"],
-            httponly=True,
-            max_age=0,
-            secure=True,
-            samesite="none",
-        )
+
+    client_info = classify_client(request.headers.get("user-agent", "unknown"))
+
+    new_token_data = TokenData(
+        user_id=current_user.user_id,
+        user_type=current_user.user_type,
+        scope=current_user.scope,
+        current_company_id=str(fallback_company["_id"]) if fallback_company else None,
+        device_type=client_info.get("device_type"),
+    )
+
+    token_pair = await create_access_token(
+        new_token_data, device_type=client_info.get("device_type")
+    )
+
+    set_cookies(response, token_pair.access_token, token_pair.refresh_token)
 
     return {
         "success": True,
-        "message": "Company and all associated data deleted successfully",
+        "accessToken": token_pair.access_token,
+        "refreshToken": token_pair.refresh_token,
+        'company_id': fallback_company["_id"]if fallback_company
+            else None,
+        "message": (
+            "Company and all associated data deleted successfully. Switched to fallback company."
+            if fallback_company
+            else "Company deleted. No fallback company available."
+        ),
     }
 
 
@@ -756,7 +766,6 @@ async def token_refresh(
     token_generated = await get_new_access_token(refresh_token)
     set_cookies(response, token_generated.access_token, token_generated.refresh_token)
     return {"ok": True}
-
 
 @auth.post("/logout", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
 async def logout(
@@ -894,9 +903,7 @@ async def forgot_password(request: Request, email: str):
 @auth.post(
     "/reset/password", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
-async def reset_password(
-    request: Request, response: Response, data: ResetPassword
-):
+async def reset_password(request: Request, response: Response, data: ResetPassword):
     """Reset password endpoint."""
     # Check if the user exists
     userExists = await user_repo.findOne(

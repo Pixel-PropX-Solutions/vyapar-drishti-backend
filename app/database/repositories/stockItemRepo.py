@@ -93,6 +93,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "created_at": {"$first": "$created_at"},
                     "updated_at": {"$first": "$updated_at"},
                     "group": {"$first": "$group"},
+                    "opening_balance": {"$first": "$opening_balance"},
                     "purchase_qty": {
                         "$sum": {
                             "$cond": [
@@ -162,10 +163,16 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "sales_qty": 1,
                     "purchase_value": 1,
                     "sales_value": 1,
+                    "opening_balance": 1,
                     "current_stock": {
                         "$subtract": [
-                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
-                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                            {
+                                "$add": [
+                                    {"$ifNull": ["$purchase_qty", 0]},
+                                    {"$ifNull": ["$opening_balance", 0]},
+                                ]
+                            },
+                            {"$ifNull": ["$sales_qty", 0]},
                         ]
                     },
                     "negative_stock": {
@@ -174,8 +181,13 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                 "$lt": [
                                     {
                                         "$subtract": [
-                                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
-                                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                                            {
+                                                "$add": [
+                                                    {"$ifNull": ["$purchase_qty", 0]},
+                                                    {"$ifNull": ["$opening_balance", 0]},
+                                                ]
+                                            },
+                                            {"$ifNull": ["$sales_qty", 0]},
                                         ]
                                     },
                                     0,
@@ -194,18 +206,22 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                             {
                                                 "$subtract": [
                                                     {
-                                                        "$sum": {
-                                                            "$ifNull": [
-                                                                "$purchase_qty",
-                                                                0,
-                                                            ]
-                                                        }
+                                                        "$add": [
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$purchase_qty",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$opening_balance",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                        ]
                                                     },
-                                                    {
-                                                        "$sum": {
-                                                            "$ifNull": ["$sales_qty", 0]
-                                                        }
-                                                    },
+                                                    {"$ifNull": ["$sales_qty", 0]},
                                                 ]
                                             },
                                             0,
@@ -216,18 +232,22 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                             {
                                                 "$subtract": [
                                                     {
-                                                        "$sum": {
-                                                            "$ifNull": [
-                                                                "$purchase_qty",
-                                                                0,
-                                                            ]
-                                                        }
+                                                        "$add": [
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$purchase_qty",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$opening_balance",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                        ]
                                                     },
-                                                    {
-                                                        "$sum": {
-                                                            "$ifNull": ["$sales_qty", 0]
-                                                        }
-                                                    },
+                                                    {"$ifNull": ["$sales_qty", 0]},
                                                 ]
                                             },
                                             "$low_stock_alert",
@@ -245,8 +265,13 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                 "$gt": [
                                     {
                                         "$subtract": [
-                                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
-                                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                                            {
+                                                "$add": [
+                                                    {"$ifNull": ["$purchase_qty", 0]},
+                                                    {"$ifNull": ["$opening_balance", 0]},
+                                                ]
+                                            },
+                                            {"$ifNull": ["$sales_qty", 0]},
                                         ]
                                     },
                                     "$low_stock_alert",
@@ -349,6 +374,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "created_at": {"$first": "$created_at"},
                     "updated_at": {"$first": "$updated_at"},
                     "group": {"$first": "$group"},
+                    "opening_balance": {"$first": "$opening_balance"},
                     "purchase_qty": {
                         "$sum": {
                             "$cond": [
@@ -430,8 +456,13 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "updated_at": 1,
                     "current_stock": {
                         "$subtract": [
-                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
-                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                            {
+                                "$add": [
+                                    {"$ifNull": ["$purchase_qty", 0]},
+                                    {"$ifNull": ["$opening_balance", 0]},
+                                ]
+                            },
+                            {"$ifNull": ["$sales_qty", 0]},
                         ]
                     },
                     "avg_purchase_rate": {
@@ -459,8 +490,13 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                 "$lt": [
                                     {
                                         "$subtract": [
-                                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
-                                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                                            {
+                                                "$add": [
+                                                    {"$ifNull": ["$purchase_qty", 0]},
+                                                    {"$ifNull": ["$opening_balance", 0]},
+                                                ]
+                                            },
+                                            {"$ifNull": ["$sales_qty", 0]},
                                         ]
                                     },
                                     0,
@@ -476,20 +512,26 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                                     {
                                                         "$subtract": [
                                                             {
-                                                                "$sum": {
-                                                                    "$ifNull": [
-                                                                        "$purchase_qty",
-                                                                        0,
-                                                                    ]
-                                                                }
+                                                                "$add": [
+                                                                    {
+                                                                        "$ifNull": [
+                                                                            "$purchase_qty",
+                                                                            0,
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "$ifNull": [
+                                                                            "$opening_balance",
+                                                                            0,
+                                                                        ]
+                                                                    },
+                                                                ]
                                                             },
                                                             {
-                                                                "$sum": {
-                                                                    "$ifNull": [
-                                                                        "$sales_qty",
-                                                                        0,
-                                                                    ]
-                                                                }
+                                                                "$ifNull": [
+                                                                    "$sales_qty",
+                                                                    0,
+                                                                ]
                                                             },
                                                         ]
                                                     },
@@ -501,20 +543,26 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                                     {
                                                         "$subtract": [
                                                             {
-                                                                "$sum": {
-                                                                    "$ifNull": [
-                                                                        "$purchase_qty",
-                                                                        0,
-                                                                    ]
-                                                                }
+                                                                "$add": [
+                                                                    {
+                                                                        "$ifNull": [
+                                                                            "$purchase_qty",
+                                                                            0,
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "$ifNull": [
+                                                                            "$opening_balance",
+                                                                            0,
+                                                                        ]
+                                                                    },
+                                                                ]
                                                             },
                                                             {
-                                                                "$sum": {
-                                                                    "$ifNull": [
-                                                                        "$sales_qty",
-                                                                        0,
-                                                                    ]
-                                                                }
+                                                                "$ifNull": [
+                                                                    "$sales_qty",
+                                                                    0,
+                                                                ]
                                                             },
                                                         ]
                                                     },
@@ -572,7 +620,9 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                         else {}
                     ),
                     **(
-                        {"stock_status": stock_status} if stock_status not in ["", None] else {}
+                        {"stock_status": stock_status}
+                        if stock_status not in ["", None]
+                        else {}
                     ),
                 }
             },
@@ -850,8 +900,13 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "updated_at": 1,
                     "current_stock": {
                         "$subtract": [
-                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
-                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                            {
+                                "$add": [
+                                    {"$ifNull": ["$purchase_qty", 0]},
+                                    {"$ifNull": ["$opening_balance", 0]},
+                                ]
+                            },
+                            {"$ifNull": ["$sales_qty", 0]},
                         ]
                     },
                     "purchase_qty": "$purchase_qty",

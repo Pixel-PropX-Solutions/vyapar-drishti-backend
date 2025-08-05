@@ -118,6 +118,8 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
 
         if parent == "Customers":
             filter_params["parent"] = {"$in": ["Debtors", "Creditors"]}
+        elif parent == "Accounts":
+            filter_params["parent"] = {"$in": ["Bank Accounts", "Cash-in-Hand"]}
         elif parent not in ["", None]:
             filter_params["$or"] = [
                 {"parent": {"$regex": f"^{parent}", "$options": "i"}},
@@ -266,9 +268,11 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
         pagination: PageRequest,
         sort: Sort,
         current_user: TokenData = Depends(get_current_user),
-        start_date: datetime = None,
-        end_date: datetime = None,
+        start_date: str = None,
+        end_date: str = None,
     ):
+        start_date = start_date[:10]
+        end_date = end_date[:10]
         filter_params = {
             "_id": ledger_id,
             "company_id": company_id,

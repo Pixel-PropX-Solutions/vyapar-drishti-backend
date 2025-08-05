@@ -48,6 +48,27 @@ oauth2_scheme = OAuth2PasswordBearerWithCookie(
     scheme_name="User Authentication",
 )
 
+async def get_current_user(
+    tokens: dict = Depends(oauth2_scheme),
+) -> TokenData:
+    token: TokenData = await verify_access_token(tokens["access_token"])
+    print("Current User Token:", token)
+    # Check token_version in DB
+    db_token = await refresh_token_repo.findOne(
+        {
+            "user_id": token.user_id,
+            "device_type": token.device_type,
+            "user_type": token.user_type,
+        },
+        {"token_version"},
+    )
+    print("DB Token Version:", db_token)
+    if not db_token or db_token.get("token_version", 1) != token.token_version:
+        raise http_exception.CredentialsInvalidException(
+            detail="Token is invalid or has been revoked."
+        )
+    return token
+
 
 async def create_refresh_token(data: TokenData):
     to_encode = data.model_dump()
@@ -194,16 +215,24 @@ async def verify_email_access_token(token: str) -> TokenData:
         user_type: str = payload.get("user_type", None)
         scope: str = payload.get("scope", None)
         device_type: str = payload.get("device_type", None)
-        if user_id is None or user_type is None or device_type is None or scope != "verify_email":
+        if (
+            user_id is None
+            or user_type is None
+            or device_type is None
+            or scope != "verify_email"
+        ):
             raise http_exception.CredentialsInvalidException(
                 detail="Invalid email verification token payload."
             )
-        token_data = TokenData(user_id=user_id, user_type=user_type, scope=scope, device_type=device_type)
+        token_data = TokenData(
+            user_id=user_id, user_type=user_type, scope=scope, device_type=device_type
+        )
         return token_data
     except JWTError:
         raise http_exception.CredentialsInvalidException(
             detail="Invalid forgot password token. Please request a new one."
         )
+
 
 async def verify_forgot_password_access_token(token: str) -> TokenData:
     try:
@@ -261,26 +290,6 @@ async def verify_access_token(token: str) -> TokenData:
         )
 
 
-async def get_current_user(
-    tokens: dict = Depends(oauth2_scheme),
-) -> TokenData:
-    token: TokenData = await verify_access_token(tokens["access_token"])
-    print("Current User Token:", token)
-    # Check token_version in DB
-    db_token = await refresh_token_repo.findOne(
-        {
-            "user_id": token.user_id,
-            "device_type": token.device_type,
-            "user_type": token.user_type,
-        },
-        {"token_version"},
-    )
-    print("DB Token Version:", db_token)
-    if not db_token or db_token.get("token_version", 1) != token.token_version:
-        raise http_exception.CredentialsInvalidException(
-            detail="Token is invalid or has been revoked."
-        )
-    return token
 
 
 async def get_refresh_token(tokens: dict = Depends(oauth2_scheme)) -> str:
