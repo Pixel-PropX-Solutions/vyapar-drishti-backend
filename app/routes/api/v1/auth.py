@@ -741,15 +741,8 @@ async def token_refresh(
 
 
 @auth.get("/app-version", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
-async def app_version(
-    current_user: TokenData = Depends(get_current_user),
-):
+async def app_version():
     """Endpoint to get the app version."""
-    if current_user.user_type != "user":
-        raise http_exception.CredentialsInvalidException(
-            detail="You do not have permission to perform this action."
-        )
-    # Here you can return the app version from your configuration or database
     return {
         "success": True,
         "message": "App version fetched successfully",
