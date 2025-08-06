@@ -637,8 +637,7 @@ async def delete_user_company(
         "success": True,
         "accessToken": token_pair.access_token,
         "refreshToken": token_pair.refresh_token,
-        'company_id': fallback_company["_id"]if fallback_company
-            else None,
+        "company_id": fallback_company["_id"] if fallback_company else None,
         "message": (
             "Company and all associated data deleted successfully. Switched to fallback company."
             if fallback_company
@@ -676,51 +675,24 @@ async def delete_user(
     voucher_docs = await vouchar_repo.findMany({"user_id": current_user.user_id})
     voucher_ids = [doc["_id"] for doc in voucher_docs]
 
-    # Delete all accounting entries associated with the vouchers
-    await accounting_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}})
-
-    # Delete all the inventory entries associated with the vouchers
-    await inventory_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}})
-
-    # Delete all the vouchers associated with the company
-    await vouchar_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete all the accounting groups associated with the company
-    await accounting_group_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete all the categories associated with the company
-    await category_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete all the voucher counters associated with the company
-    await vouchar_counter_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete all the voucher types associated with the company
-    await vouchar_type_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete all the GST rates associated with the company
-    await gst_rate_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete all the inventory groups associated with the company
-    await inventory_group_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete all the ledgers associated with the company
-    await ledger_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete all the stock items associated with the company
-    await stock_item_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete all the units of measure associated with the company
-    await units_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete all the voucher GST entries associated with the company
-    await vouchar_gst_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete the company settings
-    await company_settings_repo.deleteAll({"user_id": current_user.user_id})
-
-    # Delete the company
-    await company_repo.deleteAll({"user_id": current_user.user_id})
-
+    # Delete related data
+    await asyncio.gather(
+        accounting_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}}),
+        inventory_repo.deleteAll({"vouchar_id": {"$in": voucher_ids}}),
+        vouchar_repo.deleteAll({"user_id": current_user.user_id}),
+        accounting_group_repo.deleteAll({"user_id": current_user.user_id}),
+        category_repo.deleteAll({"user_id": current_user.user_id}),
+        vouchar_counter_repo.deleteAll({"user_id": current_user.user_id}),
+        vouchar_type_repo.deleteAll({"user_id": current_user.user_id}),
+        gst_rate_repo.deleteAll({"user_id": current_user.user_id}),
+        inventory_group_repo.deleteAll({"user_id": current_user.user_id}),
+        ledger_repo.deleteAll({"user_id": current_user.user_id}),
+        stock_item_repo.deleteAll({"user_id": current_user.user_id}),
+        units_repo.deleteAll({"user_id": current_user.user_id}),
+        vouchar_gst_repo.deleteAll({"user_id": current_user.user_id}),
+        company_settings_repo.deleteAll({"user_id": current_user.user_id}),
+        company_repo.deleteAll({"user_id": current_user.user_id}),
+    )
     # Delete the user settings
     await user_settings_repo.deleteOne({"user_id": current_user.user_id})
 
@@ -766,6 +738,25 @@ async def token_refresh(
     token_generated = await get_new_access_token(refresh_token)
     set_cookies(response, token_generated.access_token, token_generated.refresh_token)
     return {"ok": True}
+
+
+@auth.get("/app-version", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
+async def app_version(
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Endpoint to get the app version."""
+    if current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException(
+            detail="You do not have permission to perform this action."
+        )
+    # Here you can return the app version from your configuration or database
+    return {
+        "success": True,
+        "message": "App version fetched successfully",
+        "latest_version": "2.1",
+        "minimum_version": "2.0",
+    }
+
 
 @auth.post("/logout", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
 async def logout(
