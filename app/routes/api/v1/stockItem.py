@@ -81,7 +81,8 @@ async def create_product(
     product_data = {
         # required fields
         "stock_item_name": stock_item_name,
-        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
+        "company_id": current_user.current_company_id
+        or userSettings["current_company_id"],
         "unit": unit,
         "unit_id": unit_id,
         "is_deleted": False,
@@ -109,7 +110,8 @@ async def create_product(
     if response:
         gstr_data = {
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
             "item": stock_item_name,
             "item_id": response.stock_item_id,
             "hsn_code": gst_hsn_code,
@@ -158,7 +160,8 @@ async def get_product(
                 "$match": {
                     "_id": product_id,
                     "user_id": current_user.user_id,
-                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id
+                    or userSettings["current_company_id"],
                     # "is_deleted": False,
                 }
             },
@@ -194,7 +197,8 @@ async def get_product(
             },
             {
                 "$unwind": {
-                    "path": "$inventory_entries", "preserveNullAndEmptyArrays": True
+                    "path": "$inventory_entries",
+                    "preserveNullAndEmptyArrays": True,
                 }
             },
             {
@@ -207,11 +211,7 @@ async def get_product(
                     "as": "voucher",
                 }
             },
-            {
-                "$unwind": {
-                    "path": "$voucher", "preserveNullAndEmptyArrays": True
-                }
-            },
+            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
             {
                 "$addFields": {
                     "purchase_qty": {
@@ -368,7 +368,8 @@ async def get_product_details(
                 "$match": {
                     "_id": product_id,
                     "user_id": current_user.user_id,
-                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id
+                    or userSettings["current_company_id"],
                     # "is_deleted": False,
                 }
             },
@@ -404,7 +405,8 @@ async def get_product_details(
             },
             {
                 "$unwind": {
-                    "path": "$inventory_entries","preserveNullAndEmptyArrays": True
+                    "path": "$inventory_entries",
+                    "preserveNullAndEmptyArrays": True,
                 }
             },
             {
@@ -417,11 +419,7 @@ async def get_product_details(
                     "as": "voucher",
                 }
             },
-            {
-                "$unwind": {
-                    "path": "$voucher","preserveNullAndEmptyArrays": True
-                }
-            },
+            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
             {
                 "$addFields": {
                     "purchase_qty": {
@@ -545,7 +543,6 @@ async def get_product_details(
         ]
     ).to_list(length=1)
 
-
     if product:
         return {"success": True, "data": product}
     else:
@@ -562,7 +559,7 @@ async def view_all_product(
     company_id: str = Query(None),
     search: str = None,
     category: str = None,
-    stock_status: str = '',
+    stock_status: str = "",
     group: str = None,
     page_no: int = Query(1, ge=1),
     limit: int = Query(10, le=sys.maxsize),
@@ -596,6 +593,82 @@ async def view_all_product(
     )
 
     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+
+
+@Product.get(
+    "/view/inventory/items", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+)
+async def view_inventory_items(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(None),
+    search: str = None,
+    category: str = None,
+    group: str = None,
+    stock_status: str = "",
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(10, le=sys.maxsize),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await stock_item_repo.viewInventoryItems(
+        search=search,
+        company_id=current_user.current_company_id or userSettings["current_company_id"],
+        category=category,
+        group=group,
+        stock_status=stock_status,
+        pagination=page_request,
+        sort=sort,
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Inventory Items Fetched Successfully...",
+        "data": result,
+    }
+
+
+@Product.get(
+    "/view/inventory/stats", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+)
+async def view_inventory_stats(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(None),
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    result = await stock_item_repo.viewInventoryStats(
+        company_id=current_user.current_company_id or userSettings["current_company_id"],
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Inventory Stats Fetched Successfully...",
+        "data": result,
+    }
 
 
 @Product.get(
@@ -664,7 +737,8 @@ async def get_products_with_id(
         [
             {
                 "$match": {
-                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id
+                    or userSettings["current_company_id"],
                     "user_id": current_user.user_id,
                     "is_deleted": False,
                 }
@@ -737,7 +811,8 @@ async def update_product(
 
     companySettings = await company_settings_repo.findOne(
         {
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )
@@ -751,7 +826,8 @@ async def update_product(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         },
     )
 
@@ -804,7 +880,8 @@ async def update_product(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         },
         {"$set": update_fields},
     )
@@ -812,7 +889,8 @@ async def update_product(
         gstExists = await gst_rate_repo.findOne(
             {
                 "user_id": current_user.user_id,
-                "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                "company_id": current_user.current_company_id
+                or userSettings["current_company_id"],
                 "item_id": product_id,
             }
         )
@@ -822,7 +900,8 @@ async def update_product(
             res = await gst_rate_repo.update_one(
                 {
                     "user_id": current_user.user_id,
-                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id
+                    or userSettings["current_company_id"],
                     "item_id": product_id,
                 },
                 {
@@ -850,7 +929,8 @@ async def update_product(
             # Create new GST rate if it doesn't exist
             gstr_data = {
                 "user_id": current_user.user_id,
-                "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                "company_id": current_user.current_company_id
+                or userSettings["current_company_id"],
                 "item": stock_item_name,
                 "item_id": product_id,
                 "hsn_code": gst_hsn_code,
@@ -907,7 +987,8 @@ async def update_product_details(
 
     companySettings = await company_settings_repo.findOne(
         {
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
             "user_id": current_user.user_id,
         }
     )
@@ -922,7 +1003,8 @@ async def update_product_details(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         },
     )
 
@@ -932,7 +1014,7 @@ async def update_product_details(
         )
 
     updated_dict = {}
-   
+
     for k, v in dict(product_details).items():
         updated_dict[k] = v
 
@@ -941,7 +1023,8 @@ async def update_product_details(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         },
         {"$set": updated_dict, "$currentDate": {"updated_at": True}},
     )
@@ -951,7 +1034,8 @@ async def update_product_details(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         }
     )
 
@@ -986,7 +1070,8 @@ async def delete_product(
             "_id": product_id,
             "user_id": current_user.user_id,
             "is_deleted": False,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         }
     )
 
@@ -1014,7 +1099,8 @@ async def delete_product(
                     "_id": product_id,
                     "user_id": current_user.user_id,
                     "is_deleted": False,
-                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id
+                    or userSettings["current_company_id"],
                 },
             )
 
