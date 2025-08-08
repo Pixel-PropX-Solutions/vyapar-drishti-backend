@@ -310,7 +310,7 @@
                         (item.total_amount - item.taxable_value)|round(2) }}</td>
                     <td
                         style="border: 1px solid #000 !important; font-size:  10px !important; border-right:none !important; text-align: center !important; padding: 4px !important; font-weight: bold !important;">
-                        {{ item.total_amount }}</td>
+                        {{ item.total_amount|round(2) }}</td>
                 </tr>
 
                 {% endif %}
@@ -447,7 +447,7 @@
                                             <tr>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 14px !important; padding: 8px !important; text-align: center !important; font-weight: bold;">
-                                                    GRAND TOTAL: &#8377; {{ invoice.grand_total }}</td>
+                                                    GRAND TOTAL: &#8377; {{ invoice.grand_total|round(2) }}</td>
                                             </tr>
                                         </table>
                                     </div>
@@ -603,7 +603,7 @@
                                             <tr>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 14px !important; padding: 8px !important; text-align: center !important; font-weight: bold;">
-                                                    GRAND TOTAL: &#8377; {{ invoice.grand_total }}</td>
+                                                    GRAND TOTAL: &#8377; {{ invoice.grand_total|round(2) }}</td>
                                             </tr>
                                         </table>
                                     </div>

@@ -410,7 +410,7 @@
                         </td>
                         <td
                             style="border-bottom: 1px solid #000 !important; padding: 0 1mm 1mm 1mm !important; text-align: center; font-weight: bold;">
-                            {{ item.total_amount }}</td>
+                            {{ item.total_amount|round(2) }}</td>
                     </tr>
                     {% else %}
                     {% if (loop.index0 < page_items|length) %} <tr>
@@ -538,7 +538,7 @@
                                     TOTAL</td>
                                 <td
                                     style="border-bottom: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                    {{ invoice.total }}</td>
+                                    {{ invoice.total|round(2) }}</td>
                             </tr>
                             <tr>
                                 <td
@@ -546,7 +546,7 @@
                                     Total Tax</td>
                                 <td
                                     style="border-bottom: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                    {{ invoice.total_tax }}</td>
+                                    {{ invoice.total_tax|round(2) }}</td>
                             </tr>
                             <tr>
                                 <td
@@ -563,7 +563,7 @@
                             <tr>
                                 <td
                                     style="padding-bottom: 4mm !important; font-size: 12px !important; text-align: center !important; font-weight: bold !important;">
-                                    GRAND TOTAL: &#8377; {{ invoice.grand_total }}
+                                    GRAND TOTAL: &#8377; {{ invoice.grand_total|round(2) }}
                                 </td>
                             </tr>
                         </table>
