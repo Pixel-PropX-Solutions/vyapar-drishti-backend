@@ -315,7 +315,7 @@ async def register(
     )  # 3 days
 
     verification_link = (
-        f"{ENV_PROJECT.FRONTEND_DOMAIN}/verify?token={token_generated}&email={user.email}"
+        f"{ENV_PROJECT.FRONTEND_DOMAIN}verify?token={token_generated}&email={user.email}"
     )
 
     mail.send(

@@ -1661,7 +1661,7 @@ async def print_invoice(
                 "name": item.get("item", ""),
                 "qty": item.get("quantity", 0),
                 "rate": item.get("rate", 0),
-                "amount": round(item.get("amount", 0), 2),
+                "amount": item.get("amount", 0),
                 # "pack": item.get("pack", ""),
                 # "hsn": item.get("hsn", ""),
             }
@@ -1696,7 +1696,7 @@ async def print_invoice(
             "date": invoice.get("date", ""),
             "items": items,
             "total": f"{total:.2f}",
-            "grand_total": round(grand_total, 2),
+            "grand_total": grand_total,
             "grand_total_words": total_words,
         },
         "party": {
@@ -1894,12 +1894,12 @@ async def print_invoice_gst(
                 "item_id": item_id,
                 "qty": item.get("quantity", 0),
                 "rate": item.get("rate", 0),
-                "amount": round(item.get("amount", 0), 2),
+                "amount": item.get("amount", 0),
                 # "pack": stock_item.get("unit", ""),
                 "hsn": item_gst.get("hsn_code", ""),
                 "gst_rate": item_gst.get("gst_rate", ""),
-                "taxable_value": round(item_gst.get("taxable_value", 0), 2),
-                "total_amount": round(item_gst.get("total_amount", 0), 2),
+                "taxable_value": item_gst.get("taxable_value", 0),
+                "total_amount": item_gst.get("total_amount", 0),
             }
         )
 
@@ -1967,7 +1967,7 @@ async def print_invoice_gst(
     totals["units"] = units
     # --- END GST Tax Table Calculation ---
 
-    grand_total = round(abs(total_total_amount), 2)
+    grand_total = abs(total_total_amount)
 
     # Template variables
     template_vars = {
@@ -1981,6 +1981,7 @@ async def print_invoice_gst(
             "grand_total": grand_total,
             "taxes": invoice_taxes,
             "payment_status": invoice.get("status", ""),
+            "station": "Rajkot",
             "is_reversed_charge": (
                 "Yes" if invoice.get("is_reversed_charge", False) else "No"
             ),
@@ -2014,19 +2015,19 @@ async def print_invoice_gst(
         "company": invoice.get("company", {}),
         "company.bank_name": invoice.get("company_settings", {})
         .get("bank_details", {})
-        .get("bank_name", ""),
+        .get("bank_name", "SBI"),
         "company.bank_branch": invoice.get("company_settings", {})
         .get("bank_details", {})
-        .get("bank_branch", ""),
+        .get("bank_branch", "Rajkot"),
         "company.account_no": invoice.get("company_settings", {})
         .get("bank_details", {})
-        .get("account_number", ""),
+        .get("account_number", "000 000 000 000"),
         "company.account_name": invoice.get("company_settings", {})
         .get("bank_details", {})
-        .get("account_holder", ""),
+        .get("account_holder", "ABC Pvt Ltd"),
         "company.ifsc": invoice.get("company_settings", {})
         .get("bank_details", {})
-        .get("bank_ifsc", ""),
+        .get("bank_ifsc", "IFSCCODE1234"),
         "company.qr_code_url": invoice.get("company_settings", {})
         .get("bank_details", {})
         .get("qr_code_url", ""),
