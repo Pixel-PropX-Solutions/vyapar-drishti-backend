@@ -746,8 +746,8 @@ async def app_version():
     return {
         "success": True,
         "message": "App version fetched successfully",
-        "latest_version": "2.2",
-        "minimum_version": "2.2",
+        "latest_version": "2.1",
+        "minimum_version": "2.0",
     }
 
 
