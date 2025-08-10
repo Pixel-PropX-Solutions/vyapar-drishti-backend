@@ -256,7 +256,7 @@ async def view_ledgers_with_type(
                 },
             },
             {
-                "$project": {"_id": 1, "ledger_name": 1, "parent": 1, "alias": 1},
+                "$project": {"_id": 1, "ledger_name": 1, "parent": 1, "alias": 1, "phone": 1},
             },
         ]
     ).to_list(None)

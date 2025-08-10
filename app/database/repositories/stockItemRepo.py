@@ -197,6 +197,28 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                             0,
                         ]
                     },
+                    "zero_stock": {
+                        "$cond": [
+                            {
+                                "$eq": [
+                                    {
+                                        "$subtract": [
+                                            {
+                                                "$add": [
+                                                    {"$ifNull": ["$purchase_qty", 0]},
+                                                    {"$ifNull": ["$opening_balance", 0]},
+                                                ]
+                                            },
+                                            {"$ifNull": ["$sales_qty", 0]},
+                                        ]
+                                    },
+                                    0,
+                                ]
+                            },
+                            1,
+                            0,
+                        ]
+                    },
                     "low_stock": {
                         "$cond": [
                             {
@@ -262,7 +284,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "positive_stock": {
                         "$cond": [
                             {
-                                "$gt": [
+                                "$gte": [
                                     {
                                         "$subtract": [
                                             {
@@ -299,13 +321,24 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             filter_params["group"] = group
 
         sort_options = {
-            "name_asc": {"stock_item_name": 1},
-            "name_desc": {"stock_item_name": -1},
-            "created_at_asc": {"created_at": 1},
-            "created_at_desc": {"created_at": -1},
+            "stock_item_name_asc": {"stock_item_name": 1},
+            "stock_item_name_desc": {"stock_item_name": -1},
+            "current_stock_asc": {"current_stock": 1},
+            "current_stock_desc": {"current_stock": -1},
+            "last_restock_date_asc": {"last_restock_date": 1},
+            "last_restock_date_desc": {"last_restock_date": -1},
+            "unit_asc": {"unit": 1},
+            "unit_desc": {"unit": -1},
         }
+
         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
         sort_stage = sort_options.get(sort_key, {"created_at": 1})
+
+        stock_status_dict = {}
+        if stock_status == "zero":
+            stock_status_dict["$in"] = ["zero", "negative"]
+        elif stock_status not in ["", None]:
+            stock_status_dict = stock_status
 
         pipeline = [
             {"$match": filter_params},
@@ -375,6 +408,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "updated_at": {"$first": "$updated_at"},
                     "group": {"$first": "$group"},
                     "opening_balance": {"$first": "$opening_balance"},
+                    "opening_value": {"$first": "$opening_value"},
                     "purchase_qty": {
                         "$sum": {
                             "$cond": [
@@ -437,7 +471,6 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     },
                 }
             },
-            {"$sort": sort_stage},
             {
                 "$project": {
                     "_id": 1,
@@ -480,35 +513,81 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                         ]
                     },
                     "purchase_qty": "$purchase_qty",
-                    "purchase_value": "$purchase_value",
+                    "purchase_value": {
+                        "$add": [
+                            {"$ifNull": ["$purchase_value", 0]},
+                            {"$ifNull": ["$opening_value", 0]},
+                        ]
+                    },
                     "sales_qty": "$sales_qty",
                     "sales_value": "$sales_value",
                     "last_restock_date": "$last_restock_date",
                     "stock_status": {
-                        "$cond": [
-                            {
-                                "$lt": [
-                                    {
-                                        "$subtract": [
+                        "$switch": {
+                            "branches": [
+                                {
+                                    "case": {
+                                        "$lt": [
                                             {
-                                                "$add": [
-                                                    {"$ifNull": ["$purchase_qty", 0]},
-                                                    {"$ifNull": ["$opening_balance", 0]},
+                                                "$subtract": [
+                                                    {
+                                                        "$add": [
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$purchase_qty",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$opening_balance",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                        ]
+                                                    },
+                                                    {"$ifNull": ["$sales_qty", 0]},
                                                 ]
                                             },
-                                            {"$ifNull": ["$sales_qty", 0]},
+                                            0,
                                         ]
                                     },
-                                    0,
-                                ]
-                            },
-                            "negative",
-                            {
-                                "$cond": [
-                                    {
+                                    "then": "negative",
+                                },
+                                {
+                                    "case": {
+                                        "$eq": [
+                                            {
+                                                "$subtract": [
+                                                    {
+                                                        "$add": [
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$purchase_qty",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$opening_balance",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                        ]
+                                                    },
+                                                    {"$ifNull": ["$sales_qty", 0]},
+                                                ]
+                                            },
+                                            0,
+                                        ]
+                                    },
+                                    "then": "zero",
+                                },
+                                {
+                                    "case": {
                                         "$and": [
                                             {
-                                                "$gte": [
+                                                "$gt": [
                                                     {
                                                         "$subtract": [
                                                             {
@@ -539,7 +618,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                                 ]
                                             },
                                             {
-                                                "$lte": [
+                                                "$lt": [
                                                     {
                                                         "$subtract": [
                                                             {
@@ -571,11 +650,40 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                             },
                                         ]
                                     },
-                                    "low",
-                                    "positive",
-                                ]
-                            },
-                        ]
+                                    "then": "low",
+                                },
+                                {
+                                    "case": {
+                                        "$gte": [
+                                            {
+                                                "$subtract": [
+                                                    {
+                                                        "$add": [
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$purchase_qty",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$opening_balance",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                        ]
+                                                    },
+                                                    {"$ifNull": ["$sales_qty", 0]},
+                                                ]
+                                            },
+                                            "$low_stock_alert",
+                                        ]
+                                    },
+                                    "then": "positive",
+                                },
+                            ],
+                            "default": None,
+                        }
                     },
                 }
             },
@@ -620,23 +728,14 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                         else {}
                     ),
                     **(
-                        {"stock_status": stock_status}
+                        {"stock_status": stock_status_dict}
                         if stock_status not in ["", None]
                         else {}
                     ),
                 }
             },
+            {"$sort": sort_stage},
         ]
-
-        # Only add stock_status match if stock_status is not empty
-        if stock_status not in ["", None]:
-            pipeline.append(
-                {
-                    "$match": {
-                        "stock_status": stock_status,
-                    }
-                }
-            )
 
         pipeline.append(
             {
@@ -663,6 +762,19 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {"$sort": {"category": 1}},
         ]
 
+        unique_groups_pipeline = [
+            {
+                "$match": {
+                    "user_id": current_user.user_id,
+                    "is_deleted": False,
+                    "company_id": company_id,
+                }
+            },
+            {"$group": {"_id": "$inventory_group_name"}},
+            {"$project": {"_id": 0, "group": "$_id"}},
+            {"$sort": {"group": 1}},
+        ]
+
         # Run stats pipeline first (no search/category/group filters)
         stats_res = [doc async for doc in self.collection.aggregate(stats_pipeline)]
         res = [doc async for doc in self.collection.aggregate(pipeline)]
@@ -672,20 +784,30 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                 unique_categories_pipeline
             )
         ]
+        groups_res = [
+            doc
+            async for doc in inventory_group_repo.collection.aggregate(
+                unique_groups_pipeline
+            )
+        ]
+
         docs = res[0]["docs"]
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
         unique_categories = [entry["category"] for entry in categories_res]
+        unique_groups = [entry["group"] for entry in groups_res]
 
         # Aggregate stats for all products of user in company
         purchase_value = sum((doc.get("purchase_value") or 0) for doc in stats_res)
         sales_value = sum((doc.get("sales_value") or 0) for doc in stats_res)
         positive_stock = sum((doc.get("positive_stock") or 0) for doc in stats_res)
         negative_stock = sum((doc.get("negative_stock") or 0) for doc in stats_res)
+        zero_stock = sum((doc.get("zero_stock") or 0) for doc in stats_res)
         low_stock = sum((doc.get("low_stock") or 0) for doc in stats_res)
 
         class Meta1(Page):
             total: int
-            unique: List[Any]
+            unique_categories: List[Any]
+            unique_groups: List[Any]
             purchase_value: float = None
             sale_value: float = None
             positive_stock: float = None
@@ -705,9 +827,10 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                 sale_value=sales_value,
                 purchase_value=purchase_value,
                 positive_stock=positive_stock,
-                negative_stock=negative_stock,
+                negative_stock=negative_stock + zero_stock,
                 low_stock=low_stock,
-                unique=unique_categories,
+                unique_categories=unique_categories,
+                unique_groups=unique_groups,
             ),
         )
 
@@ -745,6 +868,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         }
         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
         sort_stage = sort_options.get(sort_key, {"created_at": 1})
+
         stock_status_dict = {}
         if stock_status == "zero":
             stock_status_dict["$in"] = ["zero", "negative"]
@@ -1140,16 +1264,6 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             {"$sort": sort_stage},
         ]
 
-        # Only add stock_status match if stock_status is not empty
-        if stock_status not in ["", None]:
-            pipeline.append(
-                {
-                    "$match": {
-                        "stock_status": stock_status,
-                    }
-                }
-            )
-
         pipeline.append(
             {
                 "$facet": {
@@ -1198,7 +1312,9 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         ]
         groups_res = [
             doc
-            async for doc in inventory_group_repo.collection.aggregate(unique_groups_pipeline)
+            async for doc in inventory_group_repo.collection.aggregate(
+                unique_groups_pipeline
+            )
         ]
         docs = res[0]["docs"]
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
@@ -1556,12 +1672,14 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
 
         # Define sorting logic
         sort_options = {
-            "name_asc": {"stock_item_name": 1},
-            "name_desc": {"stock_item_name": -1},
-            # "price_asc": {"selling_price": 1},
-            # "price_desc": {"selling_price": -1},
-            "created_at_asc": {"created_at": 1},
-            "created_at_desc": {"created_at": -1},
+            "stock_item_name_asc": {"stock_item_name": 1},
+            "stock_item_name_desc": {"stock_item_name": -1},
+            "current_stock_asc": {"current_stock": 1},
+            "current_stock_desc": {"current_stock": -1},
+            "last_restock_date_asc": {"last_restock_date": 1},
+            "last_restock_date_desc": {"last_restock_date": -1},
+            "unit_asc": {"unit": 1},
+            "unit_desc": {"unit": -1},
         }
 
         # Construct sorting key
@@ -1684,7 +1802,6 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     },
                 }
             },
-            {"$sort": sort_stage},
             {
                 "$project": {
                     "_id": 1,
@@ -1735,6 +1852,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     },
                 }
             },
+            {"$sort": sort_stage},
             {
                 "$facet": {
                     "docs": [
