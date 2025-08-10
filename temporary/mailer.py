@@ -1390,7 +1390,7 @@ async def print_invoice(
                 "qty": item.get("quantity", 0),
                 "rate": item.get("rate", 0),
                 "amount": item.get("amount", 0),
-                "pack": item.get("unit", ""),
+                "pack": item.get("pack", ""),
                 "hsn": item.get("hsn", ""),
             }
         )
@@ -1652,6 +1652,7 @@ async def print_invoice_gst(
             "grand_total": grand_total,
             "taxes": invoice_taxes,
             "payment_status": "Paid",  # Example payment status
+            "station": "Rajkot",  # Example station
             "is_reversed_charge": (
                 "Yes" if invoice.get("is_reversed_charge", False) else "No"
             ),
