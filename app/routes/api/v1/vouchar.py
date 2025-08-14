@@ -1998,7 +1998,7 @@ async def print_invoice_gst(
             "voucher_number": invoice.get("voucher_number", ""),
             "date": invoice.get("date", ""),
             "total_tax": total_tax,
-            # "roundoff": roundoff,
+            "discount": 0.0,
             "total": f"{total:.2f}",
             "grand_total": grand_total,
             "taxes": invoice_taxes,
@@ -2010,7 +2010,7 @@ async def print_invoice_gst(
             "vehicle_number": invoice.get("vehicle_number", ""),
             "mode_of_transport": invoice.get("mode_of_transport", ""),
             "place_of_supply": invoice.get("place_of_supply", ""),
-            # "additional_charges": 0.0,
+            "additional_charges": 0.0,
             "totals": totals,
         },
         "party": {

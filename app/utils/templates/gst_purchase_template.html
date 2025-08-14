@@ -292,12 +292,12 @@
                     </td>
                     <td
                         style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                        {{ item.rate
+                        {{ item.rate|float|round(2)
                         }}
                     </td>
                     <td
                         style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                        {{item.taxable_value}}</td>
+                        {{item.taxable_value|float|round(2)}}</td>
                     <td
                         style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
                         {{
@@ -307,10 +307,10 @@
                     <td
                         style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
                         {{
-                        (item.total_amount - item.taxable_value)|round(2) }}</td>
+                        (item.total_amount - item.taxable_value)|float|round(2) }}</td>
                     <td
                         style="border: 1px solid #000 !important; font-size:  10px !important; border-right:none !important; text-align: center !important; padding: 4px !important; font-weight: bold !important;">
-                        {{ item.total_amount|round(2) }}</td>
+                        {{ item.total_amount|float|round(2) }}</td>
                 </tr>
 
                 {% endif %}
@@ -357,19 +357,19 @@
                                                     {{ tax.percent }}&#37;</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                                                    {{ tax.taxable_value }}</td>
+                                                    {{ tax.taxable_value|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                                                    {{ tax.igst }}</td>
+                                                    {{ tax.igst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                                                    {{ tax.cgst }}</td>
+                                                    {{ tax.cgst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                                                    {{ tax.sgst }}</td>
+                                                    {{ tax.sgst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                                                    {{ tax.gst_amt }}</td>
+                                                    {{ tax.gst_amt|float|round(2) }}</td>
                                             </tr>
                                             {% endfor %}
 
@@ -379,19 +379,19 @@
                                                     TOTAL</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
-                                                    {{ invoice.totals.taxable_value }}</td>
+                                                    {{ invoice.totals.taxable_value|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
-                                                    {{ invoice.totals.igst }}</td>
+                                                    {{ invoice.totals.igst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
-                                                    {{ invoice.totals.cgst }}</td>
+                                                    {{ invoice.totals.cgst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
-                                                    {{ invoice.totals.sgst }}</td>
+                                                    {{ invoice.totals.sgst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
-                                                    {{ invoice.totals.gst_amt }}</td>
+                                                    {{ invoice.totals.gst_amt|float|round(2) }}</td>
                                             </tr>
                                         </table>
                                     </div>
@@ -406,7 +406,7 @@
                                                     SUB TOTAL</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                                    {{ invoice.total }}</td>
+                                                    {{ invoice.total|float|round(2) }}</td>
                                             </tr>
                                             <tr>
                                                 <td
@@ -414,7 +414,7 @@
                                                     DISCOUNT</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                                    {{ invoice.discount }}</td>
+                                                    {{ invoice.discount|float|round(2) }}</td>
                                             </tr>
                                             <tr>
                                                 <td
@@ -422,7 +422,7 @@
                                                     TOTAL</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                                    {{ invoice.total }}</td>
+                                                    {{ invoice.total|float|round(2) }}</td>
                                             </tr>
                                             <tr>
                                                 <td
@@ -430,7 +430,7 @@
                                                     Total Tax</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                                    {{ invoice.total_tax }}</td>
+                                                    {{ invoice.total_tax|float|round(2) }}</td>
                                             </tr>
                                             <tr>
                                                 <td
@@ -438,7 +438,7 @@
                                                     Additional Charges</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                                    {{ invoice.additional_charges}}</td>
+                                                    {{ invoice.additional_charges|float|round(2)}}</td>
                                             </tr>
                                         </table>
                                         <table
@@ -447,7 +447,7 @@
                                             <tr>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 14px !important; padding: 8px !important; text-align: center !important; font-weight: bold;">
-                                                    GRAND TOTAL: &#8377; {{ invoice.grand_total|round(2) }}</td>
+                                                    GRAND TOTAL: &#8377; {{ invoice.grand_total|float|round(2) }}</td>
                                             </tr>
                                         </table>
                                     </div>
@@ -513,19 +513,19 @@
                                                     {{ tax.percent }}&#37;</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                                                    {{ tax.taxable_value }}</td>
+                                                    {{ tax.taxable_value|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                                                    {{ tax.igst }}</td>
+                                                    {{ tax.igst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                                                    {{ tax.cgst }}</td>
+                                                    {{ tax.cgst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                                                    {{ tax.sgst }}</td>
+                                                    {{ tax.sgst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
-                                                    {{ tax.gst_amt }}</td>
+                                                    {{ tax.gst_amt|float|round(2) }}</td>
                                             </tr>
                                             {% endfor %}
 
@@ -535,19 +535,19 @@
                                                     TOTAL</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
-                                                    {{ invoice.totals.taxable_value }}</td>
+                                                    {{ invoice.totals.taxable_value|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
-                                                    {{ invoice.totals.igst }}</td>
+                                                    {{ invoice.totals.igst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
-                                                    {{ invoice.totals.cgst }}</td>
+                                                    {{ invoice.totals.cgst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
-                                                    {{ invoice.totals.sgst }}</td>
+                                                    {{ invoice.totals.sgst|float|round(2) }}</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
-                                                    {{ invoice.totals.gst_amt }}</td>
+                                                    {{ invoice.totals.gst_amt|float|round(2) }}</td>
                                             </tr>
                                         </table>
                                     </div>
@@ -562,7 +562,7 @@
                                                     SUB TOTAL</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                                    {{ invoice.total }}</td>
+                                                    {{ invoice.total|float|round(2) }}</td>
                                             </tr>
                                             <tr>
                                                 <td
@@ -570,7 +570,7 @@
                                                     DISCOUNT</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                                    {{ invoice.discount }}</td>
+                                                    {{ invoice.discount|float|round(2) }}</td>
                                             </tr>
                                             <tr>
                                                 <td
@@ -578,7 +578,7 @@
                                                     TOTAL</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                                    {{ invoice.total }}</td>
+                                                    {{ invoice.total|float|round(2) }}</td>
                                             </tr>
                                             <tr>
                                                 <td
@@ -586,7 +586,7 @@
                                                     Total Tax</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                                    {{ invoice.total_tax }}</td>
+                                                    {{ invoice.total_tax|float|round(2) }}</td>
                                             </tr>
                                             <tr>
                                                 <td
@@ -594,7 +594,7 @@
                                                     Additional Charges</td>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 10px !important; padding: 4px !important; text-align: right !important;">
-                                                    {{ invoice.additional_charges}}</td>
+                                                    {{ invoice.additional_charges|float|round(2)}}</td>
                                             </tr>
                                         </table>
                                         <table
@@ -603,7 +603,7 @@
                                             <tr>
                                                 <td
                                                     style="border: 1px solid #000 !important; font-size: 14px !important; padding: 8px !important; text-align: center !important; font-weight: bold;">
-                                                    GRAND TOTAL: &#8377; {{ invoice.grand_total|round(2) }}</td>
+                                                    GRAND TOTAL: &#8377; {{ invoice.grand_total|float|round(2) }}</td>
                                             </tr>
                                         </table>
                                     </div>
