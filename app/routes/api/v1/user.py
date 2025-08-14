@@ -25,14 +25,20 @@ from app.utils.cloudinary_client import cloudinary_client
 from app.database.repositories.companyRepo import company_repo, Company
 from app.database.repositories.CompanySettingsRepo import company_settings_repo
 from typing import Any, Dict, Optional
+from app.Config import ENV_PROJECT
+from motor.motor_asyncio import AsyncIOMotorClient
 
 
 user = APIRouter()
 
+client = AsyncIOMotorClient(ENV_PROJECT.MONGO_URI)
+db = client[ENV_PROJECT.MONGO_DATABASE]
 
-class TenantID(BaseModel):
-    tenant_id: Optional[str] = None
-    tenant_email: Optional[str] = None
+ENTITY_MAP = {
+    "customers": {"collection": "Ledger", "name_field": "ledger_name"},
+    "products": {"collection": "StockItem", "name_field": "stock_item_name"},
+    "invoices": {"collection": "Voucher", "name_field": "voucher_number"},
+}
 
 
 class Email_Body(BaseModel):
@@ -93,12 +99,12 @@ async def update_user(
     )
     if res.modified_count == 0:
         raise http_exception.ResourceNotFoundException(
-            detail="User not found or no changes made."
+            detail="Can't find user or no changes made."
         )
 
     if res is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User not found or no changes made."
+            detail="Can't find user or no changes made."
         )
     return {
         "success": True,
@@ -784,3 +790,24 @@ async def updateCompanyDetails(
         # "data": updatedCompany,
     }
 
+
+@user.get("/entity-name/{entity}/{id}", response_class=ORJSONResponse)
+async def get_entity_name(
+    entity: str, id: str, current_user: TokenData = Depends(get_current_user)
+):
+    if current_user.user_type != "user" and current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException(detail="Unauthorized access")
+
+    if entity not in ENTITY_MAP:
+        raise http_exception.ResourceNotFoundException(detail="Entity type not found")
+    config = ENTITY_MAP[entity]
+    collection = db[config["collection"]]
+    name_field = config["name_field"]
+    doc = await collection.find_one({"_id": id}, {name_field: 1})
+    if not doc:
+        raise http_exception.ResourceNotFoundException(detail="Entity not found")
+    return {
+        "success": True,
+        "message": "Entity name fetched successfully",
+        "data": doc.get(name_field),
+    }

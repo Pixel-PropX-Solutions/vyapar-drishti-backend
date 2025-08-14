@@ -295,7 +295,9 @@ async def register(
 
     userExists = await user_repo.findOne({"email": user.email})
     if userExists is not None:
-        raise http_exception.ResourceConflictException()
+        raise http_exception.ResourceConflictException(
+            detail='User already exists with the same email. Please try logging in or use a different email.'
+        )
 
     client_info = classify_client(request.headers.get("user-agent", "unknown"))
     if client_info.get("device_type") in ["Unknown", "Bot"]:
@@ -489,7 +491,7 @@ async def get_current_user_details(
 
     response = await user_repo.collection.aggregate(pipeline=user_pipeline).to_list(None)
     if not response:
-        raise http_exception.ResourceNotFoundException(detail="User not found")
+        raise http_exception.ResourceNotFoundException(detail="Can't find user")
 
     company = await company_repo.collection.aggregate(pipeline=company_pipeline).to_list(
         None
@@ -670,7 +672,9 @@ async def delete_user(
     user = await user_repo.findOne({"_id": current_user.user_id})
 
     if user is None:
-        raise http_exception.ResourceNotFoundException(detail="User not found")
+        raise http_exception.ResourceNotFoundException(
+            detail="Can't find User. Aborting deletion."
+        )
 
     voucher_docs = await vouchar_repo.findMany({"user_id": current_user.user_id})
     voucher_ids = [doc["_id"] for doc in voucher_docs]
@@ -746,8 +750,8 @@ async def app_version():
     return {
         "success": True,
         "message": "App version fetched successfully",
-        "latest_version": "2.1",
-        "minimum_version": "2.0",
+        "latest_version": "2.2",
+        "minimum_version": "2.2",
     }
 
 
@@ -846,7 +850,9 @@ async def forgot_password(request: Request, email: str):
         {"email": email}, {"_id", "email", "user_type", "name"}
     )
     if not userExists:
-        raise http_exception.ResourceNotFoundException(detail="User not found")
+        raise http_exception.ResourceNotFoundException(
+            detail="Can't find user with this email"
+        )
 
     user_settings = await user_settings_repo.findOne({"user_id": userExists["_id"]})
     if not user_settings:
@@ -895,7 +901,9 @@ async def reset_password(request: Request, response: Response, data: ResetPasswo
     )
 
     if not userExists:
-        raise http_exception.ResourceNotFoundException(detail="User not found")
+        raise http_exception.ResourceNotFoundException(
+            detail="Can't find user with this email"
+        )
 
     user_settings = await user_settings_repo.findOne({"user_id": userExists["_id"]})
     if not user_settings:

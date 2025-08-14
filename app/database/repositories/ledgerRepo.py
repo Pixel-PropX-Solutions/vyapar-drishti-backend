@@ -160,18 +160,7 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
                 },
                 {
                     "$addFields": {
-                        "total_amount": {"$abs": {"$sum": "$accounts.amount"}}
-                    },
-                },
-                {
-                    "$addFields": {
-                        "is_positive": {
-                            "$cond": [
-                                {"$lt": [{"$sum": "$accounts.amount"}, 0]},
-                                True,
-                                False,
-                            ]
-                        },
+                        "total_amount": {"$round": [{"$sum": "$accounts.amount"}, 2]}
                     },
                 },
                 {"$sort": sort_criteria},
@@ -280,14 +269,14 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
         }
 
         sort_options = {
-            "voucher_number_asc": {"voucher_number": 1},
-            "voucher_number_desc": {"voucher_number": -1},
-            "date_asc": {"date": 1},
-            "date_desc": {"date": -1},
+            "voucher_number_asc": {"accounts.voucher_number": 1},
+            "voucher_number_desc": {"accounts.voucher_number": -1},
+            "date_asc": {"accounts.date": 1},
+            "date_desc": {"accounts.date": -1},
         }
 
         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
-        sort_stage = sort_options.get(sort_key, {"date": -1})
+        sort_stage = sort_options.get(sort_key, {"accounts.date": -1})
 
         pipeline = [
             {"$match": filter_params},
@@ -459,7 +448,9 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
                 }
             },
             {
-                "$addFields": {"total_amount": {"$sum": "$accounts.amount"}},
+                "$addFields": {
+                    "total_amount": {"$round": [{"$sum": "$accounts.amount"}, 2]}
+                },
             },
             {
                 "$unwind": "$accounts",
@@ -488,7 +479,7 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
                                 },
                             ]
                         }
-                        if search
+                        if search not in ["", None]
                         else {}
                     ),
                     **({"accounts.voucher_type": type} if type not in ["", None] else {}),

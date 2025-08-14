@@ -1934,6 +1934,78 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             ),
         )
 
+    async def viewProductTimeline(
+        self,
+        product_id: str,
+        company_id: str,
+        current_user: TokenData = Depends(get_current_user),
+    ):
+        pipeline = [
+            {"$match": {"_id": product_id}},
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "let": {"item_id": product_id},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$item_id", "$$item_id"]}}},
+                        {
+                            "$lookup": {
+                                "from": "Voucher",
+                                "let": {"voucher_id": "$vouchar_id"},
+                                "pipeline": [
+                                    {
+                                        "$match": {
+                                            "$expr": {"$eq": ["$_id", "$$voucher_id"]}
+                                        }
+                                    }
+                                ],
+                                "as": "voucher",
+                            }
+                        },
+                        {
+                            "$unwind": {
+                                "path": "$voucher",
+                                "preserveNullAndEmptyArrays": True,
+                            }
+                        },
+                        {
+                            "$addFields": {
+                                "date": "$voucher.date",
+                                "voucher_number": "$voucher.voucher_number",
+                                "voucher_type": "$voucher.voucher_type",
+                                "party_name": "$voucher.party_name",
+                                "party_name_id": "$voucher.party_name_id",
+                                "place_of_supply": "$voucher.place_of_supply",
+                                "vehicle_number": "$voucher.vehicle_number",
+                                "mode_of_transport": "$voucher.mode_of_transport",
+                                "status": "$voucher.status",
+                                "due_date": "$voucher.due_date",
+                            }
+                        },
+                        {"$project": {"voucher": 0}},
+                    ],
+                    "as": "timeline",
+                }
+            },
+            {
+                "$project": {
+                    "_id": 1,
+                    "stock_item_name": 1,
+                    "user_id": 1,
+                    "company_id": 1,
+                    "unit": 1,
+                    "unit_id": 1,
+                    "timeline": 1,
+                }
+            },
+        ]
+
+        res = [doc async for doc in self.collection.aggregate(pipeline)]
+        print("Product Timeline Result:", res)
+        if not res:
+            return {"message": "No product found with the given ID."}
+        return res
+
     # async def group_products_by_stock_level(self, chemist_id: str):
     #     pipeline = [
     #         {

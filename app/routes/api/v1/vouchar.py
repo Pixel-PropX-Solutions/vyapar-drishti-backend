@@ -59,6 +59,7 @@ class VoucherWithGSTCreate(BaseModel):
     mode_of_transport: Optional[str] = None
     status: Optional[str] = None
     due_date: Optional[str] = None
+    paid_amount: Optional[float] = 0.0
     accounting: List[Accounting]
     items: List[CreateInventoryItemWithGST]
 
@@ -81,6 +82,7 @@ class GSTVoucherUpdate(BaseModel):
     mode_of_transport: Optional[str] = None
     status: Optional[str] = None
     due_date: Optional[str] = None
+    paid_amount: Optional[float] = 0.0
 
     accounting: List[AccountingUpdate]
     items: Optional[List[UpdateInventoryItemWithGST]]
@@ -151,6 +153,7 @@ async def createVouchar(
         ),
         "status": (vouchar.status if hasattr(vouchar, "status") else ""),
         "due_date": (vouchar.due_date if hasattr(vouchar, "due_date") else ""),
+        "paid_amount": (vouchar.paid_amount if hasattr(vouchar, "paid_amount") else 0.0),
         "is_deleted": False,
         # Conditional fields for voucher types
         "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
@@ -325,6 +328,15 @@ async def updateVouchar(
         "place_of_supply": (
             vouchar.place_of_supply if hasattr(vouchar, "place_of_supply") else ""
         ),
+        "vehicle_number": (
+            vouchar.vehicle_number if hasattr(vouchar, "vehicle_number") else ""
+        ),
+        "mode_of_transport": (
+            vouchar.mode_of_transport if hasattr(vouchar, "mode_of_transport") else ""
+        ),
+        "status": (vouchar.status if hasattr(vouchar, "status") else ""),
+        "due_date": (vouchar.due_date if hasattr(vouchar, "due_date") else ""),
+        "paid_amount": (vouchar.paid_amount if hasattr(vouchar, "paid_amount") else 0.0),
         "is_deleted": False,
         # Conditional fields for voucher types
         "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
@@ -553,6 +565,7 @@ async def createVoucharWithGST(
         ),
         "status": (vouchar.status if hasattr(vouchar, "status") else ""),
         "due_date": (vouchar.due_date if hasattr(vouchar, "due_date") else ""),
+        "paid_amount": (vouchar.paid_amount if hasattr(vouchar, "paid_amount") else 0.0),
         "is_deleted": False,
         # Conditional fields for voucher types
         "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
@@ -864,6 +877,15 @@ async def updateVoucharWithGST(
         "place_of_supply": (
             vouchar.place_of_supply if hasattr(vouchar, "place_of_supply") else ""
         ),
+        "vehicle_number": (
+            vouchar.vehicle_number if hasattr(vouchar, "vehicle_number") else ""
+        ),
+        "mode_of_transport": (
+            vouchar.mode_of_transport if hasattr(vouchar, "mode_of_transport") else ""
+        ),
+        "status": (vouchar.status if hasattr(vouchar, "status") else ""),
+        "due_date": (vouchar.due_date if hasattr(vouchar, "due_date") else ""),
+        "paid_amount": (vouchar.paid_amount if hasattr(vouchar, "paid_amount") else 0.0),
         "is_deleted": False,
         # Conditional fields for voucher types
         "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,

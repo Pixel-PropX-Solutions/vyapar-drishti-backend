@@ -421,7 +421,26 @@ async def get_product_details(
             },
             {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
             {
-                "$addFields": {
+                "$group": {
+                    "_id": "$_id",
+                    "company_id": {"$first": "$company_id"},
+                    "stock_item_name": {"$first": "$stock_item_name"},
+                    "unit": {"$first": "$unit"},
+                    "unit_id": {"$first": "$unit_id"},
+                    "alias_name": {"$first": "$alias_name"},
+                    "category": {"$first": "$category"},
+                    "group": {"$first": "$group"},
+                    "image": {"$first": "$image"},
+                    "description": {"$first": "$description"},
+                    "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
+                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
+                    "gst_taxability": {"$first": "$gst_taxability"},
+                    "low_stock_alert": {"$first": "$low_stock_alert"},
+                    "created_at": {"$first": "$created_at"},
+                    "updated_at": {"$first": "$updated_at"},
+                    "opening_balance": {"$first": "$opening_balance"},
+                    "opening_rate": {"$first": "$opening_rate"},
+                    "opening_value": {"$first": "$opening_value"},
                     "purchase_qty": {
                         "$sum": {
                             "$cond": [
@@ -468,33 +487,6 @@ async def get_product_details(
                             ]
                         }
                     },
-                },
-            },
-            {
-                "$group": {
-                    "_id": "$_id",
-                    "company_id": {"$first": "$company_id"},
-                    "stock_item_name": {"$first": "$stock_item_name"},
-                    "unit": {"$first": "$unit"},
-                    "unit_id": {"$first": "$unit_id"},
-                    "alias_name": {"$first": "$alias_name"},
-                    "category": {"$first": "$category"},
-                    "group": {"$first": "$group"},
-                    "image": {"$first": "$image"},
-                    "description": {"$first": "$description"},
-                    "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
-                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
-                    "gst_taxability": {"$first": "$gst_taxability"},
-                    "low_stock_alert": {"$first": "$low_stock_alert"},
-                    "created_at": {"$first": "$created_at"},
-                    "updated_at": {"$first": "$updated_at"},
-                    "purchase_qty": {"$first": "$purchase_qty"},
-                    "purchase_value": {"$first": "$purchase_value"},
-                    "sales_qty": {"$first": "$sales_qty"},
-                    "sales_value": {"$first": "$sales_value"},
-                    "opening_balance": {"$first": "$opening_balance"},
-                    "opening_rate": {"$first": "$opening_rate"},
-                    "opening_value": {"$first": "$opening_value"},
                 }
             },
             {
@@ -524,8 +516,13 @@ async def get_product_details(
                     "sales_value": 1,
                     "current_stock": {
                         "$subtract": [
-                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
-                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
+                            {
+                                "$add": [
+                                    {"$ifNull": ["$purchase_qty", 0]},
+                                    {"$ifNull": ["$opening_balance", 0]},
+                                ]
+                            },
+                            {"$ifNull": ["$sales_qty", 0]},
                         ]
                     },
                     "avg_purchase_rate": {
@@ -535,9 +532,179 @@ async def get_product_details(
                             0,
                         ]
                     },
+                    "avg_sale_rate": {
+                        "$cond": [
+                            {"$gt": ["$sales_qty", 0]},
+                            {"$divide": ["$sales_value", "$sales_qty"]},
+                            0,
+                        ]
+                    },
                     "opening_balance": 1,
                     "opening_rate": 1,
                     "opening_value": 1,
+                    "stock_status": {
+                        "$switch": {
+                            "branches": [
+                                {
+                                    "case": {
+                                        "$lt": [
+                                            {
+                                                "$subtract": [
+                                                    {
+                                                        "$add": [
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$purchase_qty",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$opening_balance",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                        ]
+                                                    },
+                                                    {"$ifNull": ["$sales_qty", 0]},
+                                                ]
+                                            },
+                                            0,
+                                        ]
+                                    },
+                                    "then": "negative",
+                                },
+                                {
+                                    "case": {
+                                        "$eq": [
+                                            {
+                                                "$subtract": [
+                                                    {
+                                                        "$add": [
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$purchase_qty",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$opening_balance",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                        ]
+                                                    },
+                                                    {"$ifNull": ["$sales_qty", 0]},
+                                                ]
+                                            },
+                                            0,
+                                        ]
+                                    },
+                                    "then": "zero",
+                                },
+                                {
+                                    "case": {
+                                        "$and": [
+                                            {
+                                                "$gt": [
+                                                    {
+                                                        "$subtract": [
+                                                            {
+                                                                "$add": [
+                                                                    {
+                                                                        "$ifNull": [
+                                                                            "$purchase_qty",
+                                                                            0,
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "$ifNull": [
+                                                                            "$opening_balance",
+                                                                            0,
+                                                                        ]
+                                                                    },
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$sales_qty",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                        ]
+                                                    },
+                                                    0,
+                                                ]
+                                            },
+                                            {
+                                                "$lt": [
+                                                    {
+                                                        "$subtract": [
+                                                            {
+                                                                "$add": [
+                                                                    {
+                                                                        "$ifNull": [
+                                                                            "$purchase_qty",
+                                                                            0,
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "$ifNull": [
+                                                                            "$opening_balance",
+                                                                            0,
+                                                                        ]
+                                                                    },
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$sales_qty",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                        ]
+                                                    },
+                                                    "$low_stock_alert",
+                                                ]
+                                            },
+                                        ]
+                                    },
+                                    "then": "low",
+                                },
+                                {
+                                    "case": {
+                                        "$gte": [
+                                            {
+                                                "$subtract": [
+                                                    {
+                                                        "$add": [
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$purchase_qty",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                            {
+                                                                "$ifNull": [
+                                                                    "$opening_balance",
+                                                                    0,
+                                                                ]
+                                                            },
+                                                        ]
+                                                    },
+                                                    {"$ifNull": ["$sales_qty", 0]},
+                                                ]
+                                            },
+                                            "$low_stock_alert",
+                                        ]
+                                    },
+                                    "then": "positive",
+                                },
+                            ],
+                            "default": None,
+                        }
+                    },
                 }
             },
         ]
@@ -551,6 +718,37 @@ async def get_product_details(
         )
 
 
+@Product.get(
+    "/get/timeline/{product_id}",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getProductTimeline(
+    product_id: str,
+    company_id: str = Query(""),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type not in {"user", "admin"}:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please create user settings first."
+        )
+
+    result = await stock_item_repo.viewProductTimeline(
+        product_id=product_id,
+        company_id=current_user.current_company_id or userSettings["current_company_id"],
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": result,
+    }
 @Product.get(
     "/view/all/product", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
@@ -669,6 +867,7 @@ async def view_inventory_stats(
         "message": "Inventory Stats Fetched Successfully...",
         "data": result,
     }
+
 
 
 @Product.get(

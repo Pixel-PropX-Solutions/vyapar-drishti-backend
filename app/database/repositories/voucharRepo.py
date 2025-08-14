@@ -81,6 +81,10 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             "created_at_desc": {"created_at": -1},
             "date_asc": {"date": 1},
             "date_desc": {"date": -1},
+            "party_name_asc": {"party_name": 1},
+            "party_name_desc": {"party_name": -1},
+            "voucher_type_asc": {"voucher_type": 1},
+            "voucher_type_desc": {"voucher_type": -1},
         }
 
         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
@@ -177,15 +181,13 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "party_name": 1,
                     "party_name_id": 1,
                     "narration": 1,
-                    # "debit": 1,
-                    # "credit": 1,
+                    'paid_amount': 1,
                     "amount": {"$arrayElemAt": ["$ledger_entries.amount", 0]},
                     "balance_type": 1,
                     "ledger_name": {"$arrayElemAt": ["$ledger_entries.ledgername", 0]},
                     "is_deemed_positive": {
                         "$arrayElemAt": ["$ledger_entries.is_deemed_positive", 0]
                     },
-                    # "ledger_entries": 1,
                     "created_at": 1,
                 }
             },

@@ -74,7 +74,8 @@ async def create_ledger(
         {
             "ledger_name": name,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         }
     )
 
@@ -108,7 +109,8 @@ async def create_ledger(
     ledger_data = {
         "ledger_name": name,
         "user_id": current_user.user_id,
-        "company_id": current_user.current_company_id or userSettings["current_company_id"],
+        "company_id": current_user.current_company_id
+        or userSettings["current_company_id"],
         "is_deleted": False,
         "phone": phone_data,
         "email": email,
@@ -211,7 +213,8 @@ async def view_all_ledgers(
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id
+                    or userSettings["current_company_id"],
                     "is_deleted": False,
                     "parent": {"$in": ["Debtors", "Creditors"]},
                 },
@@ -250,13 +253,20 @@ async def view_ledgers_with_type(
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id
+                    or userSettings["current_company_id"],
                     "parent": type,
                     "is_deleted": False,
                 },
             },
             {
-                "$project": {"_id": 1, "ledger_name": 1, "parent": 1, "alias": 1, "phone": 1},
+                "$project": {
+                    "_id": 1,
+                    "ledger_name": 1,
+                    "parent": 1,
+                    "alias": 1,
+                    "phone": 1,
+                },
             },
         ]
     ).to_list(None)
@@ -289,7 +299,8 @@ async def view_ledgers_transaction_type(
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id
+                    or userSettings["current_company_id"],
                     "parent": {"$in": type},
                 },
             },
@@ -351,7 +362,8 @@ async def update_ledger(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
             "is_deleted": False,
         }
     )
@@ -411,7 +423,8 @@ async def update_ledger(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
             "is_deleted": False,
         },
         {"$set": update_fields},
@@ -449,7 +462,8 @@ async def update_ledger_details(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
             "is_deleted": False,
         }
     )
@@ -487,12 +501,12 @@ async def update_ledger_details(
             detail="No valid fields provided for update."
         )
 
-
     await ledger_repo.update_one(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
             "is_deleted": False,
         },
         {"$set": updated_dict, "$currentDate": {"updated_at": True}},
@@ -502,7 +516,8 @@ async def update_ledger_details(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
             "is_deleted": False,
         }
     )
@@ -521,6 +536,8 @@ async def update_ledger_details(
 async def view_ledger(
     ledger_id: str,
     company_id: str = Query(None),
+    start_date: str = None,
+    end_date: str = None,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
@@ -532,13 +549,39 @@ async def view_ledger(
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
         )
+    if start_date not in (None, ""):
+        start_date = start_date[:10]
+    if end_date not in (None, ""):
+        end_date = end_date[:10]
+
+    match_date_filter = {}
+    if start_date and end_date:
+        match_date_filter = {
+            "date": {
+                "$gte": start_date,
+                "$lte": end_date,
+            }
+        }
+    # elif start_date:
+    #     match_date_filter = {
+    #         "date": {
+    #             "$gte": start_date,
+    #         }
+    #     }
+    # elif end_date:
+    #     match_date_filter = {
+    #         "date": {
+    #             "$lte": end_date,
+    #         }
+    #     }
 
     result = await ledger_repo.collection.aggregate(
         [
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id
+                    or userSettings["current_company_id"],
                     "_id": ledger_id,
                     "is_deleted": False,
                 },
@@ -552,18 +595,96 @@ async def view_ledger(
                 }
             },
             {
-                "$addFields": {"total_amount": {"$abs": {"$sum": "$accounts.amount"}}},
+                "$addFields": {
+                    "total_amount": {"$round": [{"$sum": "$accounts.amount"}, 2]},
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Voucher",
+                    "let": {"account_vouchar_ids": "$accounts.vouchar_id"},
+                    "pipeline": [
+                        {
+                            "$match": {
+                                "$expr": {"$in": ["$_id", "$$account_vouchar_ids"]},
+                                **match_date_filter,
+                            }
+                        },
+                        {
+                            "$project": {
+                                "_id": 1,
+                                "date": 1,
+                            }
+                        },
+                    ],
+                    "as": "filtered_vouchars",
+                }
             },
             {
                 "$addFields": {
-                    "is_deemed_positive": {
-                        "$cond": [
-                            {"$lt": [{"$sum": "$accounts.amount"}, 0]},
-                            True,
-                            False,
+                    "filtered_accounts": {
+                        "$filter": {
+                            "input": "$accounts",
+                            "as": "account",
+                            "cond": {
+                                "$in": [
+                                    "$$account.vouchar_id",
+                                    {
+                                        "$map": {
+                                            "input": "$filtered_vouchars",
+                                            "as": "fv",
+                                            "in": "$$fv._id",
+                                        }
+                                    },
+                                ]
+                            },
+                        }
+                    }
+                }
+            },
+            {
+                "$addFields": {
+                    "total_debit": {
+                        "$round": [
+                            {
+                                "$sum": {
+                                    "$map": {
+                                        "input": "$filtered_accounts",
+                                        "as": "fa",
+                                        "in": {
+                                            "$cond": [
+                                                {"$lt": ["$$fa.amount", 0]},
+                                                "$$fa.amount",
+                                                0,
+                                            ]
+                                        },
+                                    }
+                                }
+                            },
+                            2,
                         ]
                     },
-                },
+                    "total_credit": {
+                        "$round": [
+                            {
+                                "$sum": {
+                                    "$map": {
+                                        "input": "$filtered_accounts",
+                                        "as": "fa",
+                                        "in": {
+                                            "$cond": [
+                                                {"$gt": ["$$fa.amount", 0]},
+                                                "$$fa.amount",
+                                                0,
+                                            ]
+                                        },
+                                    }
+                                }
+                            },
+                            2,
+                        ]
+                    },
+                }
             },
             {
                 "$project": {
@@ -580,7 +701,10 @@ async def view_ledger(
                     "created_at": 0,
                     "updated_at": 0,
                     "is_revenue": 0,
-                    "opening_balance": 0,
+                    "filtered_accounts": 0,
+                    "filtered_vouchars": 0,
+                    "is_deemed_positive": 0,
+                    "alias": 0,
                     "image": 0,
                     "qr_image": 0,
                     "parent_id": 0,
@@ -630,7 +754,8 @@ async def get_ledger(
             {
                 "$match": {
                     "user_id": current_user.user_id,
-                    "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id
+                    or userSettings["current_company_id"],
                     "_id": ledger_id,
                     "is_deleted": False,
                 },
@@ -714,7 +839,8 @@ async def check_ledger_name(
         {
             "ledger_name": ledger_name,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
             "is_deleted": False,
         }
     )
@@ -726,7 +852,8 @@ async def check_ledger_name(
                 {
                     "$match": {
                         "user_id": current_user.user_id,
-                        "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                        "company_id": current_user.current_company_id
+                        or userSettings["current_company_id"],
                         "is_deleted": False,
                     }
                 },
@@ -777,7 +904,8 @@ async def delete_ledger(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         }
     )
 
@@ -791,7 +919,8 @@ async def delete_ledger(
         {
             "party_name_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         }
     )
 
@@ -804,7 +933,8 @@ async def delete_ledger(
         {
             "_id": ledger_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         },
     )
 
