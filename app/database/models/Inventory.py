@@ -5,20 +5,18 @@ import datetime
 
 
 class InventoryItem(BaseModel):
-    vouchar_id: str  # Foreign key to trn_voucher._id
+    vouchar_id: str
     item: str
     item_id: str
-    quantity: float  # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
+    quantity: float
     rate: float
-    amount: float  # Total amount for the item in the voucher(Sales, purchase), negative for sale or positive for purchase
+    amount: float
 
     # Additional fields for the item
-    # These fields are optional and can be used for additional charges or discounts
     additional_amount: Optional[float] = 0.0
     discount_amount: Optional[float] = 0.0
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    # tracking_number: Optional[str] = None
     order_number: Optional[str] = None
     order_due_date: Optional[str] = None
 
@@ -30,20 +28,18 @@ class InventoryItemDB(InventoryItem):
 
 
 class InventoryItemCreate(BaseModel):
-    vouchar_id: str  # Foreign key to trn_voucher._id
+    vouchar_id: str
     item: str
     item_id: str
-    quantity: float  # Quantity of the item in the voucher(Sales, purchase), neagative for sale or positive for purchase
+    quantity: float
     rate: float
-    amount: float  # Total amount for the item in the voucher(Sales, purchase), negative for sale or positive for purchase
+    amount: float
 
     # Additional fields for the item
-    # These fields are optional and can be used for additional charges or discounts
     additional_amount: Optional[float] = 0.0
     discount_amount: Optional[float] = 0.0
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    # tracking_number: Optional[str] = None
     order_number: Optional[str] = None
     order_due_date: Optional[str] = None
 
@@ -65,6 +61,7 @@ class InventoryItemUpdate(BaseModel):
     order_number: Optional[str] = None
     order_due_date: Optional[str] = None
 
+
 class CreateInventoryItemWithGST(BaseModel):
     vouchar_id: str
     item: str
@@ -81,6 +78,7 @@ class CreateInventoryItemWithGST(BaseModel):
     hsn_code: Optional[str] = None
     gst_rate: Optional[str] = None
     gst_amount: Optional[float] = 0.0
+
 
 class UpdateInventoryItemWithGST(BaseModel):
     entry_id: str

@@ -9,7 +9,7 @@ from typing import Optional
 
 
 class Accounting(BaseModel):
-    vouchar_id: str  # Foreign key to trn_voucher._id
+    vouchar_id: str
     ledger: str = Field(..., description="Name of the ledger account used")
     ledger_id: str = Field(..., description="Internal reference or GUID for the ledger")
     amount: float = Field(..., description="Amount debited or credited")

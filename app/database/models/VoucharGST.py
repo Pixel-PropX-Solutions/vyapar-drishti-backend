@@ -16,33 +16,6 @@ class GSTItemDetail(BaseModel):
     total_amount: float = 0.0
 
 
-# class GSTLedgerDetail(BaseModel):
-#     ledger_name: str
-#     gst_duty_head: Optional[str] = None  # CGST / SGST / IGST / CESS
-#     gst_rate: Optional[float] = None
-#     amount: float = 0.0
-
-
-# class GSTSummaryEntry(BaseModel):
-#     rate: str
-#     taxable_value: float
-#     cgst: float
-#     sgst: float
-#     igst: float
-#     total: float
-
-#     @root_validator(pre=True)
-#     def calculate_totals(cls, values):
-#         taxable_value = values.get("taxable_value", 0.0)
-#         cgst = values.get("cgst", 0.0)
-#         sgst = values.get("sgst", 0.0)
-#         igst = values.get("igst", 0.0)
-
-#         total = taxable_value + cgst + sgst + igst
-#         values["total"] = total
-#         return values
-
-
 class VoucherGST(BaseModel):
     voucher_id: str
     company_id: str

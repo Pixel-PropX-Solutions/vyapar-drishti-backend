@@ -52,7 +52,6 @@ async def get_current_user(
     tokens: dict = Depends(oauth2_scheme),
 ) -> TokenData:
     token: TokenData = await verify_access_token(tokens["access_token"])
-    print("Current User Token:", token)
     # Check token_version in DB
     db_token = await refresh_token_repo.findOne(
         {
@@ -62,7 +61,6 @@ async def get_current_user(
         },
         {"token_version"},
     )
-    print("DB Token Version:", db_token)
     if not db_token or db_token.get("token_version", 1) != token.token_version:
         raise http_exception.CredentialsInvalidException(
             detail="Token is invalid or has been revoked."
@@ -288,8 +286,6 @@ async def verify_access_token(token: str) -> TokenData:
         raise http_exception.CredentialsInvalidException(
             detail="Invalid access token. Please login again."
         )
-
-
 
 
 async def get_refresh_token(tokens: dict = Depends(oauth2_scheme)) -> str:
