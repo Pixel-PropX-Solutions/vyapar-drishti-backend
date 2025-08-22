@@ -47,13 +47,13 @@ configs = [
 ]
 
 
-def call_api():
-    response = requests.get("https://vyapar-drishti-previews.onrender.com/health")
-    print(f"API called: {response}")
+# def call_api():
+#     response = requests.get("https://vyapar-drishti-previews.onrender.com/health")
+#     print(f"API called: {response}")
 
-# Schedule the job (e.g., every 5 minutes)
-scheduler.add_job(call_api, 'cron', minute='*/5', )
-scheduler.start()
+# # Schedule the job (e.g., every 5 minutes)
+# scheduler.add_job(call_api, 'cron', minute='*/5', )
+# scheduler.start()
 
 @app.get(
     "/health",

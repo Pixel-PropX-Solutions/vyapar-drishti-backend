@@ -67,7 +67,7 @@ class ExtractionTools:
                     }},
                     "phone": "string",
                     "email": "string",
-                    "gstin": "string",
+                    "tin": "string",
                     "company_name": "string",
                     "billing_address": {{
                         "state":  "string",
@@ -104,7 +104,7 @@ class ExtractionTools:
                     "phone": "string",
                     "email": "string",
                     "company_name": "string",
-                    "gstin": "string",
+                    "tin": "string",
                 }},
                 "product_details": [
                     {{
@@ -122,7 +122,7 @@ class ExtractionTools:
                 "date": "DD-MM-YYYY",
                 "due_date": "DD-MM-YYYY",
                 "payment_method": "string",
-                "gst_total": 0.0,
+                "tax_total": 0.0,
                 "total_discount": 0.0,
                 "total_amount": 0.0,
                 "total_tax_amount": 0.0,
@@ -138,7 +138,7 @@ class ExtractionTools:
                     }},
                     "phone": "string",
                     "email": "string",
-                    "gstin": "string",
+                    "tin": "string",
                     "company_name": "string",
                     "billing_address": {{
                         "state":  "string",
@@ -175,7 +175,7 @@ class ExtractionTools:
                     "phone": "string",
                     "email": "string",
                     "company_name": "string",
-                    "gstin": "string",
+                    "tin": "string",
                 }},
                 "product_details": [
                     {{
@@ -194,7 +194,7 @@ class ExtractionTools:
                 "purchase_number": "string",
                 "invoice_number": "string",
                 "payment_method": "string",
-                "gst_total": 0.0,
+                "tax_total": 0.0,
                 "total_discount": 0.0,
                 "total_amount": 0.0,
                 "toatal_tax_amount": 0.0,
@@ -212,7 +212,7 @@ class ExtractionTools:
             - name.last: Last name of the creditor (if available).
         - phone: Contact number of the creditor.
         - email: Email address of the creditor.
-        - gstin: GST Identification Number of the creditor.
+        - tin: TAX Identification Number of the creditor.
         - company_name: Name of the creditor's company.
         - billing_address: Object containing the billing address fields:
             - state: State of the billing address.
@@ -245,7 +245,7 @@ class ExtractionTools:
         - phone: Contact number of the debitor.
         - email: Email address of the debitor.
         - company_name: Name of the debitor's company.
-        - gstin: GST Identification Number of the debitor.
+        - tin: TAX Identification Number of the debitor.
         
         product_details: A list of products/items in the bill. Each item contains:
         - name: Name of the product (can expand upto 2 or three lines).
@@ -262,7 +262,7 @@ class ExtractionTools:
         - date: Date of the sale bill in DD-MM-YYYY format.
         - due_date: Due date for payment in DD-MM-YYYY format.
         - payment_method: Payment method used (e.g., CASH, CARD, etc.).
-        - gst_total: Total GST amount for the sale.
+        - tax_total: Total TAX amount for the sale.
         - total_discount: Total discount applied to the sale (or can be sum of the individuals discounts of the products in product details).
         - total_amount: Total amount before taxes and discounts.
         - toatal_tax_amount: Total tax amount for the sale (e.g. summation of the tax_amount of all the products in the product_details).
@@ -276,7 +276,7 @@ class ExtractionTools:
         - date: Date of the purchase bill in DD-MM-YYYY format.
         - due_date: Due date for payment in DD-MM-YYYY format.
         - payment_method: Payment method used (e.g., CASH, CARD, etc.).
-        - gst_total: Total GST amount for the purchase.
+        - tax_total: Total TAX amount for the purchase.
         - total_discount: Total discount amount applied to the purchase (or can be sum of the individuals discount_amount of the products in product details).
         - total_amount: Total amount before taxes and discounts.
         - toatal_tax_amount: Total tax amount for the purchase  (e.g. summation of the tax_amount of all the products in the product_details).
@@ -295,7 +295,7 @@ class ExtractionTools:
         - The 'payment_method' field should be set to "CASH" if not specified.
         - The 'date' and 'due_date' fields should be in the format "DD-MM-YYYY".
         - The 'product_details' array should contain objects with the specified fields.
-        - The 'gst_total', 'discount', 'total_amount', 'tax_amount', 'round_off_amount', and 'grand_total' fields should be numeric values.
+        - The 'tax_total', 'discount', 'total_amount', 'tax_amount', 'round_off_amount', and 'grand_total' fields should be numeric values.
         - The 'creditor' and 'debitor' objects should contain the specified fields.
         - Try dividing the address into 'address_1' and 'address_2' if possible, otherwise set 'address_2' to null.
         - Try dividing the name of the creditor and debitor into first name and last name if possible, otherwise set last name to null.
@@ -304,15 +304,15 @@ class ExtractionTools:
         - The 'company_name' field in the 'creditor' and 'debitor' objects is optional and can be null.
         - The 'address_2' field in the 'billing_address' and 'shipping_address' objects is optional and can be null.
         - The 'phone' and 'email' fields in the 'creditor' and 'debitor' objects are optional and can be null.
-        - The 'gstin' field in the 'creditor' and 'debitor' objects is optional and can be null.
+        - The 'tin' field in the 'creditor' and 'debitor' objects is optional and can be null.
         - The 'name' field in the 'creditor' and 'debitor' objects is mandatory.
         - The 'product_details' array should contain at least one product object.
         - The 'name' field in the 'product_details' array is mandatory.
         - The 'quantity', 'unit_price', 'total_price', 'tax_rate', 'tax_amount', 'discount', and 'discount_amount' fields in the 'product_details' array are mandatory and should be numeric and if not present in bill then set them to 0 or null as specified.
         - The 'tax_amount' field in the 'product_details' array should be calculated as ('total_price' × 'tax_rate') / 100.
         - The 'discount_amount' field in the 'product_details' array should be calculated as ('total_price' × 'discount') / 100 if the dicount is percentage type.
-        - The 'grand_total' field should be calculated as the sum of all 'total_price' in 'product_details' plus 'gst_total' minus 'discount' plus 'round_off_amount'.
-        - The 'gst_total' field should be the sum of all 'tax_amount' in 'product_details'.
+        - The 'grand_total' field should be calculated as the sum of all 'total_price' in 'product_details' plus 'tax_total' minus 'discount' plus 'round_off_amount'.
+        - The 'tax_total' field should be the sum of all 'tax_amount' in 'product_details'.
         
         Only one of 'sale' or 'purchase' will be filled based on the bill type, the other must be null.
         The output should be a valid JSON object with the above structure.

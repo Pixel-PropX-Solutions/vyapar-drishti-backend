@@ -188,7 +188,7 @@ async def get_all_vouchar_type(
 #                 "email": 1,
 #                 "financial_year_start": 1,
 #                 "books_begin_from": 1,
-#                 "gstin": 1,
+#                 "tin": 1,
 #                 "website": 1,
 #                 "created_at": 1,
 #                 "updated_at": 1,

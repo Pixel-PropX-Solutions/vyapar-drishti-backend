@@ -14,6 +14,7 @@ from app.database.repositories.crud.base import (
 )
 import re
 from datetime import datetime
+# import pprint
 
 
 class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
@@ -42,8 +43,8 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         sort: Sort,
         current_user: TokenData = Depends(get_current_user),
         # is_deleted: bool = False,
-        start_date: datetime = None,
-        end_date: datetime = None,
+        start_date: str = "",
+        end_date: str = "",
     ):
         filter_params = {
             "user_id": current_user.user_id,
@@ -72,23 +73,11 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             filter_params["voucher_type"] = type
 
         if start_date not in ["", None] and end_date not in ["", None]:
-            filter_params["date"] = {"$gte": start_date, "$lte": end_date}
+            startDate = start_date[0:10]
+            endDate = end_date[0:10]
+            filter_params["date"] = {"$gte": startDate, "$lte": endDate}
 
-        sort_options = {
-            "voucher_number_asc": {"voucher_number": 1},
-            "voucher_number_desc": {"voucher_number": -1},
-            "created_at_asc": {"created_at": 1},
-            "created_at_desc": {"created_at": -1},
-            "date_asc": {"date": 1},
-            "date_desc": {"date": -1},
-            "party_name_asc": {"party_name": 1},
-            "party_name_desc": {"party_name": -1},
-            "voucher_type_asc": {"voucher_type": 1},
-            "voucher_type_desc": {"voucher_type": -1},
-        }
-
-        sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
-        sort_stage = sort_options.get(sort_key, {"date": 1, "created_at": -1})
+        sort_stage = {sort.sort_field: int(sort.sort_order)} if sort.sort_field else {"date": -1}
 
         pipeline = [
             {"$match": filter_params},
@@ -169,8 +158,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     }
                 }
             },
-            # Removed $unwind on ledger_entries
-            {"$sort": sort_stage},
             {
                 "$project": {
                     "_id": 1,
@@ -181,7 +168,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "party_name": 1,
                     "party_name_id": 1,
                     "narration": 1,
-                    'paid_amount': 1,
+                    "paid_amount": 1,
                     "amount": {"$arrayElemAt": ["$ledger_entries.amount", 0]},
                     "balance_type": 1,
                     "ledger_name": {"$arrayElemAt": ["$ledger_entries.ledgername", 0]},
@@ -191,6 +178,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "created_at": 1,
                 }
             },
+            {"$sort": sort_stage},
             {
                 "$facet": {
                     "docs": [
@@ -205,6 +193,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         res = [doc async for doc in self.collection.aggregate(pipeline)]
         docs = res[0]["docs"]
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
+        # pprint.pprint(docs, indent=2, width=120)
 
         return PaginatedResponse(
             docs=docs,

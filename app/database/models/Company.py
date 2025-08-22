@@ -27,7 +27,7 @@ class Company(BaseModel):
 
     # Optional fields
     image: Optional[str] = None
-    gstin: Optional[str] = ""
+    tin: Optional[str] = ""
     website: Optional[str] = None
     is_deleted: bool = False
     # is_selected: bool = False
@@ -61,7 +61,7 @@ class CompanyCreate(BaseModel):
 
     # Optional fields
     image: Optional[str] = None
-    gstin: Optional[str] = ""
+    tin: Optional[str] = ""
     website: Optional[str] = None
     is_deleted: bool = False
     # is_selected: bool = False

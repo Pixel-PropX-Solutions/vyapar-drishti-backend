@@ -147,3 +147,14 @@ class AlreadyVerifiedException(HTTPException):
             status_code=status.HTTP_409_CONFLICT,
             detail=detail,
         )
+
+class ValidationException(HTTPException):
+    """
+    Exception raised when the input data does not pass validation checks.
+    """
+
+    def __init__(self, detail: str = "Validation error."):
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=detail,
+        )

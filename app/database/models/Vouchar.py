@@ -25,13 +25,17 @@ class Voucher(BaseModel):
     mode_of_transport: Optional[str] = None
     status: Optional[str] = None
     due_date: Optional[str] = None
-    paid_amount: Optional[float] = 0.0
+    
+    # Accounting fields
+    paid_amount: float # Amount paid by the customer
+    total: Optional[float] = 0.0  # Total amount before taxes and discounts
+    discount: Optional[float] = 0.0 # Discount applied to the invoice
+    total_amount: Optional[float] = 0.0 # Total amount after discounts but before taxes
+    total_tax: Optional[float] = 0.0 # Total tax applied to the invoice
+    additional_charge: Optional[float] = 0.0 # Any additional charges applied
+    roundoff: Optional[float] = 0.0 # Round off amount
+    grand_total: float # Total amount including taxes, discounts, and additional charges
 
-    # Automatically set fields
-    is_invoice: Optional[int] = 0
-    is_accounting_voucher: Optional[int] = 0
-    is_inventory_voucher: Optional[int] = 0
-    is_order_voucher: Optional[int] = 0
     is_deleted: bool = False
 
 
@@ -57,8 +61,16 @@ class VoucherCreate(BaseModel):
     mode_of_transport: Optional[str] = None
     status: Optional[str] = None
     due_date: Optional[str] = None
-    paid_amount: Optional[float] = 0.0
-
+    
+    paid_amount: float # Amount paid by the customer
+    total: Optional[float] = 0.0  # Total amount before taxes and discounts
+    discount: Optional[float] = 0.0 # Discount applied to the invoice
+    total_amount: Optional[float] = 0.0 # Total amount after discounts but before taxes
+    total_tax: Optional[float] = 0.0 # Total tax applied to the invoice
+    additional_charge: Optional[float] = 0.0 # Any additional charges applied
+    roundoff: Optional[float] = 0.0 # Round off amount
+    grand_total: float # Total amount including taxes, discounts, and additional charges
+    
     accounting: List[Accounting]
     items: List[InventoryItem] = []
 
@@ -82,7 +94,15 @@ class VoucherUpdate(BaseModel):
     mode_of_transport: Optional[str] = None
     status: Optional[str] = None
     due_date: Optional[str] = None
-    paid_amount: Optional[float] = 0.0
-
+    
+    paid_amount: float # Amount paid by the customer
+    total: Optional[float] = 0.0  # Total amount before taxes and discounts
+    discount: Optional[float] = 0.0 # Discount applied to the invoice
+    total_amount: Optional[float] = 0.0 # Total amount after discounts but before taxes
+    total_tax: Optional[float] = 0.0 # Total tax applied to the invoice
+    additional_charge: Optional[float] = 0.0 # Any additional charges applied
+    roundoff: Optional[float] = 0.0 # Round off amount
+    grand_total: float # Total amount including taxes, discounts, and additional charges
+    
     accounting: List[AccountingUpdate]
     items: Optional[List[InventoryItemUpdate]]

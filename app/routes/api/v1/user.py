@@ -36,8 +36,14 @@ db = client[ENV_PROJECT.MONGO_DATABASE]
 
 ENTITY_MAP = {
     "customers": {"collection": "Ledger", "name_field": "ledger_name"},
+    "creditors": {"collection": "Ledger", "name_field": "ledger_name"},
+    "debtors": {"collection": "Ledger", "name_field": "ledger_name"},
     "products": {"collection": "StockItem", "name_field": "stock_item_name"},
     "invoices": {"collection": "Voucher", "name_field": "voucher_number"},
+    "sales": {"collection": "Voucher", "name_field": "voucher_number"},
+    "purchase": {"collection": "Voucher", "name_field": "voucher_number"},
+    "payment": {"collection": "Voucher", "name_field": "voucher_number"},
+    "receipt": {"collection": "Voucher", "name_field": "voucher_number"},
 }
 
 
@@ -122,7 +128,7 @@ async def createCompany(
     number: str = Form(None),
     code: str = Form(None),
     email: str = Form(None),
-    gstin: str = Form(None),
+    tin: str = Form(None),
     website: str = Form(None),
     image: UploadFile = File(None),
     mailing_name: str = Form(None),
@@ -184,7 +190,7 @@ async def createCompany(
         "user_id": current_user.user_id,
         "phone": phone_obj,
         "email": email,
-        "gstin": gstin,
+        "tin": tin,
         "website": website,
         "image": image_url,
         "mailing_name": mailing_name,
@@ -252,7 +258,7 @@ async def createCompany(
                 "company_name": name,
                 "country": country,
                 "state": state,
-                "enable_gst": bool(gstin),
+                "enable_tax": bool(tin),
                 "enable_inventory": True,
                 "currency": "INR",
                 "financial_year": (
@@ -264,8 +270,8 @@ async def createCompany(
                     if not books_begin_from
                     else books_begin_from
                 ),
-                "gstin": gstin,
-                "gst_registration_type": "Regular",  # Default or can be passed
+                "tin": tin,
+                "tax_registration": "Regular",  # Default or can be passed
                 "place_of_supply": state,  # Default or can be passed
                 "bank_details": {
                     "account_holder": account_holder,
@@ -310,7 +316,7 @@ async def createCompany(
                 "mailing_state": None,
                 "mailing_country": None,
                 "mailing_pincode": None,
-                "gstin": None,
+                "tin": None,
                 "account_holder": None,
                 "account_number": None,
                 "bank_ifsc": None,
@@ -336,7 +342,7 @@ async def createCompany(
                 "mailing_state": None,
                 "mailing_country": None,
                 "mailing_pincode": None,
-                "gstin": None,
+                "tin": None,
                 "account_holder": None,
                 "account_number": None,
                 "bank_ifsc": None,
@@ -362,7 +368,7 @@ async def createCompany(
                 "mailing_state": None,
                 "mailing_country": None,
                 "mailing_pincode": None,
-                "gstin": None,
+                "tin": None,
                 "account_holder": None,
                 "account_number": None,
                 "bank_ifsc": None,
@@ -388,7 +394,7 @@ async def createCompany(
                 "mailing_state": None,
                 "mailing_country": None,
                 "mailing_pincode": None,
-                "gstin": None,
+                "tin": None,
                 "account_holder": None,
                 "account_number": None,
                 "bank_ifsc": None,
@@ -483,7 +489,7 @@ async def get_all_company(
                 "email": 1,
                 "financial_year_start": 1,
                 "books_begin_from": 1,
-                "gstin": 1,
+                "tin": 1,
                 # "is_selected": 1,
                 "website": 1,
                 "created_at": 1,
@@ -566,7 +572,7 @@ async def get_company(
                 "email": 1,
                 "financial_year_start": 1,
                 "books_begin_from": 1,
-                "gstin": 1,
+                "tin": 1,
                 "website": 1,
                 "created_at": 1,
                 "updated_at": 1,
@@ -603,7 +609,7 @@ async def updateCompany(
     number: str = Form(None),
     code: str = Form(None),
     email: str = Form(None),
-    gstin: str = Form(None),
+    tin: str = Form(None),
     website: str = Form(None),
     image: UploadFile = File(None),
     mailing_name: str = Form(None),
@@ -657,7 +663,7 @@ async def updateCompany(
         "company_name": name,
         "phone": phone_obj,
         "email": email,
-        "gstin": gstin,
+        "tin": tin,
         "website": website,
         "mailing_name": mailing_name,
         "address_1": address_1,
@@ -682,8 +688,8 @@ async def updateCompany(
             "country": country,
             "state": state,
             "currency": "INR",
-            "gstin": gstin,
-            "gst_registration_type": "Regular",  # Default or can be passed
+            "tin": tin,
+            "tax_registration_type": "Regular",  # Default or can be passed
             "place_of_supply": state,  # Default or can be passed
             "bank_details": {
                 "account_holder": account_holder,

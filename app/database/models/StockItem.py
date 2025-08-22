@@ -29,9 +29,10 @@ class StockItem(BaseModel):
     opening_balance: Optional[float] = 0
     opening_rate: Optional[float] = 0
     opening_value: Optional[float] = 0
-    gst_hsn_code: Optional[str] = ""
-    gst_nature_of_goods: Optional[str] = ""
-    gst_taxability: Optional[str] = ""
+    hsn_code: Optional[str] = ""
+    nature_of_goods: Optional[str] = ""
+    taxability: Optional[str] = ""
+    tax_rate: Optional[float] = 0
 
     # Additonal Optional fields
     low_stock_alert: Optional[int] = 0
@@ -67,9 +68,9 @@ class StockItemCreate(BaseModel):
     opening_balance: Optional[float] = 0
     opening_rate: Optional[float] = 0
     opening_value: Optional[float] = 0
-    gst_nature_of_goods: Optional[str] = ""
-    gst_hsn_code: Optional[str] = ""
-    gst_taxability: Optional[str] = ""
+    nature_of_goods: Optional[str] = ""
+    hsn_code: Optional[str] = ""
+    taxability: Optional[str] = ""
 
     # Additonal Optional fields
     low_stock_alert: Optional[int] = 0

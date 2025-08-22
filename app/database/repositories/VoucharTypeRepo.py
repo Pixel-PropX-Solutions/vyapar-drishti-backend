@@ -82,7 +82,7 @@ class VoucherTypeRepo(BaseMongoDbCrud[VoucherTypeDB]):
             "name": "vouchar_type_name",
             "parent": "parent",
             "created_at": "created_at",
-            # "gst_supply_type": "gst_supply_type",
+            # "tax_supply_type": "tax_supply_type",
         }
 
         sort_field_mapped = sort_fields_mapping.get(sort.sort_field, "name")
