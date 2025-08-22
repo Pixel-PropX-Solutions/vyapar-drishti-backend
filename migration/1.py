@@ -3,8 +3,8 @@ from pymongo import MongoClient
 # -----------------------------
 # MongoDB Connection
 # -----------------------------
-client = MongoClient("mongodb+srv://tohidkhan1193407:eudbBL2oa77VGzea@vyapar-drishti-dev.wllw3e5.mongodb.net/")  # update with your connection string
-db = client["Vyapar_Drishti"]  # change to your DB name
+client = MongoClient("")  # update with your connection string
+db = client[""]  # change to your DB name
 
 
 def run_migrations():
