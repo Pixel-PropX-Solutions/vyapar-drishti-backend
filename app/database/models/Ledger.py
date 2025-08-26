@@ -29,10 +29,9 @@ class Ledger(BaseModel):
     phone: Optional[PhoneNumber] = None
 
     # Optional tax details
-    gstin: Optional[str] = None
-    gst_registration_type: Optional[str] = None
-    gst_supply_type: Optional[str] = None
-    # gst_duty_head: Optional[str] = None
+    tin: Optional[str] = None
+    tax_registration_type: Optional[str] = None
+    # tax_duty_head: Optional[str] = None
     # tax_rate: Optional[float] = 0.0
 
     # # Optional bank details
@@ -72,10 +71,9 @@ class LedgerCreate(BaseModel):
     email: Optional[str] = None
 
     # # Optional tax details
-    gstin: Optional[str] = None
-    gst_registration_type: Optional[str] = None
-    gst_supply_type: Optional[str] = None
-    # gst_duty_head: Optional[str] = None
+    tin: Optional[str] = None
+    tax_registration_type: Optional[str] = None
+    # tax_duty_head: Optional[str] = None
     # tax_rate: Optional[float] = 0.0
 
     # # Optional bank details

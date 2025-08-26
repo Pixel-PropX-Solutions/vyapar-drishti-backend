@@ -57,7 +57,7 @@ class InventoryGroupRepo(BaseMongoDbCrud[InventoryGroupDB]):
         sort_fields_mapping = {
             "name": "inventory_group_name",
             "created_at": "created_at",
-            # "gst_supply_type": "gst_supply_type",
+            # "tax_supply_type": "tax_supply_type",
         }
 
         sort_field_mapped = sort_fields_mapping.get(sort.sort_field, "name")
@@ -84,9 +84,9 @@ class InventoryGroupRepo(BaseMongoDbCrud[InventoryGroupDB]):
                         "image": 1,
                         "description": 1,
                         "is_deleted": 1,
-                        "gst_nature_of_goods": 1,
-                        "gst_hsn_code": 1,
-                        "gst_taxability": 1,
+                        "nature_of_goods": 1,
+                        "hsn_code": 1,
+                        "taxability": 1,
                         'created_at': 1,
                         'updated_at': 1,
                     }

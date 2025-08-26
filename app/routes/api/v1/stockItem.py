@@ -5,8 +5,6 @@ from app.schema.token import TokenData
 from app.oauth2 import get_current_user
 from fastapi import Query
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
-from app.database.models.GST_Rate import GSTRate
-from app.database.repositories.gstRateRepo import gst_rate_repo
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.database.repositories.CompanySettingsRepo import company_settings_repo
 from app.database.repositories.stockItemRepo import stock_item_repo
@@ -42,10 +40,10 @@ async def create_product(
     opening_balance: float = Form(None),
     opening_rate: float = Form(None),
     opening_value: float = Form(None),
-    gst_nature_of_goods: str = Form(None),
-    gst_hsn_code: str = Form(None),
-    gst_taxability: str = Form(None),
-    gst_percentage: str = Form(None),
+    nature_of_goods: str = Form(None),
+    hsn_code: str = Form(None),
+    taxability: str = Form(None),
+    tax_rate: str = Form(None),
     low_stock_alert: int = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
@@ -95,36 +93,19 @@ async def create_product(
         "group_id": group_id,
         "image": image_url,
         "description": description,
+        
         # additonal optional fields
         "opening_balance": opening_balance,
         "opening_rate": opening_rate,
         "opening_value": opening_value,
-        "gst_nature_of_goods": gst_nature_of_goods,
-        "gst_hsn_code": gst_hsn_code,
-        "gst_taxability": gst_taxability,
+        "nature_of_goods": nature_of_goods,
+        "hsn_code": hsn_code,
+        "taxability": taxability,
+        'tax_rate': tax_rate,
         "low_stock_alert": low_stock_alert,
     }
 
     response = await stock_item_repo.new(StockItem(**product_data))
-
-    if response:
-        gstr_data = {
-            "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id
-            or userSettings["current_company_id"],
-            "item": stock_item_name,
-            "item_id": response.stock_item_id,
-            "hsn_code": gst_hsn_code,
-            "nature_of_goods": gst_nature_of_goods,
-            "taxability": gst_taxability,
-            "rate": gst_percentage,
-        }
-        res = await gst_rate_repo.new(GSTRate(**gstr_data))
-
-        if not res:
-            raise http_exception.ResourceAlreadyExistsException(
-                detail="GST Rate Already Exists for this Product"
-            )
 
     if not response:
         raise http_exception.ResourceAlreadyExistsException(
@@ -274,9 +255,9 @@ async def get_product(
                     "group": {"$first": "$group"},
                     "image": {"$first": "$image"},
                     "description": {"$first": "$description"},
-                    "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
-                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
-                    "gst_taxability": {"$first": "$gst_taxability"},
+                    "nature_of_goods": {"$first": "$nature_of_goods"},
+                    "hsn_code": {"$first": "$hsn_code"},
+                    "taxability": {"$first": "$taxability"},
                     "low_stock_alert": {"$first": "$low_stock_alert"},
                     "created_at": {"$first": "$created_at"},
                     "updated_at": {"$first": "$updated_at"},
@@ -305,12 +286,12 @@ async def get_product(
                     "group_id": {"$ifNull": ["$group._id", None]},
                     "image": 1,
                     "description": 1,
-                    "gst_nature_of_goods": 1,
-                    "gst_hsn_code": 1,
+                    "nature_of_goods": 1,
+                    "hsn_code": 1,
                     "opening_balance": 1,
                     "opening_rate": 1,
                     "opening_value": 1,
-                    "gst_taxability": 1,
+                    "taxability": 1,
                     "low_stock_alert": 1,
                     "created_at": 1,
                     "updated_at": 1,
@@ -432,9 +413,9 @@ async def get_product_details(
                     "group": {"$first": "$group"},
                     "image": {"$first": "$image"},
                     "description": {"$first": "$description"},
-                    "gst_nature_of_goods": {"$first": "$gst_nature_of_goods"},
-                    "gst_hsn_code": {"$first": "$gst_hsn_code"},
-                    "gst_taxability": {"$first": "$gst_taxability"},
+                    "nature_of_goods": {"$first": "$nature_of_goods"},
+                    "hsn_code": {"$first": "$hsn_code"},
+                    "taxability": {"$first": "$taxability"},
                     "low_stock_alert": {"$first": "$low_stock_alert"},
                     "created_at": {"$first": "$created_at"},
                     "updated_at": {"$first": "$updated_at"},
@@ -504,9 +485,9 @@ async def get_product_details(
                     "group_id": {"$ifNull": ["$group._id", None]},
                     "image": 1,
                     "description": 1,
-                    "gst_nature_of_goods": 1,
-                    "gst_hsn_code": 1,
-                    "gst_taxability": 1,
+                    "nature_of_goods": 1,
+                    "hsn_code": 1,
+                    "taxability": 1,
                     "low_stock_alert": 1,
                     "created_at": 1,
                     "updated_at": 1,
@@ -943,24 +924,12 @@ async def get_products_with_id(
                 }
             },
             {
-                "$lookup": {
-                    "from": "GSTRate",
-                    "localField": "_id",
-                    "foreignField": "item_id",
-                    "as": "gst_rate",
-                }
-            },
-            {"$unwind": {"path": "$gst_rate", "preserveNullAndEmptyArrays": True}},
-            {
                 "$project": {
                     "_id": 1,
                     "stock_item_name": 1,
                     "unit": 1,
-                    "hsn_code": "$gst_rate.hsn_code",
-                    "rate": "$gst_rate.rate",
-                    "cgst": "$gst_rate.cgst",  # CGST rate
-                    "sgst": "$gst_rate.sgst",  # SGST rate
-                    "igst": "$gst_rate.igst",  # IGST rate
+                    "hsn_code": 1,
+                    "tax_rate": 1,
                 }
             },
         ]
@@ -991,10 +960,10 @@ async def update_product(
     opening_balance: float = Form(None),
     opening_rate: float = Form(None),
     opening_value: float = Form(None),
-    gst_nature_of_goods: str = Form(None),
-    gst_hsn_code: str = Form(None),
-    gst_taxability: str = Form(None),
-    gst_percentage: str = Form(None),
+    nature_of_goods: str = Form(None),
+    hsn_code: str = Form(None),
+    taxability: str = Form(None),
+    tax_rate: str = Form(None),
     low_stock_alert: int = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
@@ -1066,9 +1035,10 @@ async def update_product(
         "opening_balance": opening_balance,
         "opening_rate": opening_rate,
         "opening_value": opening_value,
-        "gst_nature_of_goods": gst_nature_of_goods,
-        "gst_hsn_code": gst_hsn_code,
-        "gst_taxability": gst_taxability,
+        "nature_of_goods": nature_of_goods,
+        "hsn_code": hsn_code,
+        "taxability": taxability,
+        "tax_rate": tax_rate,
         "low_stock_alert": low_stock_alert,
     }
     if image:
@@ -1084,72 +1054,6 @@ async def update_product(
         },
         {"$set": update_fields},
     )
-    if response and companySettings["features"]["enable_gst"]:
-        gstExists = await gst_rate_repo.findOne(
-            {
-                "user_id": current_user.user_id,
-                "company_id": current_user.current_company_id
-                or userSettings["current_company_id"],
-                "item_id": product_id,
-            }
-        )
-        match = re.fullmatch(r"(\d+(?:\.\d+)?)\+(\d+(?:\.\d+)?)", gst_percentage)
-        if gstExists:
-            # Update existing GST rate
-            res = await gst_rate_repo.update_one(
-                {
-                    "user_id": current_user.user_id,
-                    "company_id": current_user.current_company_id
-                    or userSettings["current_company_id"],
-                    "item_id": product_id,
-                },
-                {
-                    "$set": {
-                        "item": stock_item_name,
-                        "hsn_code": gst_hsn_code,
-                        "nature_of_goods": gst_nature_of_goods,
-                        "taxability": gst_taxability,
-                        "rate": gst_percentage,
-                        "cgst": (
-                            float(match.group(1)) if match else float(gst_percentage) / 2
-                        ),
-                        "sgst": (
-                            float(match.group(2)) if match else float(gst_percentage) / 2
-                        ),
-                        "igst": (
-                            float(match.group(1)) + float(match.group(2))
-                            if match
-                            else float(gst_percentage)
-                        ),
-                    }
-                },
-            )
-        else:
-            # Create new GST rate if it doesn't exist
-            gstr_data = {
-                "user_id": current_user.user_id,
-                "company_id": current_user.current_company_id
-                or userSettings["current_company_id"],
-                "item": stock_item_name,
-                "item_id": product_id,
-                "hsn_code": gst_hsn_code,
-                "nature_of_goods": gst_nature_of_goods,
-                "taxability": gst_taxability,
-                "rate": gst_percentage,
-                "cgst": float(match.group(1)) if match else float(gst_percentage) / 2,
-                "sgst": float(match.group(2)) if match else float(gst_percentage) / 2,
-                "igst": (
-                    float(match.group(1)) + float(match.group(2))
-                    if match
-                    else float(gst_percentage)
-                ),
-            }
-            res = await gst_rate_repo.new(GSTRate(**gstr_data))
-
-        if not res:
-            raise http_exception.ResourceAlreadyExistsException(
-                detail="GST Rate Already Exists for this Product"
-            )
 
     if not response:
         raise http_exception.ResourceAlreadyExistsException(

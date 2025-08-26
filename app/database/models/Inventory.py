@@ -8,17 +8,21 @@ class InventoryItem(BaseModel):
     vouchar_id: str
     item: str
     item_id: str
+    
+    hsn_code: Optional[str] = ''
+    unit: Optional[str] = ''
+    
     quantity: float
     rate: float
     amount: float
+    discount_amount: Optional[float] = 0.0
+    tax_rate: Optional[float] = 0.0
+    tax_amount: Optional[float] = 0.0
+    total_amount: Optional[float] = 0.0
 
     # Additional fields for the item
-    additional_amount: Optional[float] = 0.0
-    discount_amount: Optional[float] = 0.0
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    order_number: Optional[str] = None
-    order_due_date: Optional[str] = None
 
 
 class InventoryItemDB(InventoryItem):
@@ -31,17 +35,21 @@ class InventoryItemCreate(BaseModel):
     vouchar_id: str
     item: str
     item_id: str
+    
+    hsn_code: Optional[str] = None
+    unit: Optional[str] = None
+    
     quantity: float
     rate: float
     amount: float
 
     # Additional fields for the item
-    additional_amount: Optional[float] = 0.0
     discount_amount: Optional[float] = 0.0
+    tax_rate: Optional[float] = 0.0
+    tax_amount: Optional[float] = 0.0
+    total_amount: Optional[float] = 0.0
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    order_number: Optional[str] = None
-    order_due_date: Optional[str] = None
 
 
 class InventoryItemUpdate(BaseModel):
@@ -49,51 +57,56 @@ class InventoryItemUpdate(BaseModel):
     vouchar_id: str
     item: str
     item_id: str
-    quantity: int
+    
+    hsn_code: Optional[str] = None
+    unit: Optional[str] = None
+    
+    quantity: float
     rate: float
     amount: float
-
-    additional_amount: Optional[float] = 0.0
     discount_amount: Optional[float] = 0.0
+    tax_rate: Optional[float] = 0.0
+    tax_amount: Optional[float] = 0.0
+    total_amount: Optional[float] = 0.0
+    
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
 
-    order_number: Optional[str] = None
-    order_due_date: Optional[str] = None
-
-
-class CreateInventoryItemWithGST(BaseModel):
+class CreateInventoryItemWithTAX(BaseModel):
     vouchar_id: str
     item: str
     item_id: str
-    quantity: int
+    
+    hsn_code: Optional[str] = None
+    unit: Optional[str] = None
+    
+    quantity: float
     rate: float
     amount: float
-    additional_amount: Optional[float] = 0.0
     discount_amount: Optional[float] = 0.0
+    tax_rate: Optional[float] = 0.0
+    tax_amount: Optional[float] = 0.0
+    total_amount: Optional[float] = 0.0
+    
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    order_number: Optional[str] = None
-    order_due_date: Optional[str] = None
-    hsn_code: Optional[str] = None
-    gst_rate: Optional[str] = None
-    gst_amount: Optional[float] = 0.0
 
 
-class UpdateInventoryItemWithGST(BaseModel):
+class UpdateInventoryItemWithTAX(BaseModel):
     entry_id: str
     vouchar_id: str
     item: str
     item_id: str
-    quantity: int
+    
+    hsn_code: Optional[str] = None
+    unit: Optional[str] = None
+    
+    quantity: float
     rate: float
     amount: float
-    additional_amount: Optional[float] = 0.0
     discount_amount: Optional[float] = 0.0
+    tax_rate: Optional[float] = 0.0
+    tax_amount: Optional[float] = 0.0
+    total_amount: Optional[float] = 0.0
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    order_number: Optional[str] = None
-    order_due_date: Optional[str] = None
-    hsn_code: Optional[str] = None
-    gst_rate: Optional[str] = None
-    gst_amount: Optional[float] = 0.0

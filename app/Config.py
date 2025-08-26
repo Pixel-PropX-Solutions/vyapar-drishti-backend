@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     ENV: Optional[str] = "dev"
     DEBUG: Optional[bool] = False
     BASE_API_V1: Optional[str] = "/api/v1"
+    BASE_API_V2: Optional[str] = "/api/v2"
     APP_VERSION: Optional[str] = None
     APP_TITILE: Optional[str] = None
     APP_DESCRIPTION: Optional[str] = None

@@ -36,7 +36,7 @@
 # from app.database.repositories.companyRepo import company_repo, Company
 
 
-admin = APIRouter()
+# admin = APIRouter()
 
 
 # @admin.post("/create/user", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)

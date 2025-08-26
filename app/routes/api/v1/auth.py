@@ -49,9 +49,7 @@ from app.database.repositories.voucharCounterRepo import vouchar_counter_repo
 from app.database.repositories.VoucharTypeRepo import vouchar_type_repo
 from app.database.repositories.companyRepo import company_repo
 from app.database.repositories.CompanySettingsRepo import company_settings_repo
-from app.database.repositories.gstRateRepo import gst_rate_repo
 from app.database.repositories.InventoryRepo import inventory_repo
-from app.database.repositories.voucharGSTRepo import vouchar_gst_repo
 from app.database.repositories.inventoryGroupRepo import inventory_group_repo
 from app.database.repositories.ledgerRepo import ledger_repo
 from app.database.repositories.stockItemRepo import stock_item_repo
@@ -143,8 +141,37 @@ async def login(
     if user_type == UserTypeEnum.ADMIN and creds.username == ENV_PROJECT.ADMIN_EMAIL:
         user = {
             "password": ENV_PROJECT.ADMIN_PASSWORD,
-            "_id": "",
+            "_id": "admin-0001",
         }
+        token_version = 1
+        if hashing.verify_hash(creds.password, user["password"] ):
+            token_data = TokenData(
+                user_id=user["_id"],
+                user_type=user_type.value,
+                scope="login",
+                current_company_id=None,  # ✅ include this
+                device_type='PC',  # Assuming admin logs in from a PC
+                token_version=token_version,  # Use updated token_version
+            )
+            token_generated = await create_access_token(
+                token_data,
+                device_type='PC',  # Assuming admin logs in from a PC
+                old_refresh_token=None,
+            )
+            set_cookies(
+                response, token_generated.access_token, token_generated.refresh_token
+            )
+
+            return {
+                "ok": True,
+                "accessToken": token_generated.access_token,
+                "refreshToken": token_generated.refresh_token,
+            }
+
+        else:
+            raise http_exception.InvalidPasswordException(
+                detail="Invalid password. Please try again."
+            )
     elif user_type in [UserTypeEnum.USER]:
         user = await user_repo.findOne(
             {"email": creds.username},
@@ -296,7 +323,7 @@ async def register(
     userExists = await user_repo.findOne({"email": user.email})
     if userExists is not None:
         raise http_exception.ResourceConflictException(
-            detail='User already exists with the same email. Please try logging in or use a different email.'
+            detail="User already exists with the same email. Please try logging in or use a different email."
         )
 
     client_info = classify_client(request.headers.get("user-agent", "unknown"))
@@ -561,9 +588,6 @@ async def delete_user_company(
         vouchar_type_repo.deleteAll(
             {"company_id": company_id, "user_id": current_user.user_id}
         ),
-        gst_rate_repo.deleteAll(
-            {"company_id": company_id, "user_id": current_user.user_id}
-        ),
         inventory_group_repo.deleteAll(
             {"company_id": company_id, "user_id": current_user.user_id}
         ),
@@ -574,9 +598,6 @@ async def delete_user_company(
             {"company_id": company_id, "user_id": current_user.user_id}
         ),
         units_repo.deleteAll({"company_id": company_id, "user_id": current_user.user_id}),
-        vouchar_gst_repo.deleteAll(
-            {"company_id": company_id, "user_id": current_user.user_id}
-        ),
         company_settings_repo.deleteAll(
             {"company_id": company_id, "user_id": current_user.user_id}
         ),
@@ -688,12 +709,10 @@ async def delete_user(
         category_repo.deleteAll({"user_id": current_user.user_id}),
         vouchar_counter_repo.deleteAll({"user_id": current_user.user_id}),
         vouchar_type_repo.deleteAll({"user_id": current_user.user_id}),
-        gst_rate_repo.deleteAll({"user_id": current_user.user_id}),
         inventory_group_repo.deleteAll({"user_id": current_user.user_id}),
         ledger_repo.deleteAll({"user_id": current_user.user_id}),
         stock_item_repo.deleteAll({"user_id": current_user.user_id}),
         units_repo.deleteAll({"user_id": current_user.user_id}),
-        vouchar_gst_repo.deleteAll({"user_id": current_user.user_id}),
         company_settings_repo.deleteAll({"user_id": current_user.user_id}),
         company_repo.deleteAll({"user_id": current_user.user_id}),
     )

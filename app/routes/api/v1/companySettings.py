@@ -34,13 +34,13 @@ async def initialize_company_settings(
         "country": config.get("country", "India"),
         "state": config.get("state", "Rajasthan"),
         "features": {
-            "enable_gst": config.get("enable_gst", False),
+            "enable_tax": config.get("enable_tax", False),
             "enable_inventory": config.get("enable_inventory", True),
         },
         "currency": config.get("currency", "INR"),
-        "gst_details": {
-            "gstin": config.get("gstin", None),
-            "gst_registration_type": config.get("gst_registration_type", None),
+        "tax_details": {
+            "tin": config.get("tin", None),
+            "tax_registration": config.get("tax_registration", None),
             "place_of_supply": config.get("place_of_supply", None),
         },
         "bank_details": config.get("bank_details", None),

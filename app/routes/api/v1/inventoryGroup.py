@@ -34,9 +34,9 @@ async def createGroup(
     company_id: str = Form(...),  # Company ID to which the group belongs
     description: Optional[str] = Form(None),  # Description of the group
     image: UploadFile = File(None),  # Optional image for the group
-    # gst_nature_of_goods: Optional[str] = Form(None),
-    # gst_hsn_code: Optional[str] = Form(None),
-    # gst_taxability: Optional[str] = Form(None),
+    # nature_of_goods: Optional[str] = Form(None),
+    # hsn_code: Optional[str] = Form(None),
+    # taxability: Optional[str] = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -75,9 +75,9 @@ async def createGroup(
         "company_id": current_user.current_company_id or userSettings["current_company_id"],
         "description": description,
         "image": image_url,
-        # "gst_nature_of_goods": gst_nature_of_goods,
-        # "gst_hsn_code": gst_hsn_code,
-        # "gst_taxability": gst_taxability,
+        # "nature_of_goods": nature_of_goods,
+        # "hsn_code": hsn_code,
+        # "taxability": taxability,
         "is_deleted": False,
     }
 
@@ -220,9 +220,9 @@ async def updateGroup(
     company_id: str = Form(...),
     description: str = Form(None),
     image: UploadFile = File(None),
-    # gst_nature_of_goods: Optional[str] = Form(None),
-    # gst_hsn_code: Optional[str] = Form(None),
-    # gst_taxability: Optional[str] = Form(None),
+    # nature_of_goods: Optional[str] = Form(None),
+    # hsn_code: Optional[str] = Form(None),
+    # taxability: Optional[str] = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -272,9 +272,9 @@ async def updateGroup(
         "is_deleted": False,
         "description": description,
         "inventory_group_name": inventory_group_name,
-        # "gst_nature_of_goods": gst_nature_of_goods,
-        # "gst_hsn_code": gst_hsn_code,
-        # "gst_taxability": gst_taxability,
+        # "nature_of_goods": nature_of_goods,
+        # "hsn_code": hsn_code,
+        # "taxability": taxability,
     }
     if image:
         update_fields["image"] = image_url

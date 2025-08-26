@@ -12,24 +12,24 @@ from app.database.repositories.companyRepo import company_repo
 from fastapi.responses import ORJSONResponse, HTMLResponse
 from pydantic import BaseModel
 import app.http_exception as http_exception
+from app.routes.api.v1.taxModel import generate_tax_summary, get_current_user_tax_model
 from app.schema.token import TokenData
 from app.oauth2 import get_current_user
 from app.database.repositories.voucharRepo import vouchar_repo
+from app.routes.api.v1.voucharCounter import get_cuurent_counter
 from app.database.repositories.voucharCounterRepo import vouchar_counter_repo
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.database.repositories.ledgerRepo import ledger_repo
-from app.database.repositories.voucharGSTRepo import vouchar_gst_repo
 from app.database.repositories.accountingRepo import accounting_repo
 from app.database.repositories.InventoryRepo import inventory_repo
 from app.database.models.Vouchar import Voucher, VoucherCreate, VoucherUpdate
-from app.database.models.VoucharGST import VoucherGST
 from app.database.models.VoucharCounter import VoucherCounter
 from app.database.models.Accounting import Accounting, AccountingUpdate
 from typing import Optional, List
 from app.database.models.Inventory import (
     InventoryItem,
-    UpdateInventoryItemWithGST,
-    CreateInventoryItemWithGST,
+    UpdateInventoryItemWithTAX,
+    CreateInventoryItemWithTAX,
 )
 from fastapi import Query
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
@@ -43,7 +43,7 @@ import sys
 Vouchar = APIRouter()
 
 
-class VoucherWithGSTCreate(BaseModel):
+class VoucherWithTAXCreate(BaseModel):
     company_id: str
     date: str
     voucher_type: str
@@ -59,12 +59,20 @@ class VoucherWithGSTCreate(BaseModel):
     mode_of_transport: Optional[str] = None
     status: Optional[str] = None
     due_date: Optional[str] = None
-    paid_amount: Optional[float] = 0.0
+
+    paid_amount: Optional[float] = 0.0  # Amount paid by the customer
+    total: Optional[float] = 0.0  # Total amount before taxes and discounts
+    discount: Optional[float] = 0.0  # Discount applied to the invoice
+    total_amount: Optional[float] = 0.0  # Total amount after discounts but before taxes
+    total_tax: Optional[float] = 0.0  # Total tax applied to the invoice
+    additional_charge: Optional[float] = 0.0  # Any additional charges applied
+    roundoff: Optional[float] = 0.0  # Round off amount
+    grand_total: float  # Total amount including taxes, discounts, and additional charges
     accounting: List[Accounting]
-    items: List[CreateInventoryItemWithGST]
+    items: List[CreateInventoryItemWithTAX]
 
 
-class GSTVoucherUpdate(BaseModel):
+class TAXVoucherUpdate(BaseModel):
     vouchar_id: str
     user_id: str
     company_id: str
@@ -82,10 +90,17 @@ class GSTVoucherUpdate(BaseModel):
     mode_of_transport: Optional[str] = None
     status: Optional[str] = None
     due_date: Optional[str] = None
-    paid_amount: Optional[float] = 0.0
+    paid_amount: Optional[float] = 0.0  # Amount paid by the customer
+    total: Optional[float] = 0.0  # Total amount before taxes and discounts
+    discount: Optional[float] = 0.0  # Discount applied to the invoice
+    total_amount: Optional[float] = 0.0  # Total amount after discounts but before taxes
+    total_tax: Optional[float] = 0.0  # Total tax applied to the invoice
+    additional_charge: Optional[float] = 0.0  # Any additional charges applied
+    roundoff: Optional[float] = 0.0  # Round off amount
+    grand_total: float  # Total amount including taxes, discounts, and additional charges
 
     accounting: List[AccountingUpdate]
-    items: Optional[List[UpdateInventoryItemWithGST]]
+    items: Optional[List[UpdateInventoryItemWithTAX]]
 
 
 async def render_paginated_html(template_path, template_vars, items, items_per_page=17):
@@ -125,6 +140,32 @@ async def createVouchar(
             detail="User Settings Not Found. Please create user settings first."
         )
 
+    companyExists = await company_repo.findOne(
+        {"_id": current_user.current_company_id, "user_id": current_user.user_id}
+    )
+
+    if not companyExists:
+        raise http_exception.ResourceNotFoundException(
+            detail="Company not found. Please check your company ID."
+        )
+
+    db_invoice_no = await get_cuurent_counter(
+        voucher_type=vouchar.voucher_type,
+        company_id=current_user.current_company_id,
+        current_user=current_user,
+    )
+
+    shouldIncreaseCounter = db_invoice_no == vouchar.voucher_number
+    shouldDecreaseCounter = False
+
+    if len(vouchar.date) < 10:
+        # Assuming the date is in 'YYYY-MM-DD' format, we can pad it with zeros where required.
+        # e.g '2023-01-1' should become '2023-01-01', '2023-1-1' should become '2023-01-01', '2023-1-01' should become '2023-01-01'.
+        parts = vouchar.date.split("-")
+        for i in range(len(parts)):
+            parts[i] = parts[i].zfill(2)
+        vouchar.date = "-".join(parts)
+
     vouchar_data = {
         "user_id": current_user.user_id,
         "company_id": current_user.current_company_id,
@@ -137,39 +178,27 @@ async def createVouchar(
         "party_name_id": vouchar.party_name_id,
         # Conditional fields
         "reference_number": (
-            vouchar.reference_number if hasattr(vouchar, "reference_number") else ""
+            vouchar.reference_number if vouchar.reference_number else ""
         ),
-        "reference_date": (
-            vouchar.reference_date if hasattr(vouchar, "reference_date") else ""
-        ),
-        "place_of_supply": (
-            vouchar.place_of_supply if hasattr(vouchar, "place_of_supply") else ""
-        ),
-        "vehicle_number": (
-            vouchar.vehicle_number if hasattr(vouchar, "vehicle_number") else ""
-        ),
+        "reference_date": (vouchar.reference_date if vouchar.reference_date else ""),
+        "place_of_supply": (vouchar.place_of_supply if vouchar.place_of_supply else ""),
+        "vehicle_number": (vouchar.vehicle_number if vouchar.vehicle_number else ""),
         "mode_of_transport": (
-            vouchar.mode_of_transport if hasattr(vouchar, "mode_of_transport") else ""
+            vouchar.mode_of_transport if vouchar.mode_of_transport else ""
         ),
+        "due_date": (vouchar.due_date if vouchar.due_date else ""),
         "status": (vouchar.status if hasattr(vouchar, "status") else ""),
-        "due_date": (vouchar.due_date if hasattr(vouchar, "due_date") else ""),
-        "paid_amount": (vouchar.paid_amount if hasattr(vouchar, "paid_amount") else 0.0),
+        "paid_amount": vouchar.paid_amount if vouchar.paid_amount else 0.0,
+        "total": vouchar.total if vouchar.total else 0.0,
+        "discount": vouchar.discount if vouchar.discount else 0.0,
+        "total_amount": vouchar.total_amount if vouchar.total_amount else 0.0,
+        "total_tax": 0.0,  # Assuming total_tax is 0 for non tax voucher
+        "additional_charge": (
+            vouchar.additional_charge if vouchar.additional_charge else 0.0
+        ),
+        "roundoff": vouchar.roundoff if vouchar.roundoff else 0.0,
+        "grand_total": vouchar.grand_total if vouchar.grand_total else 0.0,
         "is_deleted": False,
-        # Conditional fields for voucher types
-        "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
-        "is_accounting_voucher": (
-            1
-            if vouchar.voucher_type in ["sales", "purchase", "payment", "receipt"]
-            else 0
-        ),
-        "is_inventory_voucher": (
-            1
-            if vouchar.voucher_type in ["sales", "purchase"] and len(vouchar.items) > 0
-            else 0
-        ),
-        "is_order_voucher": (
-            1 if vouchar.voucher_type.lower() in ["sales order", "purchase order"] else 0
-        ),
     }
 
     accounting_data = vouchar.accounting
@@ -230,46 +259,43 @@ async def createVouchar(
                     "quantity": item.quantity,
                     "rate": item.rate,
                     "amount": item.amount,
-                    "additional_amount": (
-                        item.additional_amount
-                        if hasattr(item, "additional_amount")
-                        else 0.0
-                    ),
+                    "total_amount": item.total_amount,
                     "discount_amount": (
-                        item.discount_amount if hasattr(item, "discount_amount") else 0.0
+                        item.discount_amount if item.discount_amount else 0.0
                     ),
-                    "godown": item.godown if hasattr(item, "godown") else "",
-                    "godown_id": item.godown_id if hasattr(item, "godown_id") else "",
-                    "order_number": (
-                        item.order_number if hasattr(item, "order_number") else None
-                    ),
-                    "order_due_date": (
-                        item.order_due_date if hasattr(item, "order_due_date") else None
-                    ),
+                    "godown": item.godown if item.godown else "",
+                    "godown_id": item.godown_id if item.godown_id else "",
+                    "tax_rate": 0,
+                    "tax_amount": 0,
+                    "hsn_code": '',
+                    "unit": item.unit if item.unit else '',
                 }
                 await inventory_repo.new(InventoryItem(**item_data))
 
-            # Increase the vouchar counter for the voucher type
-            await vouchar_counter_repo.update_one(
-                {
-                    "voucher_type": vouchar.voucher_type,
-                    "company_id": current_user.current_company_id,
-                    "user_id": current_user.user_id,
-                },
-                {"$inc": {"current_number": 1}},
-            )
+            if shouldIncreaseCounter:
+                # Increase the vouchar counter for the voucher type
+                await vouchar_counter_repo.update_one(
+                    {
+                        "voucher_type": vouchar.voucher_type,
+                        "company_id": current_user.current_company_id,
+                        "user_id": current_user.user_id,
+                    },
+                    {"$inc": {"current_number": 1}},
+                )
+                shouldDecreaseCounter = True
 
         except Exception as e:
             # Rollback vouchar creation if any error occurs
             print("Error during vouchar creation:", e)
-            await vouchar_counter_repo.update_one(
-                {
-                    "voucher_type": vouchar.voucher_type,
-                    "company_id": current_user.current_company_id,
-                    "user_id": current_user.user_id,
-                },
-                {"$inc": {"current_number": -1}},
-            )
+            if shouldDecreaseCounter:
+                await vouchar_counter_repo.update_one(
+                    {
+                        "voucher_type": vouchar.voucher_type,
+                        "company_id": current_user.current_company_id,
+                        "user_id": current_user.user_id,
+                    },
+                    {"$inc": {"current_number": -1}},
+                )
             await accounting_repo.deleteAll({"vouchar_id": response.vouchar_id})
             await inventory_repo.deleteAll({"vouchar_id": response.vouchar_id})
             await vouchar_repo.deleteById(response.vouchar_id)
@@ -336,23 +362,17 @@ async def updateVouchar(
         ),
         "status": (vouchar.status if hasattr(vouchar, "status") else ""),
         "due_date": (vouchar.due_date if hasattr(vouchar, "due_date") else ""),
-        "paid_amount": (vouchar.paid_amount if hasattr(vouchar, "paid_amount") else 0.0),
+        "paid_amount": vouchar.paid_amount if vouchar.paid_amount else 0.0,
+        "total": vouchar.total if vouchar.total else 0.0,
+        "discount": vouchar.discount if vouchar.discount else 0.0,
+        "total_amount": vouchar.total_amount if vouchar.total_amount else 0.0,
+        "total_tax": 0.0,  # Assuming total_tax is 0 for non tax voucher
+        "additional_charge": (
+            vouchar.additional_charge if vouchar.additional_charge else 0.0
+        ),
+        "roundoff": vouchar.roundoff if vouchar.roundoff else 0.0,
+        "grand_total": vouchar.grand_total if vouchar.grand_total else 0.0,
         "is_deleted": False,
-        # Conditional fields for voucher types
-        "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
-        "is_accounting_voucher": (
-            1
-            if vouchar.voucher_type in ["sales", "purchase", "payment", "receipt"]
-            else 0
-        ),
-        "is_inventory_voucher": (
-            1
-            if vouchar.voucher_type in ["sales", "purchase"] and len(vouchar.items) > 0
-            else 0
-        ),
-        "is_order_voucher": (
-            1 if vouchar.voucher_type.lower() in ["sales order", "purchase order"] else 0
-        ),
     }
 
     accounting_data = vouchar.accounting
@@ -438,22 +458,12 @@ async def updateVouchar(
                     "quantity": item.quantity,
                     "rate": item.rate,
                     "amount": item.amount,
-                    "additional_amount": (
-                        item.additional_amount
-                        if hasattr(item, "additional_amount")
-                        else 0.0
-                    ),
                     "discount_amount": (
-                        item.discount_amount if hasattr(item, "discount_amount") else 0.0
+                        item.discount_amount if item.discount_amount else 0.0
                     ),
-                    "godown": item.godown if hasattr(item, "godown") else "",
-                    "godown_id": (item.godown_id if hasattr(item, "godown_id") else ""),
-                    "order_number": (
-                        item.order_number if hasattr(item, "order_number") else None
-                    ),
-                    "order_due_date": (
-                        item.order_due_date if hasattr(item, "order_due_date") else None
-                    ),
+                    "total_amount": item.total_amount,
+                    "godown": item.godown if item.godown else "",
+                    "godown_id": item.godown_id if item.godown_id else "",
                 }
                 if existing_item:
                     await inventory_repo.update_one(
@@ -498,12 +508,13 @@ async def updateVouchar(
 
 
 @Vouchar.post(
-    "/create/vouchar/gst", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+    "/create/vouchar/tax", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
-async def createVoucharWithGST(
-    vouchar: VoucherWithGSTCreate,
+async def createVoucharWithTAX(
+    vouchar: VoucherWithTAXCreate,
     current_user: TokenData = Depends(get_current_user),
 ):
+    print("Creating vouchar with TAX:", vouchar)
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
@@ -523,19 +534,22 @@ async def createVoucharWithGST(
             detail="Company not found. Please check your company ID."
         )
 
-    companyStateCode = companyExists.get("gstin", None)[:2]
-
-    companySettings = await company_settings_repo.findOne(
-        {
-            "company_id": current_user.current_company_id,
-            "user_id": current_user.user_id,
-        }
+    db_invoice_no = await get_cuurent_counter(
+        voucher_type=vouchar.voucher_type,
+        company_id=current_user.current_company_id,
+        current_user=current_user,
     )
 
-    if not companySettings:
-        raise http_exception.ResourceNotFoundException(
-            detail="Company settings not found. Please check your company ID."
-        )
+    shouldIncreaseCounter = db_invoice_no == vouchar.voucher_number
+    shouldDecreaseCounter = False
+    
+    if len(vouchar.date) < 10:
+        # Assuming the date is in 'YYYY-MM-DD' format, we can pad it with zeros where required.
+        # e.g '2023-01-1' should become '2023-01-01', '2023-1-1' should become '2023-01-01', '2023-1-01' should become '2023-01-01'.
+        parts = vouchar.date.split("-")
+        for i in range(len(parts)):
+            parts[i] = parts[i].zfill(2)
+        vouchar.date = "-".join(parts)
 
     vouchar_data = {
         "user_id": current_user.user_id,
@@ -549,39 +563,27 @@ async def createVoucharWithGST(
         "party_name_id": vouchar.party_name_id,
         # Conditional fields
         "reference_number": (
-            vouchar.reference_number if hasattr(vouchar, "reference_number") else ""
+            vouchar.reference_number if vouchar.reference_number else ""
         ),
-        "reference_date": (
-            vouchar.reference_date if hasattr(vouchar, "reference_date") else ""
-        ),
-        "place_of_supply": (
-            vouchar.place_of_supply if hasattr(vouchar, "place_of_supply") else ""
-        ),
-        "vehicle_number": (
-            vouchar.vehicle_number if hasattr(vouchar, "vehicle_number") else ""
-        ),
+        "reference_date": (vouchar.reference_date if vouchar.reference_date else ""),
+        "place_of_supply": (vouchar.place_of_supply if vouchar.place_of_supply else ""),
+        "vehicle_number": (vouchar.vehicle_number if vouchar.vehicle_number else ""),
         "mode_of_transport": (
-            vouchar.mode_of_transport if hasattr(vouchar, "mode_of_transport") else ""
+            vouchar.mode_of_transport if vouchar.mode_of_transport else ""
         ),
-        "status": (vouchar.status if hasattr(vouchar, "status") else ""),
-        "due_date": (vouchar.due_date if hasattr(vouchar, "due_date") else ""),
-        "paid_amount": (vouchar.paid_amount if hasattr(vouchar, "paid_amount") else 0.0),
+        "status": (vouchar.status if vouchar.status else ""),
+        "due_date": (vouchar.due_date if vouchar.due_date else ""),
+        "paid_amount": vouchar.paid_amount if vouchar.paid_amount else 0.0,
+        "total": vouchar.total if vouchar.total else 0.0,
+        "discount": vouchar.discount if vouchar.discount else 0.0,
+        "total_amount": vouchar.total_amount if vouchar.total_amount else 0.0,
+        "total_tax": vouchar.total_tax if vouchar.total_tax else 0.0,
+        "additional_charge": (
+            vouchar.additional_charge if vouchar.additional_charge else 0.0
+        ),
+        "roundoff": vouchar.roundoff if vouchar.roundoff else 0.0,
+        "grand_total": vouchar.grand_total if vouchar.grand_total else 0.0,
         "is_deleted": False,
-        # Conditional fields for voucher types
-        "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
-        "is_accounting_voucher": (
-            1
-            if vouchar.voucher_type in ["sales", "purchase", "payment", "receipt"]
-            else 0
-        ),
-        "is_inventory_voucher": (
-            1
-            if vouchar.voucher_type in ["sales", "purchase"] and len(vouchar.items) > 0
-            else 0
-        ),
-        "is_order_voucher": (
-            1 if vouchar.voucher_type.lower() in ["sales order", "purchase order"] else 0
-        ),
     }
 
     accounting_data = vouchar.accounting
@@ -642,161 +644,44 @@ async def createVoucharWithGST(
                     "quantity": item.quantity,
                     "rate": item.rate,
                     "amount": item.amount,
-                    "additional_amount": (
-                        item.additional_amount
-                        if hasattr(item, "additional_amount")
-                        else 0.0
-                    ),
+                    "total_amount": item.total_amount,
                     "discount_amount": (
-                        item.discount_amount if hasattr(item, "discount_amount") else 0.0
+                        item.discount_amount if item.discount_amount else 0.0
                     ),
-                    "godown": item.godown if hasattr(item, "godown") else "",
-                    "godown_id": item.godown_id if hasattr(item, "godown_id") else "",
-                    "order_number": (
-                        item.order_number if hasattr(item, "order_number") else None
-                    ),
-                    "order_due_date": (
-                        item.order_due_date if hasattr(item, "order_due_date") else None
-                    ),
+                    "godown": item.godown if item.godown else "",
+                    "godown_id": item.godown_id if item.godown_id else "",
+                    "tax_rate": item.tax_rate if item.tax_rate else None,
+                    "tax_amount": item.tax_amount if item.tax_amount else None,
+                    "hsn_code": item.hsn_code if item.hsn_code else None,
+                    "unit": item.unit if item.unit else None,
                 }
                 await inventory_repo.new(InventoryItem(**item_data))
 
-            party_ledger = await ledger_repo.findOne(
-                {
-                    "company_id": current_user.current_company_id,
-                    "ledger_name": vouchar.party_name,
-                    "user_id": current_user.user_id,
-                }
-            )
-
-            if companySettings["features"]["enable_gst"] and party_ledger:
-                # If GST is enabled, ensure vouchar created with GST details
-                if vouchar.voucher_type == "Purchase":
-                    if not party_ledger["gstin"]:
-                        raise http_exception.BadRequestException(
-                            detail="Party ledger does not have GSTIN. Please update the party ledger."
-                        )
-
-                    # Extract Party GSTIN
-                    partyStateCode = party_ledger["gstin"][:2]
-
-                    vouchar_gst_data = {
-                        "voucher_id": response.vouchar_id,
+            if shouldIncreaseCounter:
+                await vouchar_counter_repo.update_one(
+                    {
+                        "voucher_type": vouchar.voucher_type,
                         "company_id": current_user.current_company_id,
                         "user_id": current_user.user_id,
-                        "is_gst_applicable": True,
-                        "place_of_supply": (
-                            vouchar.place_of_supply
-                            if hasattr(vouchar, "place_of_supply")
-                            else ""
-                        ),
-                        "party_gstin": (
-                            party_ledger.gstin if hasattr(party_ledger, "gstin") else ""
-                        ),
-                        "item_gst_details": [
-                            {
-                                "item": item.item,
-                                "item_id": item.item_id,
-                                "hsn_code": item.hsn_code,
-                                "gst_rate": item.gst_rate,
-                                "taxable_value": item.amount,
-                                "cgst": (
-                                    item.gst_amount / 2
-                                    if companyStateCode == partyStateCode
-                                    else 0
-                                ),  # CGST amount
-                                "sgst": (
-                                    item.gst_amount / 2
-                                    if companyStateCode == partyStateCode
-                                    else 0
-                                ),  # SGST amount
-                                "igst": (
-                                    item.gst_amount
-                                    if companyStateCode != partyStateCode
-                                    else 0
-                                ),  # IGST amount
-                                "total_amount": item.amount + item.gst_amount,
-                            }
-                            for item in vouchar.items
-                        ],
-                    }
-                    await vouchar_gst_repo.new(VoucherGST(**vouchar_gst_data))
-                    # return {"success": True, "message": "Vouchar Created Successfully"}
-
-                elif vouchar.voucher_type == "Sales":
-
-                    if not companyExists.get("gstin", None):
-                        raise http_exception.BadRequestException(
-                            detail="Company does not have GSTIN. Please update the company details."
-                        )
-
-                    companyStateCode = companyExists.get("gstin", None)[:2]
-
-                    if not party_ledger["gstin"]:
-                        companyStateCode = companyExists.get("state", None)
-                        partyStateCode = party_ledger["mailing_state"]
-                    else:
-                        partyStateCode = party_ledger["gstin"][:2]
-
-                    vouchar_gst_data = {
-                        "voucher_id": response.vouchar_id,
-                        "company_id": current_user.current_company_id,
-                        "user_id": current_user.user_id,
-                        "is_gst_applicable": True,
-                        "place_of_supply": (
-                            vouchar.place_of_supply
-                            if hasattr(vouchar, "place_of_supply")
-                            else ""
-                        ),
-                        "party_gstin": (
-                            party_ledger.gstin if hasattr(party_ledger, "gstin") else ""
-                        ),
-                        "item_gst_details": [
-                            {
-                                "item": item.item,
-                                "item_id": item.item_id,
-                                "hsn_code": item.hsn_code,
-                                "gst_rate": item.gst_rate,
-                                "taxable_value": item.amount,
-                                "cgst": (
-                                    item.gst_amount / 2
-                                    if companyStateCode == partyStateCode
-                                    else 0
-                                ),  # CGST amount
-                                "sgst": (
-                                    item.gst_amount / 2
-                                    if companyStateCode == partyStateCode
-                                    else 0
-                                ),  # SGST amount
-                                "igst": (
-                                    item.gst_amount
-                                    if companyStateCode != partyStateCode
-                                    else 0
-                                ),  # IGST amount
-                                "total_amount": item.amount + item.gst_amount,
-                            }
-                            for item in vouchar.items
-                        ],
-                    }
-                    await vouchar_gst_repo.new(VoucherGST(**vouchar_gst_data))
-                    # return {"success": True, "message": "Vouchar Created Successfully"}
-
-            # Increase the vouchar counter for the voucher type
-            await vouchar_counter_repo.update_one(
-                {
-                    "voucher_type": vouchar.voucher_type,
-                    "company_id": current_user.current_company_id,
-                    "user_id": current_user.user_id,
-                },
-                {"$inc": {"current_number": 1}},
-            )
+                    },
+                    {"$inc": {"current_number": 1}},
+                )
+                shouldDecreaseCounter = True
 
         except Exception as e:
             # Rollback vouchar creation if any error occurs
             print("Error during vouchar creation:", e)
+            if shouldDecreaseCounter:
+                await vouchar_counter_repo.update_one(
+                    {
+                        "voucher_type": vouchar.voucher_type,
+                        "company_id": current_user.current_company_id,
+                        "user_id": current_user.user_id,
+                    },
+                    {"$inc": {"current_number": -1}},
+                )
             await accounting_repo.deleteAll({"vouchar_id": response.vouchar_id})
             await inventory_repo.deleteAll({"vouchar_id": response.vouchar_id})
-            await vouchar_gst_repo.deleteAll({"voucher_id": response.vouchar_id})
             await vouchar_repo.deleteById(response.vouchar_id)
 
             raise http_exception.BadRequestException()
@@ -810,13 +695,13 @@ async def createVoucharWithGST(
 
 
 @Vouchar.put(
-    "/update/vouchar/gst/{vouchar_id}",
+    "/update/vouchar/tax/{vouchar_id}",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def updateVoucharWithGST(
+async def updateVoucharWithTAX(
     vouchar_id: str,
-    vouchar: GSTVoucherUpdate,
+    vouchar: TAXVoucherUpdate,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -832,8 +717,6 @@ async def updateVoucharWithGST(
     companyExists = await company_repo.findOne(
         {"_id": current_user.current_company_id, "user_id": current_user.user_id}
     )
-
-    companyStateCode = companyExists.get("gstin", None)[:2]
 
     if not companyExists:
         raise http_exception.ResourceNotFoundException(
@@ -885,23 +768,17 @@ async def updateVoucharWithGST(
         ),
         "status": (vouchar.status if hasattr(vouchar, "status") else ""),
         "due_date": (vouchar.due_date if hasattr(vouchar, "due_date") else ""),
-        "paid_amount": (vouchar.paid_amount if hasattr(vouchar, "paid_amount") else 0.0),
+        "paid_amount": vouchar.paid_amount if vouchar.paid_amount else 0.0,
+        "total": vouchar.total if vouchar.total else 0.0,
+        "discount": vouchar.discount if vouchar.discount else 0.0,
+        "total_amount": vouchar.total_amount if vouchar.total_amount else 0.0,
+        "total_tax": vouchar.total_tax if vouchar.total_tax else 0.0,
+        "additional_charge": (
+            vouchar.additional_charge if vouchar.additional_charge else 0.0
+        ),
+        "roundoff": vouchar.roundoff if vouchar.roundoff else 0.0,
+        "grand_total": vouchar.grand_total if vouchar.grand_total else 0.0,
         "is_deleted": False,
-        # Conditional fields for voucher types
-        "is_invoice": 1 if vouchar.voucher_type in ["sales", "purchase"] else 0,
-        "is_accounting_voucher": (
-            1
-            if vouchar.voucher_type in ["sales", "purchase", "payment", "receipt"]
-            else 0
-        ),
-        "is_inventory_voucher": (
-            1
-            if vouchar.voucher_type in ["sales", "purchase"] and len(vouchar.items) > 0
-            else 0
-        ),
-        "is_order_voucher": (
-            1 if vouchar.voucher_type.lower() in ["sales order", "purchase order"] else 0
-        ),
     }
 
     accounting_data = vouchar.accounting
@@ -997,22 +874,14 @@ async def updateVoucharWithGST(
                     "quantity": item.quantity,
                     "rate": item.rate,
                     "amount": item.amount,
-                    "additional_amount": (
-                        item.additional_amount
-                        if hasattr(item, "additional_amount")
-                        else 0.0
-                    ),
                     "discount_amount": (
-                        item.discount_amount if hasattr(item, "discount_amount") else 0.0
+                        item.discount_amount if item.discount_amount else 0.0
                     ),
-                    "godown": item.godown if hasattr(item, "godown") else "",
-                    "godown_id": (item.godown_id if hasattr(item, "godown_id") else ""),
-                    "order_number": (
-                        item.order_number if hasattr(item, "order_number") else None
-                    ),
-                    "order_due_date": (
-                        item.order_due_date if hasattr(item, "order_due_date") else None
-                    ),
+                    "tax_rate": item.tax_rate if item.tax_rate else None,
+                    "tax_amount": item.tax_amount if item.tax_amount else None,
+                    "total_amount": item.total_amount,
+                    "godown": item.godown if item.godown else "",
+                    "godown_id": item.godown_id if item.godown_id else "",
                 }
 
                 if existing_item:
@@ -1031,6 +900,8 @@ async def updateVoucharWithGST(
                             "vouchar_id": vouchar_id,
                             "item": item.item,
                             "item_id": item.item_id,
+                            "hsn_code": item.hsn_code,
+                            "unit": item.unit,
                         }
                     )
 
@@ -1045,130 +916,6 @@ async def updateVoucharWithGST(
                         "vouchar_id": vouchar_id,
                     }
                 )
-            party_ledger = await ledger_repo.findOne(
-                {
-                    "company_id": current_user.current_company_id,
-                    "ledger_name": vouchar.party_name,
-                    "user_id": current_user.user_id,
-                }
-            )
-
-            if companySettings["features"]["enable_gst"] and party_ledger:
-                # If GST is enabled, ensure vouchar updated with GST details
-                if vouchar.voucher_type == "Purchase":
-                    if not party_ledger["gstin"]:
-                        raise http_exception.BadRequestException(
-                            detail="Party ledger does not have GSTIN. Please update the party ledger."
-                        )
-
-                    # Extract Party GSTIN
-                    partyStateCode = party_ledger["gstin"][:2]
-
-                    vouchar_gst_data = {
-                        "voucher_id": vouchar_id,
-                        "company_id": current_user.current_company_id,
-                        "user_id": current_user.user_id,
-                        "is_gst_applicable": True,
-                        "place_of_supply": (
-                            vouchar.place_of_supply
-                            if hasattr(vouchar, "place_of_supply")
-                            else ""
-                        ),
-                        "party_gstin": (
-                            party_ledger["gstin"]
-                            if hasattr(party_ledger, "gstin")
-                            else ""
-                        ),
-                        "item_gst_details": [
-                            {
-                                "item": item.item,
-                                "item_id": item.item_id,
-                                "hsn_code": item.hsn_code,
-                                "gst_rate": item.gst_rate,
-                                "taxable_value": item.amount,
-                                "cgst": (
-                                    item.gst_amount / 2
-                                    if companyStateCode == partyStateCode
-                                    else 0
-                                ),  # CGST amount
-                                "sgst": (
-                                    item.gst_amount / 2
-                                    if companyStateCode == partyStateCode
-                                    else 0
-                                ),  # SGST amount
-                                "igst": (
-                                    item.gst_amount
-                                    if companyStateCode != partyStateCode
-                                    else 0
-                                ),  # IGST amount
-                                "total_amount": item.amount + item.gst_amount,
-                            }
-                            for item in vouchar.items
-                        ],
-                    }
-                    await vouchar_gst_repo.update_one(
-                        {"voucher_id": vouchar_id},
-                        {"$set": vouchar_gst_data},
-                    )
-
-                    return {"success": True, "message": "Vouchar Updated Successfully"}
-                elif vouchar.voucher_type == "Sales":
-                    if not companyExists["gstin"]:
-                        raise http_exception.BadRequestException(
-                            detail="Company does not have GSTIN. Please update the company details."
-                        )
-                    companyStateCode = companyExists["gstin"][:2]
-                    if not party_ledger["gstin"]:
-                        companyStateCode = companyExists["state"]
-                        partyStateCode = party_ledger["mailing_state"]
-                    else:
-                        partyStateCode = party_ledger["gstin"][:2]
-
-                    vouchar_gst_data = {
-                        "voucher_id": vouchar_id,
-                        "company_id": current_user.current_company_id,
-                        "user_id": current_user.user_id,
-                        "is_gst_applicable": True,
-                        "place_of_supply": (
-                            vouchar.place_of_supply
-                            if hasattr(vouchar, "place_of_supply")
-                            else ""
-                        ),
-                        "party_gstin": (
-                            party_ledger["gstin"]
-                            if hasattr(party_ledger, "gstin")
-                            else ""
-                        ),
-                        "item_gst_details": [
-                            {
-                                "item": item.item,
-                                "item_id": item.item_id,
-                                "hsn_code": item.hsn_code,
-                                "gst_rate": item.gst_rate,
-                                "taxable_value": item.amount,
-                                "cgst": (
-                                    item.gst_amount / 2
-                                    if companyStateCode == partyStateCode
-                                    else 0
-                                ),  # CGST amount
-                                "sgst": (
-                                    item.gst_amount / 2
-                                    if companyStateCode == partyStateCode
-                                    else 0
-                                ),  # SGST amount
-                                "igst": (
-                                    item.gst_amount
-                                    if companyStateCode != partyStateCode
-                                    else 0
-                                ),  # IGST amount
-                            }
-                            for item in vouchar.items
-                        ],
-                    }
-                    await vouchar_gst_repo.update_one(
-                        {"voucher_id": vouchar_id},
-                        {"$set": vouchar_gst_data},
-                    )
 
         except Exception as e:
             print("Error during vouchar update:", str(e))
@@ -1257,248 +1004,65 @@ async def getVouchar(
             detail="Company settings not found. Please contact support."
         )
 
-    if companySettings["features"]["enable_gst"]:
-        data = await vouchar_repo.collection.aggregate(
-            [
-                {
-                    "$match": {
-                        "_id": vouchar_id,
-                        "company_id": current_user.current_company_id,
-                        "user_id": current_user.user_id,
-                    }
-                },
-                {
-                    "$lookup": {
-                        "from": "Inventory",
-                        "let": {"vouchar_id": "$_id"},
-                        "pipeline": [
-                            {
-                                "$match": {
-                                    "$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}
-                                }
-                            }
-                        ],
-                        "as": "inventory",
-                    }
-                },
-                {
-                    "$addFields": {
-                        "inventory": {
-                            "$sortArray": {
-                                "input": "$inventory",
-                                "sortBy": {"created_at": 1},
-                            }
+    data = await vouchar_repo.collection.aggregate(
+        [
+            {
+                "$match": {
+                    "_id": vouchar_id,
+                    "company_id": current_user.current_company_id,
+                    "user_id": current_user.user_id,
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}}
+                    ],
+                    "as": "inventory",
+                }
+            },
+            {
+                "$addFields": {
+                    "inventory": {
+                        "$sortArray": {
+                            "input": "$inventory",
+                            "sortBy": {"created_at": 1},
                         }
                     }
-                },
-                {
-                    "$lookup": {
-                        "from": "VoucherGST",
-                        "let": {"vouchar_id": "$_id"},
-                        "pipeline": [
-                            {
-                                "$match": {
-                                    "$expr": {"$eq": ["$voucher_id", "$$vouchar_id"]}
-                                }
-                            }
-                        ],
-                        "as": "voucher_gst",
-                    }
-                },
-                {
-                    "$addFields": {
-                        "item_gst_details": {
-                            "$ifNull": [
-                                {
-                                    "$ifNull": [
-                                        {
-                                            "$arrayElemAt": [
-                                                "$voucher_gst.item_gst_details",
-                                                0,
-                                            ]
-                                        },
-                                        [],
-                                    ]
-                                },
-                                [],
-                            ]
-                        }
-                    }
-                },
-                {
-                    "$addFields": {
-                        "inventory": {
-                            "$map": {
-                                "input": "$inventory",
-                                "as": "item",
-                                "in": {
-                                    "$mergeObjects": [
-                                        "$$item",
-                                        {
-                                            "$let": {
-                                                "vars": {
-                                                    "gst": {
-                                                        "$arrayElemAt": [
-                                                            {
-                                                                "$filter": {
-                                                                    "input": "$item_gst_details",
-                                                                    "as": "gst",
-                                                                    "cond": {
-                                                                        "$eq": [
-                                                                            "$$gst.item_id",
-                                                                            "$$item.item_id",
-                                                                        ]
-                                                                    },
-                                                                }
-                                                            },
-                                                            0,
-                                                        ]
-                                                    }
-                                                },
-                                                "in": {
-                                                    "hsn_code": {
-                                                        "$ifNull": [
-                                                            "$$gst.hsn_code",
-                                                            None,
-                                                        ]
-                                                    },
-                                                    "gst": {
-                                                        "$ifNull": [
-                                                            "$$gst.gst_rate",
-                                                            None,
-                                                        ]
-                                                    },
-                                                    "gst_amount": {
-                                                        "$ifNull": [
-                                                            {
-                                                                "$subtract": [
-                                                                    "$$gst.total_amount",
-                                                                    "$$gst.taxable_value",
-                                                                ]
-                                                            },
-                                                            None,
-                                                        ]
-                                                    },
-                                                },
-                                            }
-                                        },
-                                    ]
-                                },
-                            }
-                        }
-                    }
-                },
-                {
-                    "$lookup": {
-                        "from": "Accounting",
-                        "let": {"vouchar_id": "$_id"},
-                        "pipeline": [
-                            {
-                                "$match": {
-                                    "$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}
-                                }
-                            }
-                        ],
-                        "as": "accounting_entries",
-                    }
-                },
-                {
-                    "$lookup": {
-                        "from": "Ledger",
-                        "let": {"ledger_id": "$party_name_id"},
-                        "pipeline": [
-                            {"$match": {"$expr": {"$eq": ["$_id", "$$ledger_id"]}}}
-                        ],
-                        "as": "party_details",
-                    }
-                },
-                {
-                    "$unwind": {
-                        "path": "$party_details",
-                    }
-                },
-                {
-                    "$project": {
-                        "item_gst_details": 0,
-                        "voucher_gst": 0,
-                    }
-                },
-            ]
-        ).to_list(length=1)
-        if not data:
-            raise http_exception.ResourceNotFoundException(
-                detail="Vouchar not found. Please check the vouchar ID."
-            )
-    else:
-        data = await vouchar_repo.collection.aggregate(
-            [
-                {
-                    "$match": {
-                        "_id": vouchar_id,
-                        "company_id": current_user.current_company_id,
-                        "user_id": current_user.user_id,
-                    }
-                },
-                {
-                    "$lookup": {
-                        "from": "Inventory",
-                        "let": {"vouchar_id": "$_id"},
-                        "pipeline": [
-                            {
-                                "$match": {
-                                    "$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}
-                                }
-                            }
-                        ],
-                        "as": "inventory",
-                    }
-                },
-                {
-                    "$addFields": {
-                        "inventory": {
-                            "$sortArray": {
-                                "input": "$inventory",
-                                "sortBy": {"created_at": 1},
-                            }
-                        }
-                    }
-                },
-                {
-                    "$lookup": {
-                        "from": "Accounting",
-                        "let": {"vouchar_id": "$_id"},
-                        "pipeline": [
-                            {
-                                "$match": {
-                                    "$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}
-                                }
-                            }
-                        ],
-                        "as": "accounting_entries",
-                    }
-                },
-                {
-                    "$lookup": {
-                        "from": "Ledger",
-                        "let": {"ledger_id": "$party_name_id"},
-                        "pipeline": [
-                            {"$match": {"$expr": {"$eq": ["$_id", "$$ledger_id"]}}}
-                        ],
-                        "as": "party_details",
-                    }
-                },
-                {
-                    "$unwind": {
-                        "path": "$party_details",
-                    }
-                },
-            ]
-        ).to_list(length=1)
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Accounting",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}}
+                    ],
+                    "as": "accounting_entries",
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "Ledger",
+                    "let": {"ledger_id": "$party_name_id"},
+                    "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$ledger_id"]}}}],
+                    "as": "party_details",
+                }
+            },
+            {
+                "$unwind": {
+                    "path": "$party_details",
+                }
+            },
+        ]
+    ).to_list(length=1)
 
-        if not data:
-            raise http_exception.ResourceNotFoundException(
-                detail="Vouchar not found. Please check the vouchar ID."
-            )
+    if not data:
+        raise http_exception.ResourceNotFoundException(
+            detail="Vouchar not found. Please check the vouchar ID."
+        )
 
     return {
         "success": True,
@@ -1615,15 +1179,6 @@ async def print_invoice(
             },
             {
                 "$lookup": {
-                    "from": "StockItem",
-                    "localField": "inventory.item_id",
-                    "foreignField": "_id",
-                    "as": "stockItems",
-                }
-            },
-            # Attach party ledger details
-            {
-                "$lookup": {
                     "from": "Ledger",
                     "localField": "party_name_id",
                     "foreignField": "_id",
@@ -1632,31 +1187,6 @@ async def print_invoice(
             },
             {"$unwind": {"path": "$company", "preserveNullAndEmptyArrays": True}},
             {"$unwind": {"path": "$party_details", "preserveNullAndEmptyArrays": True}},
-            # Pick the first non-party accounting record as "accounting"
-            {
-                "$addFields": {
-                    "accounting": {
-                        "$first": {
-                            "$filter": {
-                                "input": "$accounting_entries",
-                                "as": "acc",
-                                "cond": {"$ne": ["$$acc.ledger_id", "$party_name_id"]},
-                            }
-                        }
-                    }
-                }
-            },
-            # Lookup the customer (i.e., ledger of the accounting entry)
-            {
-                "$lookup": {
-                    "from": "Ledger",
-                    "let": {"ledger_id": "$accounting.ledger_id"},
-                    "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$ledger_id"]}}}],
-                    "as": "customer",
-                }
-            },
-            {"$unwind": {"path": "$customer", "preserveNullAndEmptyArrays": True}},
-            # Final clean-up: remove temp accounting_entries
             {"$project": {"accounting_entries": 0}},
         ]
     ).to_list(length=1)
@@ -1666,49 +1196,24 @@ async def print_invoice(
 
     invoice = invoice_data[0]
 
-    # Simulate customer info from the ledger party for this template
-    customer = {
-        "name": invoice.get("customer", {}).get("ledger_name", ""),
-        "address": invoice.get("customer", {}).get("mailing_address", ""),
-        "phone": invoice.get("customer", {}).get("phone", ""),
-        "gst_no": "08ABIPJ1392D1ZT",
-        # "gst_no": invoice.get("customer", {}).get("gst_no", ""),
-    }
-
     # Prepare item rows
     items = []
     for item in invoice.get("inventory", []):
         items.append(
             {
                 "name": item.get("item", ""),
+                "item_id": item.get("item_id", ""),
                 "qty": item.get("quantity", 0),
                 "rate": item.get("rate", 0),
                 "amount": item.get("amount", 0),
-                # "pack": item.get("pack", ""),
-                # "hsn": item.get("hsn", ""),
+                "discount_amount": item.get("discount_amount", 0),
+                "total_amount": item.get("total_amount", 0),
+                "pack": item.get("unit", 0),
             }
         )
 
-    stock_items = invoice.get("stockItems", [])
-
-    for item in items:
-        for si in stock_items:
-            if si.get("_id") == item.get("item_id"):
-                item["pack"] = si.get("unit", "")
-
-    total = sum(i["amount"] for i in items)
-    grand_total = abs(invoice.get("accounting", {}).get("amount", 0))
-    total_int = int(grand_total)
-    total_frac = int(round((grand_total - total_int) * 100))
-    if total_frac > 0:
-        total_words = (
-            num2words(total_int, lang="en_IN").title()
-            + " Rupees And "
-            + num2words(total_frac, lang="en_IN").title()
-            + " Paise only"
-        )
-    else:
-        total_words = num2words(total_int, lang="en_IN").title() + " Rupees Only"
+    grand_total = invoice.get("grand_total", 0)
+    total_words = num2words(grand_total, lang="en_IN").title() + " Rupees Only"
 
     # Template variables
     template_vars = {
@@ -1716,8 +1221,16 @@ async def print_invoice(
             "voucher_type": invoice.get("voucher_type", ""),
             "voucher_number": invoice.get("voucher_number", ""),
             "date": invoice.get("date", ""),
+            "vehicle_number": invoice.get("vehicle_number", ""),
+            "mode_of_transport": invoice.get("mode_of_transport", ""),
+            "status": invoice.get("status", ""),
+            "place_of_supply": invoice.get("place_of_supply", ""),
             "items": items,
-            "total": f"{total:.2f}",
+            "total": invoice.get("total", 0),
+            "discount": invoice.get("discount", 0),
+            "total_amount": invoice.get("total_amount", 0),
+            "additional_charge": invoice.get("additional_charge", 0),
+            "roundoff": invoice.get("roundoff", 0),
             "grand_total": grand_total,
             "grand_total_words": total_words,
         },
@@ -1733,21 +1246,20 @@ async def print_invoice(
             ),
             "phone": invoice.get("party_details", {}).get("phone", ""),
             "email": invoice.get("party_details", {}).get("email", ""),
-            "gst_no": invoice.get("party_details", {}).get("gstin", "") or "",
+            "tin": invoice.get("party_details", {}).get("tin", "") or "",
             "bank_name": invoice.get("party_details", {}).get("bank_name", ""),
             "bank_branch": invoice.get("party_details", {}).get("bank_branch", ""),
             "account_no": invoice.get("party_details", {}).get("account_number", ""),
             "account_name": invoice.get("party_details", {}).get("account_holder", ""),
             "ifsc": invoice.get("party_details", {}).get("bank_ifsc", ""),
         },
-        "customer": customer,
         "qr_code_url": "",
         "company": invoice.get("company", {}),
         "company.motto": "LIFE'S A JOURNEY, KEEP SMILING",
     }
 
     # Load HTML template (assuming you have it in a file)
-    async with aiofiles.open("app/utils/templates/no_gst_template.html", "r") as f:
+    async with aiofiles.open("app/utils/templates/no_tax_template.html", "r") as f:
         template_str = await f.read()
 
     template = Template(template_str)
@@ -1756,7 +1268,7 @@ async def print_invoice(
     rendered_html = template.render(**vars_with_items)
 
     async with aiofiles.open(
-        "app/utils/templates/no_gst_download_template.html", "r"
+        "app/utils/templates/no_tax_download_template.html", "r"
     ) as g:
         template_str_download = await g.read()
 
@@ -1765,7 +1277,7 @@ async def print_invoice(
     vars_with_items["invoice"]["items"] = items
     rendered_download_html = template_download.render(**vars_with_items)
 
-    template_path = "app/utils/templates/no_gst_template.html"
+    template_path = "app/utils/templates/no_tax_template.html"
     rendered_pages = await render_paginated_html(
         template_path, template_vars, items, items_per_page=17
     )
@@ -1783,11 +1295,11 @@ async def print_invoice(
 
 
 @Vouchar.get(
-    "/print/vouchar/gst",
+    "/print/vouchar/tax",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def print_invoice_gst(
+async def print_invoice_tax(
     vouchar_id: str = Query(...),
     company_id: str = Query(None),
     current_user: TokenData = Depends(get_current_user),
@@ -1812,7 +1324,6 @@ async def print_invoice_gst(
                     "user_id": current_user.user_id,
                 }
             },
-            # Attach all accounting entries
             {
                 "$lookup": {
                     "from": "Company",
@@ -1823,22 +1334,12 @@ async def print_invoice_gst(
             },
             {
                 "$lookup": {
-                    "from": "Accounting",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
-                    "as": "accounting_entries",
-                }
-            },
-            # Attach inventory
-            {
-                "$lookup": {
                     "from": "Inventory",
                     "localField": "_id",
                     "foreignField": "vouchar_id",
                     "as": "inventory",
                 }
             },
-            # Sort inventory items by created_at ascending
             {
                 "$addFields": {
                     "inventory": {
@@ -1846,23 +1347,6 @@ async def print_invoice_gst(
                     }
                 }
             },
-            {
-                "$lookup": {
-                    "from": "StockItem",
-                    "localField": "inventory.item_id",
-                    "foreignField": "_id",
-                    "as": "stockItems",
-                }
-            },
-            {
-                "$lookup": {
-                    "from": "VoucherGST",
-                    "localField": "_id",
-                    "foreignField": "voucher_id",
-                    "as": "voucher_gst",
-                }
-            },
-            # Attach party ledger details
             {
                 "$lookup": {
                     "from": "Ledger",
@@ -1894,102 +1378,32 @@ async def print_invoice_gst(
         raise http_exception.ResourceNotFoundException(detail="Vouchar not found.")
 
     invoice = invoice_data[0]
-    # print("Invoice Data:", invoice)
-
-    # Prepare item rows
     items = []
-    voucher_gst = invoice.get("voucher_gst", [{}])
-
-    item_gst_details = voucher_gst[0].get("item_gst_details", [])
-    # print()
-    # print("Item GST Details:", item_gst_details)
-
-    # Build a mapping from item_id to GST details
-    item_gst_map = {str(gst.get("item_id", "")): gst for gst in item_gst_details}
 
     for item in invoice.get("inventory", []):
         item_id = str(item.get("item_id", ""))
-        item_gst = item_gst_map.get(item_id, {})
         items.append(
             {
-                "name": item.get("item", ""),
                 "item_id": item_id,
+                "name": item.get("item", ""),
+                "pack": item.get("unit", ""),
+                "hsn": item.get("hsn_code", ""),
                 "qty": item.get("quantity", 0),
                 "rate": item.get("rate", 0),
                 "amount": item.get("amount", 0),
-                # "pack": stock_item.get("unit", ""),
-                "hsn": item_gst.get("hsn_code", ""),
-                "gst_rate": item_gst.get("gst_rate", ""),
-                "taxable_value": item_gst.get("taxable_value", 0),
-                "total_amount": item_gst.get("total_amount", 0),
+                "discount_amount": item.get("discount_amount", 0),
+                "tax_rate": item.get("tax_rate", ""),
+                "tax_amount": item.get("tax_amount", 0),
+                "total_amount": item.get("total_amount", 0),
             }
         )
 
-    stock_items = invoice.get("stockItems", [])
-
-    for item in items:
-        for si in stock_items:
-            if si.get("_id") == item.get("item_id"):
-                item["pack"] = si.get("unit", "")
-
-    total = sum(i["amount"] for i in items)
-    units = sum(i["qty"] for i in items)
-    total_total_amount = sum(i["total_amount"] for i in items)
-    total_taxable_value = sum(i["taxable_value"] for i in items)
-    total_tax = round(total_total_amount - total_taxable_value, 2)
-
-    # --- GST Tax Table Calculation ---
-    from collections import defaultdict
-
-    tax_summary = defaultdict(
-        lambda: {
-            "igst": 0.0,
-            "sgst": 0.0,
-            "cgst": 0.0,
-            "gst_amt": 0.0,
-            "taxable_value": 0.0,
-        }
+    totals, invoice_taxes, tax_headers, tax_code = await generate_tax_summary(
+        items=items,
+        party_details=invoice.get("party_details", {}),
+        company=invoice.get("company", {}),
+        current_user=current_user,
     )
-
-    for detail in item_gst_details:
-        try:
-            rate = float(detail.get("gst_rate", 0))
-        except Exception:
-            rate = 0.0
-        tax_summary[rate]["igst"] += float(detail.get("igst", 0.0))
-        tax_summary[rate]["sgst"] += float(detail.get("sgst", 0.0))
-        tax_summary[rate]["cgst"] += float(detail.get("cgst", 0.0))
-        tax_summary[rate]["taxable_value"] += float(detail.get("taxable_value", 0.0))
-        tax_summary[rate]["gst_amt"] += (
-            float(detail.get("igst", 0.0))
-            + float(detail.get("sgst", 0.0))
-            + float(detail.get("cgst", 0.0))
-        )
-
-    invoice_taxes = []
-    totals = {"igst": 0.0, "sgst": 0.0, "cgst": 0.0, "gst_amt": 0.0, "taxable_value": 0.0}
-    for rate, vals in tax_summary.items():
-        invoice_taxes.append(
-            {
-                "percent": rate,
-                "igst": round(vals["igst"], 2),
-                "sgst": round(vals["sgst"], 2),
-                "cgst": round(vals["cgst"], 2),
-                "taxable_value": round(vals["taxable_value"], 2),
-                "gst_amt": round(vals["gst_amt"], 2),
-            }
-        )
-        totals["igst"] += vals["igst"]
-        totals["sgst"] += vals["sgst"]
-        totals["cgst"] += vals["cgst"]
-        totals["taxable_value"] += vals["taxable_value"]
-        totals["gst_amt"] += vals["gst_amt"]
-
-    totals = {k: round(v, 2) for k, v in totals.items()}
-    totals["units"] = units
-    # --- END GST Tax Table Calculation ---
-
-    grand_total = abs(total_total_amount)
 
     # Template variables
     template_vars = {
@@ -1997,21 +1411,24 @@ async def print_invoice_gst(
             "voucher_type": invoice.get("voucher_type", ""),
             "voucher_number": invoice.get("voucher_number", ""),
             "date": invoice.get("date", ""),
-            "total_tax": total_tax,
-            "discount": 0.0,
-            "total": f"{total:.2f}",
-            "grand_total": grand_total,
-            "taxes": invoice_taxes,
-            "payment_status": invoice.get("status", ""),
-            "station": "Rajkot",
+            "vehicle_number": invoice.get("vehicle_number", ""),
+            "mode_of_transport": invoice.get("mode_of_transport", ""),
+            "status": invoice.get("status", ""),
+            "place_of_supply": invoice.get("place_of_supply", ""),
+            "total": invoice.get("total", 0),
+            "discount": invoice.get("discount", 0),
+            "total_amount": invoice.get("total_amount", 0),
+            "total_tax": invoice.get("total_tax", 0),
+            "additional_charge": invoice.get("additional_charge", 0),
+            "roundoff": invoice.get("roundoff", 0),
+            "grand_total": invoice.get("grand_total", 0),
             "is_reversed_charge": (
                 "Yes" if invoice.get("is_reversed_charge", False) else "No"
             ),
-            "vehicle_number": invoice.get("vehicle_number", ""),
-            "mode_of_transport": invoice.get("mode_of_transport", ""),
-            "place_of_supply": invoice.get("place_of_supply", ""),
-            "additional_charges": 0.0,
+            "tax_code": tax_code,
             "totals": totals,
+            "tax_headers": tax_headers,
+            "taxes": invoice_taxes,
         },
         "party": {
             "name": invoice.get("party_details", {}).get("ledger_name", ""),
@@ -2027,7 +1444,7 @@ async def print_invoice_gst(
             ),
             "phone": invoice.get("party_details", {}).get("phone", ""),
             "email": invoice.get("party_details", {}).get("email", ""),
-            "gst_no": invoice.get("party_details", {}).get("gstin", "") or "",
+            "tin": invoice.get("party_details", {}).get("tin", "") or "",
             "bank_name": invoice.get("party_details", {}).get("bank_name", ""),
             "bank_branch": invoice.get("party_details", {}).get("bank_branch", ""),
             "account_no": invoice.get("party_details", {}).get("account_number", ""),
@@ -2037,19 +1454,19 @@ async def print_invoice_gst(
         "company": invoice.get("company", {}),
         "company.bank_name": invoice.get("company_settings", {})
         .get("bank_details", {})
-        .get("bank_name", "SBI"),
+        .get("bank_name", ""),
         "company.bank_branch": invoice.get("company_settings", {})
         .get("bank_details", {})
-        .get("bank_branch", "Rajkot"),
+        .get("bank_branch", ""),
         "company.account_no": invoice.get("company_settings", {})
         .get("bank_details", {})
-        .get("account_number", "000 000 000 000"),
+        .get("account_number", ""),
         "company.account_name": invoice.get("company_settings", {})
         .get("bank_details", {})
-        .get("account_holder", "ABC Pvt Ltd"),
+        .get("account_holder", ""),
         "company.ifsc": invoice.get("company_settings", {})
         .get("bank_details", {})
-        .get("bank_ifsc", "IFSCCODE1234"),
+        .get("bank_ifsc", ""),
         "company.qr_code_url": invoice.get("company_settings", {})
         .get("bank_details", {})
         .get("qr_code_url", ""),
@@ -2060,7 +1477,7 @@ async def print_invoice_gst(
 
     if invoice.get("voucher_type", "") == "Sales":
         async with aiofiles.open(
-            "app/utils/templates/gst_sale_invoice_template.html", "r"
+            "app/utils/templates/tax_sale_invoice_template.html", "r"
         ) as f:
             template_str = await f.read()
 
@@ -2068,9 +1485,12 @@ async def print_invoice_gst(
         vars_with_items = dict(template_vars)
         vars_with_items["invoice"]["items"] = items
         rendered_html = template.render(**vars_with_items)
+        # return HTMLResponse(
+        #     content=rendered_html
+        # )
 
         async with aiofiles.open(
-            "app/utils/templates/gst_sale_invoice_download_template.html", "r"
+            "app/utils/templates/tax_sale_invoice_download_template.html", "r"
         ) as g:
             template_str_download = await g.read()
 
@@ -2079,7 +1499,7 @@ async def print_invoice_gst(
         vars_with_items["invoice"]["items"] = items
         rendered_download_html = template.render(**vars_with_items)
 
-        template_path = "app/utils/templates/gst_sale_invoice_template.html"
+        template_path = "app/utils/templates/tax_sale_invoice_template.html"
         rendered_pages = await render_paginated_html(
             template_path, template_vars, items, items_per_page=17
         )
@@ -2096,7 +1516,7 @@ async def print_invoice_gst(
 
     else:
         async with aiofiles.open(
-            "app/utils/templates/gst_purchase_template.html", "r"
+            "app/utils/templates/tax_purchase_template.html", "r"
         ) as f:
             template_str = await f.read()
 
@@ -2106,7 +1526,7 @@ async def print_invoice_gst(
         rendered_html = template.render(**vars_with_items)
 
         async with aiofiles.open(
-            "app/utils/templates/gst_purchase_download_template.html", "r"
+            "app/utils/templates/tax_purchase_download_template.html", "r"
         ) as g:
             template_str_download = await g.read()
 
@@ -2115,7 +1535,7 @@ async def print_invoice_gst(
         vars_with_items["invoice"]["items"] = items
         rendered_download_html = template.render(**vars_with_items)
 
-        template_path = "app/utils/templates/gst_purchase_template.html"
+        template_path = "app/utils/templates/tax_purchase_template.html"
         rendered_pages = await render_paginated_html(
             template_path, template_vars, items, items_per_page=17
         )
@@ -2631,11 +2051,11 @@ async def delete_vouchar(
 
 
 @Vouchar.delete(
-    "/gst/delete/{vouchar_id}",
+    "/tax/delete/{vouchar_id}",
     response_class=ORJSONResponse,
     status_code=status.HTTP_200_OK,
 )
-async def delete_gst_vouchar(
+async def delete_tax_vouchar(
     vouchar_id: str,
     company_id: str = Query(None),
     current_user: TokenData = Depends(get_current_user),
@@ -2669,15 +2089,6 @@ async def delete_gst_vouchar(
 
     # Delete all the inventory entries associated with the vouchers
     await inventory_repo.deleteAll({"vouchar_id": vouchar_id})
-
-    # Delete all the voucher GST entries associated with the company
-    await vouchar_gst_repo.deleteOne(
-        {
-            "voucher_id": vouchar_id,
-            "company_id": company_id,
-            "user_id": current_user.user_id,
-        }
-    )
 
     await vouchar_repo.deleteOne(
         {

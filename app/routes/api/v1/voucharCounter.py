@@ -15,9 +15,24 @@ counter_router = APIRouter()
 
 DEFAULT_VOUCHER_TYPES = {
     "Sales": {"prefix": "INV", "suffix": "", "separator": "-", "reset_cycle": "yearly"},
-    "Purchase": {"prefix": "PUR", "suffix": "", "separator": "-", "reset_cycle": "yearly"},
-    "Payment": {"prefix": "PAY", "suffix": "", "separator": "-", "reset_cycle": "monthly"},
-    "Receipt": {"prefix": "REC", "suffix": "", "separator": "-", "reset_cycle": "monthly"},
+    "Purchase": {
+        "prefix": "PUR",
+        "suffix": "",
+        "separator": "-",
+        "reset_cycle": "yearly",
+    },
+    "Payment": {
+        "prefix": "PAY",
+        "suffix": "",
+        "separator": "-",
+        "reset_cycle": "monthly",
+    },
+    "Receipt": {
+        "prefix": "REC",
+        "suffix": "",
+        "separator": "-",
+        "reset_cycle": "monthly",
+    },
     "Journal": {"prefix": "JRN", "suffix": "", "separator": "-", "reset_cycle": "yearly"},
     "Contra": {"prefix": "CON", "suffix": "", "separator": "-", "reset_cycle": "yearly"},
 }
@@ -56,11 +71,30 @@ async def initialize_voucher_counters(user_id: str, company_id: str):
     return {"message": "Voucher counters initialized", "count": len(counters)}
 
 
-def calculate_current_financial_year() -> str:
-    """Returns financial year in format YYYY-YY (e.g., 2024-25)"""
-    today = datetime.today()
-    year = today.year if today.month >= 4 else today.year - 1
-    return f"{year}-{str((year + 1) % 100).zfill(2)}"
+async def get_cuurent_counter(
+    voucher_type: str,
+    current_user: TokenData,
+    company_id: str = "",
+):
+    query = {
+        "company_id": current_user.current_company_id or company_id,
+        "user_id": current_user.user_id,
+        "voucher_type": voucher_type,
+    }
+
+    counter = await vouchar_counter_repo.findOne(query)
+
+    # Format the current number with prefix, suffix, and padding
+    if counter:
+        pad_length = counter["pad_length"] or 4  # Default padding length if not set
+        separator = counter["separator"]
+        padded_number = str(counter["current_number"]).zfill(pad_length)
+        if counter["suffix"]:
+            formatted_number = f"{counter['prefix']}{separator}{padded_number}{separator}{counter['suffix']}"
+        else:
+            formatted_number = f"{counter['prefix']}{separator}{padded_number}"
+
+    return formatted_number
 
 
 @counter_router.get("/get/current/{voucher_type}", summary="Get voucher counter details")
@@ -80,7 +114,8 @@ async def get_counter(
         )
 
     query = {
-        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
+        "company_id": current_user.current_company_id
+        or userSettings["current_company_id"],
         "user_id": current_user.user_id,
         "voucher_type": voucher_type,
     }
@@ -127,7 +162,8 @@ async def update_counter(
         )
 
     query = {
-        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
+        "company_id": current_user.current_company_id
+        or userSettings["current_company_id"],
         "user_id": current_user.user_id,
         "voucher_type": request.voucher_type,
         "financial_year": request.financial_year,
@@ -169,7 +205,8 @@ async def reset_counter(
         )
 
     query = {
-        "company_id": current_user.current_company_id or  userSettings["current_company_id"],
+        "company_id": current_user.current_company_id
+        or userSettings["current_company_id"],
         "user_id": current_user.user_id,
         "voucher_type": voucher_type,
         "financial_year": financial_year,
