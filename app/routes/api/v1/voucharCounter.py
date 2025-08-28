@@ -189,9 +189,8 @@ async def update_counter(
 
 @counter_router.post("/reset", summary="Reset counters manually")
 async def reset_counter(
-    voucher_type: str,
-    financial_year: str,
     company_id: str,
+    voucher_type: str,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -209,7 +208,6 @@ async def reset_counter(
         or userSettings["current_company_id"],
         "user_id": current_user.user_id,
         "voucher_type": voucher_type,
-        "financial_year": financial_year,
     }
 
     counter = await vouchar_counter_repo.findOne(query)

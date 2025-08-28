@@ -1,4 +1,6 @@
+from typing import Any, List
 from fastapi import Depends
+from pydantic import BaseModel
 from app.Config import ENV_PROJECT
 from app.database.models.Vouchar import Voucher, VoucherDB
 from app.oauth2 import get_current_user
@@ -14,7 +16,7 @@ from app.database.repositories.crud.base import (
 )
 import re
 from datetime import datetime
-# import pprint
+import math
 
 
 class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
@@ -77,7 +79,9 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             endDate = end_date[0:10]
             filter_params["date"] = {"$gte": startDate, "$lte": endDate}
 
-        sort_stage = {sort.sort_field: int(sort.sort_order)} if sort.sort_field else {"date": -1}
+        sort_stage = (
+            {sort.sort_field: int(sort.sort_order)} if sort.sort_field else {"date": -1}
+        )
 
         pipeline = [
             {"$match": filter_params},
@@ -208,83 +212,386 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
     async def viewTimeline(
         self,
         search: str,
-        type: str,
-        party_name: str,
         company_id: str,
         pagination: PageRequest,
         sort: Sort,
+        category: str = '',
         current_user: TokenData = Depends(get_current_user),
-        # is_deleted: bool = False,
         start_date: datetime = None,
         end_date: datetime = None,
     ):
+        start_date = start_date[:10]
+        end_date = end_date[:10]
         filter_params = {
             "user_id": current_user.user_id,
             "company_id": company_id,
         }
 
-        if type not in ["", None]:
-            filter_params["voucher_type"] = type
-
         if start_date not in ["", None] and end_date not in ["", None]:
             filter_params["date"] = {"$gte": start_date, "$lte": end_date}
 
-        sort_options = {
-            "voucher_number_asc": {"voucher_number": 1},
-            "voucher_number_desc": {"voucher_number": -1},
-            "created_at_asc": {"created_at": 1},
-            "created_at_desc": {"created_at": -1},
-            "date_asc": {"date": 1},
-            "date_desc": {"date": -1},
-        }
-
-        sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
-        sort_stage = sort_options.get(sort_key, {"date": -1, "created_at": -1})
-
         pipeline = [
             {"$match": filter_params},
+            # Join with Inventory and calculate total_qty for distributing additional_charge
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
-                    "as": "inventory",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                        {
+                            "$group": {
+                                "_id": None,
+                                "items": {"$push": "$$ROOT"},
+                                "total_qty": {"$sum": "$quantity"},
+                            }
+                        },
+                    ],
+                    "as": "inventory_info",
                 }
             },
-            {"$unwind": "$inventory"},
+            {"$unwind": {"path": "$inventory_info"}},
+            {"$unwind": {"path": "$inventory_info.items"}},
+            # Flatten inventory + voucher fields
             {
                 "$addFields": {
-                    "inventory.company_id": "$company_id",
-                    "inventory.user_id": "$user_id",
-                    "inventory.date": "$date",
-                    "inventory.voucher_number": "$voucher_number",
-                    "inventory.voucher_type": "$voucher_type",
-                    "inventory.narration": "$narration",
-                    "inventory.party_name": "$party_name",
-                    "inventory.place_of_supply": "$place_of_supply",
-                    "inventory.created_at": "$created_at",
-                    "inventory.updated_at": "$updated_at",
+                    "item": "$inventory_info.items.item",
+                    "item_id": "$inventory_info.items.item_id",
+                    "unit": "$inventory_info.items.unit",
+                    "quantity": "$inventory_info.items.quantity",
+                    "rate": "$inventory_info.items.rate",
+                    "amount": "$inventory_info.items.amount",
+                    "is_purchase": {
+                        "$cond": [{"$eq": ["$voucher_type", "Purchase"]}, 1, 0]
+                    },
+                    "is_sale": {"$cond": [{"$eq": ["$voucher_type", "Sales"]}, 1, 0]},
+                    "date": "$date",
+                    "total_qty": "$inventory_info.total_qty",
+                    # per-unit additional charge
+                    "per_unit_additional": {
+                        "$cond": [
+                            {"$gt": ["$inventory_info.total_qty", 0]},
+                            {
+                                "$divide": [
+                                    "$additional_charge",
+                                    "$inventory_info.total_qty",
+                                ]
+                            },
+                            0,
+                        ]
+                    },
                 }
             },
-            {"$replaceRoot": {"newRoot": "$inventory"}},
-            {"$sort": sort_stage},
+            # Adjusted total amount (item.total_amount + distributed additional charge)
+            {
+                "$addFields": {
+                    "per_item_additional": {
+                        "$multiply": ["$per_unit_additional", "$quantity"]
+                    },
+                    "adj_total_amount": {
+                        "$add": [
+                            "$inventory_info.items.total_amount",
+                            {"$multiply": ["$per_unit_additional", "$quantity"]},
+                        ]
+                    },
+                }
+            },
+            # 🔹 Join with StockItem to fetch master opening balances
+            {
+                "$lookup": {
+                    "from": "StockItem",
+                    "let": {"item_id": "$item_id"},
+                    "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$item_id"]}}}],
+                    "as": "stock_item",
+                }
+            },
+            {"$unwind": {"path": "$stock_item", "preserveNullAndEmptyArrays": True}},
+            # Group per item
+            {
+                "$group": {
+                    "_id": "$item_id",
+                    "item_id": {"$first": "$item_id"},
+                    "item": {"$first": "$item"},
+                    "unit": {"$first": "$unit"},
+                    "stock_opening_qty": {"$first": "$stock_item.opening_balance"},
+                    "stock_opening_val": {"$first": "$stock_item.opening_value"},
+                    "stock_opening_rate": {"$first": "$stock_item.opening_rate"},
+                    # Opening balances (before start_date, from vouchers)
+                    "opening_qty_vouchers": {
+                        "$sum": {
+                            "$cond": [
+                                {"$lt": ["$date", start_date]},
+                                {
+                                    "$cond": [
+                                        {"$eq": ["$is_purchase", 1]},
+                                        "$quantity",
+                                        {"$multiply": [-1, "$quantity"]},
+                                    ]
+                                },
+                                0,
+                            ]
+                        }
+                    },
+                    "opening_val_vouchers": {
+                        "$sum": {
+                            "$cond": [
+                                {"$lt": ["$date", start_date]},
+                                {
+                                    "$cond": [
+                                        {"$eq": ["$is_purchase", 1]},
+                                        "$adj_total_amount",
+                                        {"$multiply": [-1, "$adj_total_amount"]},
+                                    ]
+                                },
+                                0,
+                            ]
+                        }
+                    },
+                    # Inwards (Purchases in date range)
+                    "inwards_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$gte": ["$date", start_date]},
+                                        {"$lte": ["$date", end_date]},
+                                        {"$eq": ["$is_purchase", 1]},
+                                    ]
+                                },
+                                "$quantity",
+                                0,
+                            ]
+                        }
+                    },
+                    "inwards_val": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$gte": ["$date", start_date]},
+                                        {"$lte": ["$date", end_date]},
+                                        {"$eq": ["$is_purchase", 1]},
+                                    ]
+                                },
+                                "$adj_total_amount",
+                                0,
+                            ]
+                        }
+                    },
+                    # Outwards (Sales in date range)
+                    "outwards_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$gte": ["$date", start_date]},
+                                        {"$lte": ["$date", end_date]},
+                                        {"$eq": ["$is_sale", 1]},
+                                    ]
+                                },
+                                "$quantity",
+                                0,
+                            ]
+                        }
+                    },
+                    "outwards_val": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$gte": ["$date", start_date]},
+                                        {"$lte": ["$date", end_date]},
+                                        {"$eq": ["$is_sale", 1]},
+                                    ]
+                                },
+                                "$adj_total_amount",
+                                0,
+                            ]
+                        }
+                    },
+                }
+            },
+            # 🔹 Add StockItem opening + voucher opening together
+            {
+                "$addFields": {
+                    "opening_qty": {
+                        "$round": [
+                            {
+                                "$add": [
+                                    "$stock_opening_qty",
+                                    "$opening_qty_vouchers",
+                                ]
+                            },
+                            2,
+                        ]
+                    },
+                    "opening_val": {
+                        "$round": [
+                            {
+                                "$add": [
+                                    "$stock_opening_val",
+                                    "$opening_val_vouchers",
+                                ]
+                            },
+                            2,
+                        ]
+                    },
+                }
+            },
+            # Recalculate opening_rate with new qty/val
+            {
+                "$addFields": {
+                    "closing_qty": {
+                        "$round": [
+                            {
+                                "$subtract": [
+                                    {
+                                        "$add": [
+                                            "$opening_qty",
+                                            "$inwards_qty",
+                                        ]
+                                    },
+                                    "$outwards_qty",
+                                ]
+                            },
+                            2,
+                        ]
+                    },
+                    "opening_rate": {
+                        "$cond": [
+                            {"$eq": ["$opening_qty", 0]},
+                            {"$ifNull": ["$stock_opening_rate", 0]},
+                            {
+                                "$round": [
+                                    {"$divide": ["$opening_val", "$opening_qty"]},
+                                    2,
+                                ]
+                            },
+                        ]
+                    },
+                    "inwards_rate": {
+                        "$cond": [
+                            {"$eq": ["$inwards_qty", 0]},
+                            0,
+                            {
+                                "$round": [
+                                    {"$divide": ["$inwards_val", "$inwards_qty"]},
+                                    2,
+                                ]
+                            },
+                        ]
+                    },
+                    "outwards_rate": {
+                        "$cond": [
+                            {"$eq": ["$outwards_qty", 0]},
+                            0,
+                            {
+                                "$round": [
+                                    {"$divide": ["$outwards_val", "$outwards_qty"]},
+                                    2,
+                                ]
+                            },
+                        ]
+                    },
+                }
+            },
+            {
+                "$addFields": {
+                    # Gross Profit = OutwardsVal – (OutwardsQty × AvgCostRate)
+                    "avg_cost_rate": {
+                        "$cond": [
+                            {"$gt": [{"$add": ["$opening_qty", "$inwards_qty"]}, 0]},
+                            {
+                                "$round": [
+                                    {
+                                        "$divide": [
+                                            {"$add": ["$opening_val", "$inwards_val"]},
+                                            {"$add": ["$opening_qty", "$inwards_qty"]},
+                                        ]
+                                    },
+                                    2,
+                                ]
+                            },
+                            0,
+                        ]
+                    },
+                }
+            },
+            {
+                "$addFields": {
+                    "gross_profit": {
+                        "$round": [
+                            {
+                                "$multiply": [
+                                    "$outwards_qty",
+                                    {"$subtract": ["$outwards_rate", "$avg_cost_rate"]},
+                                ]
+                            },
+                            2,
+                        ]
+                    },
+                    "profit_percent": {
+                        "$cond": [
+                            {"$gt": ["$outwards_val", 0]},
+                            {
+                                "$round": [
+                                    {
+                                        "$multiply": [
+                                            {
+                                                "$divide": [
+                                                    {
+                                                        "$multiply": [
+                                                            "$outwards_qty",
+                                                            {
+                                                                "$subtract": [
+                                                                    "$outwards_rate",
+                                                                    "$avg_cost_rate",
+                                                                ]
+                                                            },
+                                                        ]
+                                                    },
+                                                    "$outwards_val",
+                                                ]
+                                            },
+                                            100,
+                                        ]
+                                    },
+                                    2,
+                                ]
+                            },
+                            0,
+                        ]
+                    },
+                    "closing_val": {"$multiply": ["$closing_qty", "$avg_cost_rate"]},
+                }
+            },
+            {
+                "$project": {
+                    "item_id": 1,
+                    "item": 1,
+                    "unit": 1,
+                    "opening_qty": 1,
+                    "opening_rate": 1,
+                    "opening_val": 1,
+                    "inwards_qty": 1,
+                    "inwards_rate": 1,
+                    "inwards_val": 1,
+                    "outwards_qty": 1,
+                    "outwards_rate": 1,
+                    "outwards_val": 1,
+                    "closing_qty": 1,
+                    "closing_rate": "$avg_cost_rate",
+                    "closing_val": 1,
+                    "gross_profit": 1,
+                    "profit_percent": 1,
+                }
+            },
+            {"$sort": {"item": -1 if sort.sort_order == SortingOrder.ASC else 1}},
             {
                 "$match": {
                     **(
                         {
                             "$or": [
-                                {
-                                    "voucher_number": {
-                                        "$regex": f"{search}",
-                                        "$options": "i",
-                                    }
-                                },
-                                {
-                                    "party_name": {
-                                        "$regex": f"{search}",
-                                        "$options": "i",
-                                    }
-                                },
                                 {
                                     "item": {
                                         "$regex": f"{search}",
@@ -295,9 +602,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                         }
                         if search not in ["", None]
                         else {}
-                    ),
-                    **(
-                        {"party_name": party_name} if party_name not in ["", None] else {}
                     ),
                 }
             },
@@ -312,290 +616,353 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             },
         ]
 
-        party_name_pipeline = [
-            {
-                "$match": {
-                    "user_id": current_user.user_id,
-                    "company_id": company_id,
-                }
-            },
+        meta_pipeline = [
+            {"$match": filter_params},
+            # Join with Inventory and calculate total_qty for distributing additional_charge
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
-                    "as": "inventory",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                        {
+                            "$group": {
+                                "_id": None,
+                                "items": {"$push": "$$ROOT"},
+                                "total_qty": {"$sum": "$quantity"},
+                            }
+                        },
+                    ],
+                    "as": "inventory_info",
                 }
             },
-            {"$unwind": "$inventory"},
+            {"$unwind": {"path": "$inventory_info"}},
+            {"$unwind": {"path": "$inventory_info.items"}},
+            # Flatten inventory + voucher fields
             {
                 "$addFields": {
-                    "inventory.company_id": "$company_id",
-                    "inventory.user_id": "$user_id",
-                    "inventory.date": "$date",
-                    "inventory.voucher_number": "$voucher_number",
-                    "inventory.voucher_type": "$voucher_type",
-                    "inventory.narration": "$narration",
-                    "inventory.party_name": "$party_name",
-                    "inventory.place_of_supply": "$place_of_supply",
-                    "inventory.created_at": "$created_at",
-                    "inventory.updated_at": "$updated_at",
+                    "item": "$inventory_info.items.item",
+                    "item_id": "$inventory_info.items.item_id",
+                    "unit": "$inventory_info.items.unit",
+                    "quantity": "$inventory_info.items.quantity",
+                    "rate": "$inventory_info.items.rate",
+                    "amount": "$inventory_info.items.amount",
+                    "is_purchase": {
+                        "$cond": [{"$eq": ["$voucher_type", "Purchase"]}, 1, 0]
+                    },
+                    "is_sale": {"$cond": [{"$eq": ["$voucher_type", "Sales"]}, 1, 0]},
+                    "date": "$date",
+                    "total_qty": "$inventory_info.total_qty",
+                    # per-unit additional charge
+                    "per_unit_additional": {
+                        "$cond": [
+                            {"$gt": ["$inventory_info.total_qty", 0]},
+                            {
+                                "$divide": [
+                                    "$additional_charge",
+                                    "$inventory_info.total_qty",
+                                ]
+                            },
+                            0,
+                        ]
+                    },
                 }
             },
-            {"$replaceRoot": {"newRoot": "$inventory"}},
-            {"$group": {"_id": "$party_name"}},
-            {"$project": {"_id": 0, "party_name": "$_id"}},
-            {"$sort": {"party_name": 1}},
+            # Adjusted total amount (item.total_amount + distributed additional charge)
+            {
+                "$addFields": {
+                    "per_item_additional": {
+                        "$multiply": ["$per_unit_additional", "$quantity"]
+                    },
+                    "adj_total_amount": {
+                        "$add": [
+                            "$inventory_info.items.total_amount",
+                            {"$multiply": ["$per_unit_additional", "$quantity"]},
+                        ]
+                    },
+                }
+            },
+            # 🔹 Join with StockItem to fetch master opening balances
+            {
+                "$lookup": {
+                    "from": "StockItem",
+                    "let": {"item_id": "$item_id"},
+                    "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$item_id"]}}}],
+                    "as": "stock_item",
+                }
+            },
+            {"$unwind": {"path": "$stock_item", "preserveNullAndEmptyArrays": True}},
+            # Group per item
+            {
+                "$group": {
+                    "_id": "$item_id",
+                    "item_id": {"$first": "$item_id"},
+                    "item": {"$first": "$item"},
+                    "unit": {"$first": "$unit"},
+                    "stock_opening_qty": {"$first": "$stock_item.opening_balance"},
+                    "stock_opening_val": {"$first": "$stock_item.opening_value"},
+                    "stock_opening_rate": {"$first": "$stock_item.opening_rate"},
+                    # Opening balances (before start_date, from vouchers)
+                    "opening_qty_vouchers": {
+                        "$sum": {
+                            "$cond": [
+                                {"$lt": ["$date", start_date]},
+                                {
+                                    "$cond": [
+                                        {"$eq": ["$is_purchase", 1]},
+                                        "$quantity",
+                                        {"$multiply": [-1, "$quantity"]},
+                                    ]
+                                },
+                                0,
+                            ]
+                        }
+                    },
+                    "opening_val_vouchers": {
+                        "$sum": {
+                            "$cond": [
+                                {"$lt": ["$date", start_date]},
+                                {
+                                    "$cond": [
+                                        {"$eq": ["$is_purchase", 1]},
+                                        "$adj_total_amount",
+                                        {"$multiply": [-1, "$adj_total_amount"]},
+                                    ]
+                                },
+                                0,
+                            ]
+                        }
+                    },
+                    # Inwards (Purchases in date range)
+                    "inwards_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$gte": ["$date", start_date]},
+                                        {"$lte": ["$date", end_date]},
+                                        {"$eq": ["$is_purchase", 1]},
+                                    ]
+                                },
+                                "$quantity",
+                                0,
+                            ]
+                        }
+                    },
+                    "inwards_val": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$gte": ["$date", start_date]},
+                                        {"$lte": ["$date", end_date]},
+                                        {"$eq": ["$is_purchase", 1]},
+                                    ]
+                                },
+                                "$adj_total_amount",
+                                0,
+                            ]
+                        }
+                    },
+                    # Outwards (Sales in date range)
+                    "outwards_qty": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$gte": ["$date", start_date]},
+                                        {"$lte": ["$date", end_date]},
+                                        {"$eq": ["$is_sale", 1]},
+                                    ]
+                                },
+                                "$quantity",
+                                0,
+                            ]
+                        }
+                    },
+                    "outwards_val": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$gte": ["$date", start_date]},
+                                        {"$lte": ["$date", end_date]},
+                                        {"$eq": ["$is_sale", 1]},
+                                    ]
+                                },
+                                "$adj_total_amount",
+                                0,
+                            ]
+                        }
+                    },
+                }
+            },
+            # 🔹 Add StockItem opening + voucher opening together
+            {
+                "$addFields": {
+                    "opening_qty": {
+                        "$round": [
+                            {
+                                "$add": [
+                                    "$stock_opening_qty",
+                                    "$opening_qty_vouchers",
+                                ]
+                            },
+                            2,
+                        ]
+                    },
+                    "opening_val": {
+                        "$round": [
+                            {
+                                "$add": [
+                                    "$stock_opening_val",
+                                    "$opening_val_vouchers",
+                                ]
+                            },
+                            2,
+                        ]
+                    },
+                }
+            },
+            # Recalculate opening_rate with new qty/val
+            {
+                "$addFields": {
+                    "closing_qty": {
+                        "$round": [
+                            {
+                                "$add": [
+                                    "$opening_qty",
+                                    "$inwards_qty",
+                                    {"$multiply": [-1, "$outwards_qty"]},
+                                ]
+                            },
+                            2,
+                        ]
+                    },
+                    "inwards_rate": {
+                        "$cond": [
+                            {"$eq": ["$inwards_qty", 0]},
+                            0,
+                            {
+                                "$round": [
+                                    {"$divide": ["$inwards_val", "$inwards_qty"]},
+                                    2,
+                                ]
+                            },
+                        ]
+                    },
+                    "outwards_rate": {
+                        "$cond": [
+                            {"$eq": ["$outwards_qty", 0]},
+                            0,
+                            {
+                                "$round": [
+                                    {"$divide": ["$outwards_val", "$outwards_qty"]},
+                                    2,
+                                ]
+                            },
+                        ]
+                    },
+                }
+            },
+            {
+                "$addFields": {
+                    # Gross Profit = OutwardsVal – (OutwardsQty × AvgCostRate)
+                    "avg_cost_rate": {
+                        "$cond": [
+                            {"$gt": [{"$add": ["$opening_qty", "$inwards_qty"]}, 0]},
+                            {
+                                "$round": [
+                                    {
+                                        "$divide": [
+                                            {"$add": ["$opening_val", "$inwards_val"]},
+                                            {"$add": ["$opening_qty", "$inwards_qty"]},
+                                        ]
+                                    },
+                                    2,
+                                ]
+                            },
+                            0,
+                        ]
+                    },
+                }
+            },
+            {
+                "$addFields": {
+                    "gross_profit": {
+                        "$round": [
+                            {
+                                "$multiply": [
+                                    "$outwards_qty",
+                                    {"$subtract": ["$outwards_rate", "$avg_cost_rate"]},
+                                ]
+                            },
+                            2,
+                        ]
+                    },
+                    "closing_val": {"$multiply": ["$closing_qty", "$avg_cost_rate"]},
+                }
+            },
+            {
+                "$project": {
+                    "item_id": 1,
+                    "opening_qty": 1,
+                    "opening_rate": 1,
+                    "opening_val": 1,
+                    "inwards_qty": 1,
+                    "inwards_rate": 1,
+                    "inwards_val": 1,
+                    "outwards_qty": 1,
+                    "outwards_rate": 1,
+                    "outwards_val": 1,
+                    "closing_qty": 1,
+                    "closing_rate": "$avg_cost_rate",
+                    "closing_val": 1,
+                    "gross_profit": 1,
+                }
+            },
         ]
 
         res = [doc async for doc in self.collection.aggregate(pipeline)]
-        party_res = [doc async for doc in self.collection.aggregate(party_name_pipeline)]
+        totals_res = [doc async for doc in self.collection.aggregate(meta_pipeline)]
+        # print("totals_res", totals_res)
         docs = res[0]["docs"]
-        unique_parties = [entry["party_name"] for entry in party_res]
+        opening_val = sum((doc.get("opening_val") or 0) for doc in totals_res)
+        inwards_val = sum((doc.get("inwards_val") or 0) for doc in totals_res)
+        outwards_val = sum((doc.get("outwards_val") or 0) for doc in totals_res)
+        closing_val = sum((doc.get("closing_val") or 0) for doc in totals_res)
+        gross_profit = sum((doc.get("gross_profit") or 0) for doc in totals_res)
+        profit_percent = gross_profit / outwards_val * 100 if outwards_val != 0 else 0
 
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
 
-        return PaginatedResponse(
+        class Meta2(Page):
+            total: int
+            opening_val: float
+            inwards_val: float
+            outwards_val: float
+            closing_val: float
+            gross_profit: float
+            profit_percent: float
+
+        class PaginatedResponse2(BaseModel):
+            docs: List[Any]
+            meta: Meta2
+
+        return PaginatedResponse2(
             docs=docs,
-            meta=Meta(
+            meta=Meta2(
                 page=pagination.paging.page,
                 limit=pagination.paging.limit,
                 total=count,
-                unique=unique_parties,
+                opening_val=opening_val,
+                inwards_val=inwards_val,
+                outwards_val=outwards_val,
+                closing_val=closing_val,
+                gross_profit=gross_profit,
+                profit_percent=profit_percent,
             ),
         )
 
 
 vouchar_repo = VoucherRepo()
-
-
-# from fastapi import Depends
-# from app.Config import ENV_PROJECT
-# from app.database.models.Vouchar import Voucher, VoucherDB
-# from app.oauth2 import get_current_user
-# from app.schema.token import TokenData
-# from .crud.base_mongo_crud import BaseMongoDbCrud
-# from app.database.repositories.crud.base import (
-#     PageRequest,
-#     Meta,
-#     PaginatedResponse,
-#     SortingOrder,
-#     Sort,
-#     Page,
-# )
-# import re
-# from datetime import datetime
-
-
-# class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
-#     def __init__(self):
-#         super().__init__(
-#             ENV_PROJECT.MONGO_DATABASE,
-#             "Voucher",
-#             unique_attributes=[
-#                 "voucher_number",
-#                 "user_id",
-#                 "voucher_type",
-#                 "company_id",
-#                 "party_name",
-#             ],
-#         )
-
-#     async def new(self, sub: Voucher):
-#         return await self.save(VoucherDB(**sub.model_dump()))
-
-#     async def viewAllVouchar(
-#         self,
-#         search: str,
-#         type: str,
-#         company_id: str,
-#         # group: str,
-#         pagination: PageRequest,
-#         sort: Sort,
-#         current_user: TokenData = Depends(get_current_user),
-#         is_deleted: bool = False,
-#         start_date: datetime = None,
-#         end_date: datetime = None,
-#         skip: int = 0,
-#     ):
-#         filter_params = {
-#             "user_id": current_user.user_id,
-#             # "is_deleted": is_deleted,
-#             "company_id": company_id,
-#         }
-#         # Filter by search term
-#         if search not in ["", None]:
-#             try:
-#                 safe_search = re.escape(search)
-#                 filter_params["$or"] = [
-#                     {"name": {"$regex": safe_search, "$options": "i"}},
-#                     {"alias_name": {"$regex": safe_search, "$options": "i"}},
-#                     {"voucher_type": {"$regex": safe_search, "$options": "i"}},
-#                     {"group": {"$regex": safe_search, "$options": "i"}},
-#                     {"description": {"$regex": safe_search, "$options": "i"}},
-#                 ]
-#             except re.error:
-#                 # If regex is invalid, ignore search filter or handle as needed
-#                 pass
-
-#         if type not in ["", None]:
-#             filter_params["voucher_type"] = type
-
-#         if start_date and end_date:
-#             filter_params["created_at"] = {"$gte": start_date, "$lte": end_date}
-
-#         # if group not in ["", None]:
-#         #     filter_params["group"] = group
-
-#         # Define sorting logic
-#         sort_options = {
-#             "name_asc": {"name": 1},
-#             "name_desc": {"name": -1},
-#             # "price_asc": {"selling_price": 1},
-#             # "price_desc": {"selling_price": -1},
-#             "created_at_asc": {"created_at": 1},
-#             "created_at_desc": {"created_at": -1},
-#         }
-
-#         # Construct sorting key
-#         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
-
-#         sort_stage = sort_options.get(sort_key, {"created_at": 1})
-
-#         pipeline = [
-#             {"$match": filter_params},
-#             {
-#                 "$lookup": {
-#                     "from": "Ledger",
-#                     "localField": "party_name",
-#                     "foreignField": "name",
-#                     "as": "party",
-#                 }
-#             },
-#             {"$unwind": {"path": "$party", "preserveNullAndEmptyArrays": True}},
-#             {
-#                 "$lookup": {
-#                     "from": "Inventory",
-#                     "localField": "_id",
-#                     "foreignField": "vouchar_id",
-#                     "as": "inventory",
-#                 }
-#             },
-#             {"$unwind": {"path": "$inventory", "preserveNullAndEmptyArrays": True}},
-#             {
-#                 "$lookup": {
-#                     "from": "Accounting",
-#                     "localField": "_id",
-#                     "foreignField": "vouchar_id",
-#                     "as": "accounting",
-#                 }
-#             },
-#             {
-#                 "$group": {
-#                     "_id": "$_id",
-#                     "voucher_number": {"$first": "$voucher_number"},
-#                     "date": {"$first": "$date"},
-#                     "voucher_type": {"$first": "$voucher_type"},
-#                     "accounting": {"$push": "$accounting"},
-#                     "inventory": {"$first": "$inventory"},
-#                     "party": {"$first": "$party"},
-#                 }
-#             },
-#             {
-#                 "$addFields": {
-#                     "amount": {
-#                         "$add": [{"$ifNull": ["$debit", 0]}, {"$ifNull": ["$credit", 0]}]
-#                     },
-#                     "balance_type": {
-#                         "$cond": [
-#                             {"$gt": ["$debit", "$credit"]},
-#                             "Dr",
-#                             {"$cond": [{"$gt": ["$credit", "$debit"]}, "Cr", "Balanced"]},
-#                         ]
-#                     },
-#                 }
-#             },
-#             {
-#                 "$project": {
-#                     "_id": 1,
-#                     "date": 1,
-#                     "voucher_number": 1,
-#                     "voucher_type": 1,
-#                     "ledger_name": 1,
-#                     "debit": 1,
-#                     "credit": 1,
-#                     "amount": 1,
-#                     "balance_type": 1,
-#                     "narration": 1,
-#                 }
-#             },
-#             {
-#                 "$facet": {
-#                     "docs": [
-#                         {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
-#                         {"$limit": pagination.paging.limit},
-#                     ],
-#                     "count": [{"$count": "count"}],
-#                 }
-#             },
-#         ]
-
-#         unique_categories_pipeline = [
-#             {
-#                 "$match": {
-#                     "user_id": current_user.user_id,
-#                     "is_deleted": is_deleted,
-#                     "company_id": company_id,
-#                 }
-#             },
-#             {"$group": {"_id": "$category"}},
-#             {"$project": {"_id": 0, "category": "$_id"}},
-#             {"$sort": {"category": 1}},
-#         ]
-
-#         unique_groups_pipeline = [
-#             {
-#                 "$match": {
-#                     "user_id": current_user.user_id,
-#                     "is_deleted": is_deleted,
-#                     "company_id": company_id,
-#                 }
-#             },
-#             {"$group": {"_id": "$group"}},
-#             {"$project": {"_id": 0, "group": "$_id"}},
-#             {"$sort": {"group": 1}},
-#         ]
-
-#         res = [doc async for doc in self.collection.aggregate(pipeline)]
-
-#         # categories_res = [
-#         #     doc
-#         #     async for doc in category_repo.collection.aggregate(
-#         #         unique_categories_pipeline
-#         #     )
-#         # ]
-
-#         # group_res = [
-#         #     doc
-#         #     async for doc in group_repo.collection.aggregate(unique_groups_pipeline)
-#         # ]
-#         docs = res[0]["docs"]
-#         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
-
-#         # Extract unique categories and groups
-#         # unique_categories = [entry["category"] for entry in categories_res]
-
-#         # unique_groups = [entry["group"] for entry in group_res]
-
-#         return PaginatedResponse(
-#             docs=docs,
-#             meta=Meta(
-#                 page=pagination.paging.page,
-#                 limit=pagination.paging.limit,
-#                 total=count,
-#                 unique=[],
-#             ),
-#         )
-
-
-# vouchar_repo = VoucherRepo()

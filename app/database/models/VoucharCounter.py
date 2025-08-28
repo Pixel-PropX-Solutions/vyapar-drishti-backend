@@ -41,7 +41,7 @@ class VoucherCounter(BaseModel):
     # counter state
     starting_number: int = Field(default=1, ge=0, description="Value after each reset")
     current_number: int = Field(
-        default=0, ge=0, description="Last number issued (auto‑incremented)"
+        default=1, ge=0, description="Last number issued (auto‑incremented)"
     )
 
     # reset logic

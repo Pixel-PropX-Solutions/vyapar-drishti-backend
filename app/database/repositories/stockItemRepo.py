@@ -1815,39 +1815,54 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "image": 1,
                     "description": 1,
                     "hsn_code": 1,
-                    "opening_balance": 1,
-                    "opening_rate": 1,
-                    "opening_value": 1,
-                    "low_stock_alert": 1,
+                    "opening_balance": {"$round": ["$opening_balance", 2]},
+                    "opening_rate": {"$round": ["$opening_rate", 2]},
+                    "opening_value": {"$round": ["$opening_value", 2]},
+                    "low_stock_alert": {"$round": ["$low_stock_alert", 2]},
                     "created_at": 1,
                     "updated_at": 1,
                     "current_stock": {
-                        "$subtract": [
+                        "$round": [
                             {
-                                "$add": [
-                                    {"$ifNull": ["$purchase_qty", 0]},
-                                    {"$ifNull": ["$opening_balance", 0]},
+                                "$subtract": [
+                                    {
+                                        "$add": [
+                                            {"$ifNull": ["$purchase_qty", 0]},
+                                            {"$ifNull": ["$opening_balance", 0]},
+                                        ]
+                                    },
+                                    {"$ifNull": ["$sales_qty", 0]},
                                 ]
                             },
-                            {"$ifNull": ["$sales_qty", 0]},
+                            2,
                         ]
                     },
-                    "purchase_qty": "$purchase_qty",
-                    "purchase_value": "$purchase_value",
+                    "purchase_qty": {"$round": ["$purchase_qty", 2]},
+                    "purchase_value": {"$round": ["$purchase_value", 2]},
                     "avg_purchase_rate": {
-                        "$cond": [
-                            {"$gt": ["$purchase_qty", 0]},
-                            {"$divide": ["$purchase_value", "$purchase_qty"]},
-                            0,
+                        "$round": [
+                            {
+                                "$cond": [
+                                    {"$gt": ["$purchase_qty", 0]},
+                                    {"$divide": ["$purchase_value", "$purchase_qty"]},
+                                    0,
+                                ]
+                            },
+                            2,
                         ]
                     },
-                    "sales_qty": "$sales_qty",
-                    "sales_value": "$sales_value",
+                    "sales_qty": {"$round": ["$sales_qty", 2]},
+                    "sales_value": {"$round": ["$sales_value", 2]},
                     "avg_sales_rate": {
-                        "$cond": [
-                            {"$gt": ["$sales_qty", 0]},
-                            {"$divide": ["$sales_value", "$sales_qty"]},
-                            0,
+                        "$round": [
+                            {
+                                "$cond": [
+                                    {"$gt": ["$sales_qty", 0]},
+                                    {"$divide": ["$sales_value", "$sales_qty"]},
+                                    0,
+                                ]
+                            },
+                            2,
                         ]
                     },
                 }

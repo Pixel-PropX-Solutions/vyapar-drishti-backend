@@ -267,8 +267,8 @@ async def createVouchar(
                     "godown_id": item.godown_id if item.godown_id else "",
                     "tax_rate": 0,
                     "tax_amount": 0,
-                    "hsn_code": '',
-                    "unit": item.unit if item.unit else '',
+                    "hsn_code": "",
+                    "unit": item.unit if item.unit else "",
                 }
                 await inventory_repo.new(InventoryItem(**item_data))
 
@@ -542,7 +542,7 @@ async def createVoucharWithTAX(
 
     shouldIncreaseCounter = db_invoice_no == vouchar.voucher_number
     shouldDecreaseCounter = False
-    
+
     if len(vouchar.date) < 10:
         # Assuming the date is in 'YYYY-MM-DD' format, we can pad it with zeros where required.
         # e.g '2023-01-1' should become '2023-01-01', '2023-1-1' should become '2023-01-01', '2023-1-01' should become '2023-01-01'.
@@ -1080,8 +1080,7 @@ async def getTimeline(
     current_user: TokenData = Depends(get_current_user),
     company_id: str = Query(""),
     search: str = "",
-    type: str = "",
-    party_name: str = "",
+    category: str = "",
     start_date: str = "",
     end_date: str = "",
     page_no: int = Query(1, ge=1),
@@ -1106,8 +1105,7 @@ async def getTimeline(
     result = await vouchar_repo.viewTimeline(
         search=search,
         company_id=current_user.current_company_id,
-        type=type,
-        party_name=party_name,
+        category=category,
         pagination=page_request,
         start_date=start_date,
         end_date=end_date,
