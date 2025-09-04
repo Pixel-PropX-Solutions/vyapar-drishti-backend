@@ -47,9 +47,9 @@ configs = [
 ]
 
 
-def call_api():
-    response = requests.get("https://dristidocs-backend.onrender.com/health")
-    print(f"API called: {response}")
+# def call_api():
+#     response = requests.get("https://dristidocs-backend.onrender.com/health")
+#     print(f"API called: {response}")
 
 # # Schedule the job (e.g., every 5 minutes)
 # scheduler.add_job(call_api, 'cron', minute='*/5', )
