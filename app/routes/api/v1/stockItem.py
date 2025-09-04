@@ -37,14 +37,14 @@ async def create_product(
     image: UploadFile = File(None),
     description: str = Form(None),
     # Additonal Optional fields
-    opening_balance: float = Form(None),
-    opening_rate: float = Form(None),
-    opening_value: float = Form(None),
+    opening_balance: float = Form(0.0),
+    opening_rate: float = Form(0.0),
+    opening_value: float = Form(0.0),
     nature_of_goods: str = Form(None),
     hsn_code: str = Form(None),
     taxability: str = Form(None),
-    tax_rate: str = Form(None),
-    low_stock_alert: int = Form(None),
+    tax_rate: float = Form(0.0),
+    low_stock_alert: float = Form(10.0),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -93,7 +93,6 @@ async def create_product(
         "group_id": group_id,
         "image": image_url,
         "description": description,
-        
         # additonal optional fields
         "opening_balance": opening_balance,
         "opening_rate": opening_rate,
@@ -101,7 +100,7 @@ async def create_product(
         "nature_of_goods": nature_of_goods,
         "hsn_code": hsn_code,
         "taxability": taxability,
-        'tax_rate': tax_rate,
+        "tax_rate": tax_rate,
         "low_stock_alert": low_stock_alert,
     }
 
@@ -167,110 +166,6 @@ async def get_product(
             },
             {"$unwind": {"path": "$group", "preserveNullAndEmptyArrays": True}},
             {
-                "$lookup": {
-                    "from": "Inventory",
-                    "let": {"stock_item_id": "$_id"},
-                    "pipeline": [
-                        {"$match": {"$expr": {"$eq": ["$item_id", "$$stock_item_id"]}}}
-                    ],
-                    "as": "inventory_entries",
-                }
-            },
-            {
-                "$unwind": {
-                    "path": "$inventory_entries",
-                    "preserveNullAndEmptyArrays": True,
-                }
-            },
-            {
-                "$lookup": {
-                    "from": "Voucher",
-                    "let": {"inventory_voucher_id": "$inventory_entries.vouchar_id"},
-                    "pipeline": [
-                        {"$match": {"$expr": {"$eq": ["$_id", "$$inventory_voucher_id"]}}}
-                    ],
-                    "as": "voucher",
-                }
-            },
-            {"$unwind": {"path": "$voucher", "preserveNullAndEmptyArrays": True}},
-            {
-                "$addFields": {
-                    "purchase_qty": {
-                        "$sum": {
-                            "$cond": [
-                                {
-                                    "$eq": [
-                                        {"$toLower": "$voucher.voucher_type"},
-                                        "purchase",
-                                    ]
-                                },
-                                "$inventory_entries.quantity",
-                                0,
-                            ]
-                        }
-                    },
-                    "purchase_value": {
-                        "$sum": {
-                            "$cond": [
-                                {
-                                    "$eq": [
-                                        {"$toLower": "$voucher.voucher_type"},
-                                        "purchase",
-                                    ]
-                                },
-                                "$inventory_entries.amount",
-                                0,
-                            ]
-                        }
-                    },
-                    "sales_qty": {
-                        "$sum": {
-                            "$cond": [
-                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
-                                {"$abs": "$inventory_entries.quantity"},
-                                0,
-                            ]
-                        }
-                    },
-                    "sales_value": {
-                        "$sum": {
-                            "$cond": [
-                                {"$eq": [{"$toLower": "$voucher.voucher_type"}, "sales"]},
-                                {"$abs": "$inventory_entries.amount"},
-                                0,
-                            ]
-                        }
-                    },
-                },
-            },
-            {
-                "$group": {
-                    "_id": "$_id",
-                    "company_id": {"$first": "$company_id"},
-                    "stock_item_name": {"$first": "$stock_item_name"},
-                    "unit": {"$first": "$unit"},
-                    "unit_id": {"$first": "$unit_id"},
-                    "alias_name": {"$first": "$alias_name"},
-                    "category": {"$first": "$category"},
-                    "group": {"$first": "$group"},
-                    "image": {"$first": "$image"},
-                    "description": {"$first": "$description"},
-                    "nature_of_goods": {"$first": "$nature_of_goods"},
-                    "hsn_code": {"$first": "$hsn_code"},
-                    "taxability": {"$first": "$taxability"},
-                    "low_stock_alert": {"$first": "$low_stock_alert"},
-                    "created_at": {"$first": "$created_at"},
-                    "updated_at": {"$first": "$updated_at"},
-                    "purchase_qty": {"$first": "$purchase_qty"},
-                    "purchase_value": {"$first": "$purchase_value"},
-                    "sales_qty": {"$first": "$sales_qty"},
-                    "sales_value": {"$first": "$sales_value"},
-                    "opening_balance": {"$first": "$opening_balance"},
-                    "opening_rate": {"$first": "$opening_rate"},
-                    "opening_value": {"$first": "$opening_value"},
-                }
-            },
-            {
                 "$project": {
                     "_id": 1,
                     "stock_item_name": 1,
@@ -292,26 +187,10 @@ async def get_product(
                     "opening_rate": 1,
                     "opening_value": 1,
                     "taxability": 1,
+                    "tax_rate": 1,
                     "low_stock_alert": 1,
                     "created_at": 1,
                     "updated_at": 1,
-                    "current_stock": {
-                        "$subtract": [
-                            {"$sum": {"$ifNull": ["$purchase_qty", 0]}},
-                            {"$sum": {"$ifNull": ["$sales_qty", 0]}},
-                        ]
-                    },
-                    "avg_purchase_rate": {
-                        "$cond": [
-                            {"$gt": ["$purchase_qty", 0]},
-                            {"$divide": ["$purchase_value", "$purchase_qty"]},
-                            0,
-                        ]
-                    },
-                    "purchase_qty": "$purchase_qty",
-                    "purchase_value": "$purchase_value",
-                    "sales_qty": "$sales_qty",
-                    "sales_value": "$sales_value",
                 }
             },
         ]
@@ -509,7 +388,27 @@ async def get_product_details(
                     "avg_purchase_rate": {
                         "$cond": [
                             {"$gt": ["$purchase_qty", 0]},
-                            {"$divide": ["$purchase_value", "$purchase_qty"]},
+                            {
+                                "$round": [
+                                    {
+                                        "$divide": [
+                                            {
+                                                "$add": [
+                                                    {"$ifNull": ["$purchase_value", 0]},
+                                                    {"$ifNull": ["$opening_value", 0]},
+                                                ]
+                                            },
+                                            {
+                                                "$add": [
+                                                    {"$ifNull": ["$purchase_qty", 0]},
+                                                    {"$ifNull": ["$opening_balance", 0]},
+                                                ]
+                                            },
+                                        ]
+                                    },
+                                    2,
+                                ]
+                            },
                             0,
                         ]
                     },
@@ -730,6 +629,8 @@ async def getProductTimeline(
         "message": "Data Fetched Successfully...",
         "data": result,
     }
+
+
 @Product.get(
     "/view/all/product", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
@@ -848,7 +749,6 @@ async def view_inventory_stats(
         "message": "Inventory Stats Fetched Successfully...",
         "data": result,
     }
-
 
 
 @Product.get(
@@ -1130,16 +1030,6 @@ async def update_product_details(
             or userSettings["current_company_id"],
         },
         {"$set": updated_dict, "$currentDate": {"updated_at": True}},
-    )
-
-    await stock_item_repo.findOne(
-        {
-            "_id": product_id,
-            "user_id": current_user.user_id,
-            "is_deleted": False,
-            "company_id": current_user.current_company_id
-            or userSettings["current_company_id"],
-        }
     )
 
     return {

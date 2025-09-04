@@ -246,16 +246,28 @@ async def view_ledgers_with_type(
             detail="User Settings Not Found. Please create user settings first."
         )
 
+    if type == "Customers":
+        parent_filter = {"$in": ["Debtors", "Creditors"]}
+    elif type == "Accounts":
+        parent_filter = {"$in": ["Bank Accounts", "Cash-in-Hand"]}
+    elif type not in ["", None]:
+        parent_filter = type
+    else:
+        parent_filter = None
+
+    match_query = {
+        "user_id": current_user.user_id,
+        "company_id": current_user.current_company_id
+        or userSettings["current_company_id"],
+        "is_deleted": False,
+    }
+    if parent_filter is not None:
+        match_query["parent"] = parent_filter
+
     result = await ledger_repo.collection.aggregate(
         [
             {
-                "$match": {
-                    "user_id": current_user.user_id,
-                    "company_id": current_user.current_company_id
-                    or userSettings["current_company_id"],
-                    "parent": type,
-                    "is_deleted": False,
-                },
+                "$match": match_query,
             },
             {
                 "$project": {

@@ -39,6 +39,11 @@ import aiofiles
 from num2words import num2words
 from math import ceil
 import sys
+import asyncio
+from datetime import datetime
+import calendar
+
+# from playwright.async_api import async_playwright
 
 Vouchar = APIRouter()
 
@@ -57,7 +62,7 @@ class VoucherWithTAXCreate(BaseModel):
     place_of_supply: Optional[str] = None
     vehicle_number: Optional[str] = None
     mode_of_transport: Optional[str] = None
-    status: Optional[str] = None
+    payment_mode: Optional[str] = None
     due_date: Optional[str] = None
 
     paid_amount: Optional[float] = 0.0  # Amount paid by the customer
@@ -88,7 +93,7 @@ class TAXVoucherUpdate(BaseModel):
     place_of_supply: Optional[str]
     vehicle_number: Optional[str] = None
     mode_of_transport: Optional[str] = None
-    status: Optional[str] = None
+    payment_mode: Optional[str] = None
     due_date: Optional[str] = None
     paid_amount: Optional[float] = 0.0  # Amount paid by the customer
     total: Optional[float] = 0.0  # Total amount before taxes and discounts
@@ -187,7 +192,9 @@ async def createVouchar(
             vouchar.mode_of_transport if vouchar.mode_of_transport else ""
         ),
         "due_date": (vouchar.due_date if vouchar.due_date else ""),
-        "status": (vouchar.status if hasattr(vouchar, "status") else ""),
+        "payment_mode": (
+            vouchar.payment_mode if hasattr(vouchar, "payment_mode") else ""
+        ),
         "paid_amount": vouchar.paid_amount if vouchar.paid_amount else 0.0,
         "total": vouchar.total if vouchar.total else 0.0,
         "discount": vouchar.discount if vouchar.discount else 0.0,
@@ -360,7 +367,9 @@ async def updateVouchar(
         "mode_of_transport": (
             vouchar.mode_of_transport if hasattr(vouchar, "mode_of_transport") else ""
         ),
-        "status": (vouchar.status if hasattr(vouchar, "status") else ""),
+        "payment_mode": (
+            vouchar.payment_mode if hasattr(vouchar, "payment_mode") else ""
+        ),
         "due_date": (vouchar.due_date if hasattr(vouchar, "due_date") else ""),
         "paid_amount": vouchar.paid_amount if vouchar.paid_amount else 0.0,
         "total": vouchar.total if vouchar.total else 0.0,
@@ -571,7 +580,7 @@ async def createVoucharWithTAX(
         "mode_of_transport": (
             vouchar.mode_of_transport if vouchar.mode_of_transport else ""
         ),
-        "status": (vouchar.status if vouchar.status else ""),
+        "payment_mode": (vouchar.payment_mode if vouchar.payment_mode else ""),
         "due_date": (vouchar.due_date if vouchar.due_date else ""),
         "paid_amount": vouchar.paid_amount if vouchar.paid_amount else 0.0,
         "total": vouchar.total if vouchar.total else 0.0,
@@ -766,7 +775,9 @@ async def updateVoucharWithTAX(
         "mode_of_transport": (
             vouchar.mode_of_transport if hasattr(vouchar, "mode_of_transport") else ""
         ),
-        "status": (vouchar.status if hasattr(vouchar, "status") else ""),
+        "payment_mode": (
+            vouchar.payment_mode if hasattr(vouchar, "payment_mode") else ""
+        ),
         "due_date": (vouchar.due_date if hasattr(vouchar, "due_date") else ""),
         "paid_amount": vouchar.paid_amount if vouchar.paid_amount else 0.0,
         "total": vouchar.total if vouchar.total else 0.0,
@@ -1221,7 +1232,7 @@ async def print_invoice(
             "date": invoice.get("date", ""),
             "vehicle_number": invoice.get("vehicle_number", ""),
             "mode_of_transport": invoice.get("mode_of_transport", ""),
-            "status": invoice.get("status", ""),
+            "payment_mode": invoice.get("payment_mode", ""),
             "place_of_supply": invoice.get("place_of_supply", ""),
             "items": items,
             "total": invoice.get("total", 0),
@@ -1279,6 +1290,13 @@ async def print_invoice(
     rendered_pages = await render_paginated_html(
         template_path, template_vars, items, items_per_page=17
     )
+
+    # async with async_playwright() as p:
+    #     browser = await p.chromium.launch()
+    #     page = await browser.new_page()
+    #     await page.set_content(rendered_html, wait_until="networkidle")
+    #     pdf_bytes = await page.pdf(format="A4", print_background=True, path="out.pdf")
+    #     await browser.close()
     # return HTMLResponse(content=rendered_download_html, status_code=status.HTTP_200_OK)
 
     return {
@@ -1411,7 +1429,7 @@ async def print_invoice_tax(
             "date": invoice.get("date", ""),
             "vehicle_number": invoice.get("vehicle_number", ""),
             "mode_of_transport": invoice.get("mode_of_transport", ""),
-            "status": invoice.get("status", ""),
+            "payment_mode": invoice.get("payment_mode", ""),
             "place_of_supply": invoice.get("place_of_supply", ""),
             "total": invoice.get("total", 0),
             "discount": invoice.get("discount", 0),
@@ -2098,3 +2116,105 @@ async def delete_tax_vouchar(
     )
 
     return {"success": True, "message": "Invoice Deleted Successfully..."}
+
+
+@Vouchar.get("/get/analytics", response_class=ORJSONResponse)
+async def get_analytics(
+    company_id: str = Query(None),
+    financial_year: int = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    if financial_year is None:
+        financial_year = datetime.now().year
+
+    response = await vouchar_repo.get_analytics_data(
+            current_user=current_user,
+            year=int(financial_year),
+            company_id=current_user.current_company_id or company_id,
+        )
+
+    return {
+        "success": True,
+        "data": response,
+        "message": "Data fetched successfully...",
+    }
+
+@Vouchar.get("/get/analytics/monthly", response_class=ORJSONResponse)
+async def get_analytics_monthly(
+    company_id: str = Query(None),
+    financial_year: int = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    if financial_year is None:
+        financial_year = datetime.now().year
+
+    response = await vouchar_repo.get_monthly_data(
+            current_user=current_user,
+            year=int(financial_year),
+            company_id=current_user.current_company_id or company_id,
+        )
+    
+
+    return {
+        "success": True,
+        "data": response,
+        "message": "Data fetched successfully...",
+    }
+
+
+@Vouchar.get("/get/analytics/daily", response_class=ORJSONResponse)
+async def get_analytics_daily(
+    company_id: str = Query(None),
+    financial_year: int = Query(None),
+    financial_month: int = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+):
+    if current_user.user_type != "user":
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    if financial_year is None:
+        financial_year = datetime.now().year
+
+    if financial_month is None:
+        financial_month = datetime.now().month
+
+    response = await vouchar_repo.get_daily_data(
+            current_user=current_user,
+            year=int(financial_year),
+            month=int(financial_month),
+            company_id=current_user.current_company_id or company_id,
+        ),
+    
+
+    return {
+        "success": True,
+        "data": response,
+        "message": "Data fetched successfully...",
+    }

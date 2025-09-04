@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <title>New User Query - Vyapar Drishti</title>
+    <style>
+        body {
+            background-color: #f4f4f9;
+            font-family: 'Liberation Sans';
+            margin: 0;
+            padding: 0;
+            margin-top: 30px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 20px;
+            text-align: center;
+        }
+
+        .logo {
+            max-width: 120px;
+            border-radius: 8px;
+        }
+
+        .message {
+            font-size: 1.8rem;
+            color: #000000;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .body {
+            padding: 25px;
+            text-align: left;
+        }
+
+        .alert-banner {
+            background-color: #e8f4f8;
+            border-left: 4px solid #26d2d2;
+            padding: 15px;
+            margin-bottom: 25px;
+            border-radius: 4px;
+        }
+
+        .alert-text {
+            color: #004b6b;
+            font-weight: bold;
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .user-details {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .detail-row {
+            display: flex;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 8px;
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .detail-label {
+            font-weight: bold;
+            color: #006e89;
+            width: 120px;
+            flex-shrink: 0;
+        }
+
+        .detail-value {
+            color: #333;
+            flex-grow: 1;
+            word-break: break-word;
+        }
+
+        .message-section {
+            background-color: #fff;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .message-title {
+            color: #006e89;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin:0 !important;
+            margin-bottom: 15px !important;
+            border-bottom: 2px solid #26d2d2;
+            padding-bottom: 8px;
+        }
+
+        .message-content {
+            color: #333;
+            line-height: 1.6;
+            font-size: 1rem;
+            white-space: pre-wrap;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #26d2d2;
+        }
+
+        .action-buttons {
+            text-align: center;
+            margin: 25px 0;
+        }
+
+        .cta-button {
+            background-color: #006e89;
+            color: #ffffff;
+            padding: 12px 25px;
+            font-size: 1.1rem;
+            text-decoration: none;
+            border-radius: 5px;
+            display: inline-block;
+            margin: 0 10px;
+            font-weight: bold;
+        }
+
+        .cta-button:hover {
+            background-color: #00405c;
+        }
+
+        .cta-button.secondary {
+            background-color: #28a745;
+        }
+
+        .cta-button.secondary:hover {
+            background-color: #1e7e34;
+        }
+
+        .timestamp {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .timestamp-text {
+            color: #856404;
+            font-size: 0.95rem;
+            margin: 0;
+        }
+
+        .priority-high {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+        }
+
+        .priority-medium {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+
+        .priority-low {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+
+        .footer {
+            background-color: #f4f4f9;
+            text-align: center;
+            padding: 15px;
+            color: #888888;
+            font-size: 0.9rem;
+        }
+
+        .footer a {
+            color: #006e89;
+            text-decoration: none;
+        }
+
+        .ii a[href] {
+            color: #ffffff;
+        }
+
+        @media only screen and (max-width: 600px) {
+            .container {
+                width: 100%;
+                padding: 10px;
+            }
+
+            .header {
+                padding: 15px;
+            }
+
+            .body {
+                padding: 15px;
+            }
+
+            .detail-row {
+                flex-direction: column;
+            }
+
+            .detail-label {
+                width: auto;
+                margin-bottom: 4px;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            .cta-button {
+                display: block;
+                margin: 5px 0;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="https://vyapar-drishti.vercel.app">
+                <img class="logo"
+                    src="https://res.cloudinary.com/dnkp2gm1d/image/upload/v1753596124/Vyapar_Drishti/Logo1_rhecjo.png"
+                    alt="Vyapar Drishti Logo" />
+            </a>
+            <div class="message">New User Query Received</div>
+        </div>
+
+        <div class="body">
+            <div class="alert-banner">
+                <p class="alert-text">🔔 You have received a new query from a user on Vyapar Drishti platform</p>
+            </div>
+
+            <div class="timestamp">
+                <p class="timestamp-text">
+                    <strong>Received on:</strong> {timestamp} | <strong>Query ID:</strong> #{queryId}
+                </p>
+            </div>
+
+            <div class="user-details">
+                <div class="detail-row">
+                    <span class="detail-label">Name:</span>
+                    <span class="detail-value">{firstName} {lastName}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Email:</span>
+                    <span class="detail-value">{email}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Phone:</span>
+                    <span class="detail-value">{phone}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Company:</span>
+                    <span class="detail-value">{companyName}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Industry:</span>
+                    <span class="detail-value">{industry}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Company Size:</span>
+                    <span class="detail-value">{companySize}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Query Type:</span>
+                    <span class="detail-value">{queryType}</span>
+                </div>
+            </div>
+
+            <div class="message-section">
+                <h3 class="message-title">📝 User Message/Query:</h3>
+                <div class="message-content">{message}</div>
+            </div>
+
+            <div class="action-buttons">
+                <a href="mailto:{email}?subject=Re:%20Your%20Query%20-%20Vyapar%20Drishti%20(%23{queryId})&body=Hello%20{firstName},%0A%0AThank%20you%20for%20contacting%20Vyapar%20Drishti%20support.%0A%0A" 
+                   class="cta-button">Reply via Email</a>
+                <a href="tel:{phone}" class="cta-button secondary">Call User</a>
+            </div>
+
+            <div class="alert-banner priority-medium">
+                <p class="alert-text">
+                    ⚡ Recommended Response Time: Within 24 hours<br>
+                    📋 Please update the query status in the admin dashboard after taking action.
+                </p>
+            </div>
+
+            <p style="text-align: center; margin-top: 25px; color: #555;">
+                This is an automated notification from the Vyapar Drishti contact form system.<br>
+                To manage all queries, visit the 
+                <a href="https://vyapar-drishti.vercel.app/admin" style="color: #006e89; text-decoration: none; font-weight: bold;">Admin Dashboard</a>
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2025 Team Vyapar Drishti, All Rights Reserved.</p>
+            <p>
+                Admin Portal: <a href="https://vyapar-drishti.vercel.app/admin">Dashboard</a> | 
+                Platform: <a href="https://vyapar-drishti.vercel.app">Vyapar Drishti</a>
+            </p>
+        </div>
+    </div>
+</body>
+
+</html>

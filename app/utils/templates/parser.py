@@ -41,6 +41,7 @@ class Template:
         self.domain_login = domain + "/login"
         self.onboard_html = self.directory + "onboard.html"
         self.password_request_html = self.directory + "password_request.html"
+        self.query_email_html = self.directory + "query_email.html"
         self.forgot_password = self.directory + "forgot_password.html"
         self.subdomain = "dev" if env == "dev" else ""
 
@@ -128,6 +129,47 @@ class Template:
             "role": role,
         }
         return self.render_template(self.password_request_html, parser)
+
+    def QueryEmail(
+        self,
+        firstName,
+        lastName,
+        email,
+        phone,
+        companyName,
+        industry,
+        companySize,
+        message,
+        queryId,
+        queryType,
+        time,
+    ):
+        """QUERY_EMAIL
+        --------------------
+        Generates a query email template with the provided details.
+        Parameters:
+        - name: Name of the user.
+        - role: Role of the user (e.g., admin, user).
+        - email: Email address of the user.
+        - password: Password for the user.
+        Returns:
+        - Rendered HTML string for the query email.
+        """
+
+        parser = {
+            "firstName": firstName,
+            "lastName": lastName,
+            "email": email,
+            "phone": phone,
+            "companyName": companyName,
+            "industry": industry,
+            "companySize": companySize,
+            "message": message,
+            "queryId": queryId,
+            "queryType": queryType,
+            "timestamp": time,
+        }
+        return self.render_template(self.query_email_html, parser)
 
 
 """------------------------------------------------------------------------------------------------------------------------

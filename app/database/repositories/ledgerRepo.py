@@ -269,14 +269,21 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
         }
 
         sort_options = {
-            "voucher_number_asc": {"accounts.voucher_number": 1},
-            "voucher_number_desc": {"accounts.voucher_number": -1},
-            "date_asc": {"accounts.date": 1},
-            "date_desc": {"accounts.date": -1},
+            "voucher_number_asc": [("accounts.voucher_number", 1)],
+            "voucher_number_desc": [("accounts.voucher_number", -1)],
+            "date_asc": [("accounts.date", 1)],
+            "date_desc": [("accounts.date", -1)],
         }
 
         sort_key = f"{sort.sort_field}_{'asc' if sort.sort_order == SortingOrder.ASC else 'desc'}"
-        sort_stage = sort_options.get(sort_key, {"accounts.date": -1})
+
+        primary_sort = sort_options.get(sort_key, [("accounts.date", -1)])
+
+        if primary_sort[0][0] != "accounts.voucher_number":
+            sort_stage = dict(primary_sort + [("accounts.voucher_number", -1)])
+        else:
+            sort_stage = dict(primary_sort)
+        
 
         pipeline = [
             {"$match": filter_params},

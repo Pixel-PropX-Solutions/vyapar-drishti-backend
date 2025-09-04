@@ -35,7 +35,7 @@ class StockItem(BaseModel):
     tax_rate: Optional[float] = 0
 
     # Additonal Optional fields
-    low_stock_alert: Optional[int] = 0
+    low_stock_alert: Optional[float] = 10.0
 
 
 # Database Schema
@@ -65,15 +65,16 @@ class StockItemCreate(BaseModel):
     description: Optional[str] = ""
 
     # optional fields
-    opening_balance: Optional[float] = 0
-    opening_rate: Optional[float] = 0
-    opening_value: Optional[float] = 0
+    opening_balance: Optional[float] = 0.0
+    opening_rate: Optional[float] = 0.0
+    opening_value: Optional[float] = 0.0
     nature_of_goods: Optional[str] = ""
     hsn_code: Optional[str] = ""
     taxability: Optional[str] = ""
+    tax_rate: Optional[float] = 0.0
 
     # Additonal Optional fields
-    low_stock_alert: Optional[int] = 0
+    low_stock_alert: Optional[float] = 10.0
 
 
 class StockItemVouchar(BaseModel):

@@ -1993,7 +1993,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                                 "place_of_supply": "$voucher.place_of_supply",
                                 "vehicle_number": "$voucher.vehicle_number",
                                 "mode_of_transport": "$voucher.mode_of_transport",
-                                "status": "$voucher.status",
+                                "payment_mode": "$voucher.payment_mode",
                                 "due_date": "$voucher.due_date",
                             }
                         },

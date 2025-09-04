@@ -23,7 +23,7 @@ class Voucher(BaseModel):
     place_of_supply: str = ""
     vehicle_number: Optional[str] = None
     mode_of_transport: Optional[str] = None
-    status: Optional[str] = None
+    payment_mode: Optional[str] = None
     due_date: Optional[str] = None
     
     # Accounting fields
@@ -59,7 +59,7 @@ class VoucherCreate(BaseModel):
     place_of_supply: Optional[str] = None
     vehicle_number: Optional[str] = None
     mode_of_transport: Optional[str] = None
-    status: Optional[str] = None
+    payment_mode: Optional[str] = None
     due_date: Optional[str] = None
     
     paid_amount: float # Amount paid by the customer
@@ -92,7 +92,7 @@ class VoucherUpdate(BaseModel):
 
     vehicle_number: Optional[str] = None
     mode_of_transport: Optional[str] = None
-    status: Optional[str] = None
+    payment_mode: Optional[str] = None
     due_date: Optional[str] = None
     
     paid_amount: float # Amount paid by the customer

@@ -85,6 +85,20 @@ class ResetPassword(BaseModel):
     token: str
 
 
+class EmailQuery(BaseModel):
+    firstName: str
+    lastName: str
+    email: str
+    phone: str
+    company: str
+    industry: str
+    employees: str
+    message: str
+    queryType: str
+    time: str
+    marketingConsent: bool = True
+
+
 # class OTPdata(BaseModel):
 #     email: str
 #     phone_number: str
@@ -144,18 +158,18 @@ async def login(
             "_id": "admin-0001",
         }
         token_version = 1
-        if hashing.verify_hash(creds.password, user["password"] ):
+        if hashing.verify_hash(creds.password, user["password"]):
             token_data = TokenData(
                 user_id=user["_id"],
                 user_type=user_type.value,
                 scope="login",
                 current_company_id=None,  # ✅ include this
-                device_type='PC',  # Assuming admin logs in from a PC
+                device_type="PC",  # Assuming admin logs in from a PC
                 token_version=token_version,  # Use updated token_version
             )
             token_generated = await create_access_token(
                 token_data,
-                device_type='PC',  # Assuming admin logs in from a PC
+                device_type="PC",  # Assuming admin logs in from a PC
                 old_refresh_token=None,
             )
             set_cookies(
@@ -507,11 +521,7 @@ async def get_current_user_details(
                 "email": 1,
                 "financial_year_start": 1,
                 "books_begin_from": 1,
-                # "is_selected": 1,
                 "company_settings": 1,
-                # "company_settings.company_id": 0,
-                # "company_settings.created_at": 0,
-                # "company_settings.updated_at": 0,
             },
         },
     ]
@@ -842,19 +852,30 @@ async def logout(
 
 
 @auth.post(
-    "/send/password", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+    "/send/email/query", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
 )
-async def send_password(
-    response: Response, email: str, password: str, name: str = "User"
+async def send_email_query(
+    email_query: EmailQuery,
 ):
+    queryId = await generatePassword.createPassword()
     mail.send(
-        "Welcome to Vyapar Drishti",
-        email,
-        template.PasswordRequest(
-            name="User", role="user", email=email, password=password
+        "New Query from Vyapar Drishti Website",
+        ENV_PROJECT.EMAIL_ADDRESS,
+        template.QueryEmail(
+            firstName=email_query.firstName,
+            lastName=email_query.lastName,
+            email=email_query.email,
+            phone=email_query.phone,
+            companyName=email_query.company,
+            industry=email_query.industry,
+            companySize=email_query.employees,
+            message=email_query.message,
+            queryId=queryId.capitalize(),
+            queryType=email_query.queryType,
+            time=email_query.time,
         ),
     )
-    return {"success": True, "message": "Password sent to email successfully"}
+    return {"success": True, "message": "Query email sent successfully"}
 
 
 @auth.post(
