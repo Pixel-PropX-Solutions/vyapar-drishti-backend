@@ -6,6 +6,7 @@ from fastapi import (
     Form,
     UploadFile,
     status,
+    Response,
 )
 from app.database.repositories.CompanySettingsRepo import company_settings_repo
 from app.database.repositories.companyRepo import company_repo
@@ -39,11 +40,11 @@ import aiofiles
 from num2words import num2words
 from math import ceil
 import sys
-import asyncio
 from datetime import datetime
-import calendar
 
 # from playwright.async_api import async_playwright
+# from app.core.services import browser as shared_browser
+import app.core.services as browser_module
 
 Vouchar = APIRouter()
 
@@ -952,7 +953,7 @@ async def view_all_vouchar(
     end_date: str = None,
     page_no: int = Query(1, ge=1),
     limit: int = Query(10, le=sys.maxsize),
-    sortField: str = "created_at",
+    sortField: str = "date",
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -1095,7 +1096,7 @@ async def getTimeline(
     start_date: str = "",
     end_date: str = "",
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=sys.maxsize),
+    limit: int = Query(ge=10, le=sys.maxsize),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):
@@ -1148,7 +1149,7 @@ async def print_invoice(
 
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     invoice_data = await vouchar_repo.collection.aggregate(
@@ -1201,7 +1202,9 @@ async def print_invoice(
     ).to_list(length=1)
 
     if not invoice_data:
-        raise http_exception.ResourceNotFoundException()
+        raise http_exception.ResourceNotFoundException(
+            details="No Invoices found with the requested details."
+        )
 
     invoice = invoice_data[0]
 
@@ -1223,13 +1226,14 @@ async def print_invoice(
 
     grand_total = invoice.get("grand_total", 0)
     total_words = num2words(grand_total, lang="en_IN").title() + " Rupees Only"
+    formatted_date =  invoice.get("date", "")[:10] if invoice.get("date", "") else ""
 
     # Template variables
     template_vars = {
         "invoice": {
             "voucher_type": invoice.get("voucher_type", ""),
             "voucher_number": invoice.get("voucher_number", ""),
-            "date": invoice.get("date", ""),
+            "date": formatted_date,
             "vehicle_number": invoice.get("vehicle_number", ""),
             "mode_of_transport": invoice.get("mode_of_transport", ""),
             "payment_mode": invoice.get("payment_mode", ""),
@@ -1268,46 +1272,28 @@ async def print_invoice(
     }
 
     # Load HTML template (assuming you have it in a file)
-    async with aiofiles.open("app/utils/templates/no_tax_template.html", "r") as f:
+    async with aiofiles.open("app/utils/templates/template.html", "r") as f:
         template_str = await f.read()
 
     template = Template(template_str)
-    vars_with_items = dict(template_vars)
-    vars_with_items["invoice"]["items"] = items
-    rendered_html = template.render(**vars_with_items)
+    rendered_html = template.render(**template_vars)
 
-    async with aiofiles.open(
-        "app/utils/templates/no_tax_download_template.html", "r"
-    ) as g:
-        template_str_download = await g.read()
+    if browser_module.browser is None:
+        raise RuntimeError("Browser is not ready yet")
 
-    template_download = Template(template_str_download)
-    vars_with_items = dict(template_vars)
-    vars_with_items["invoice"]["items"] = items
-    rendered_download_html = template_download.render(**vars_with_items)
-
-    template_path = "app/utils/templates/no_tax_template.html"
-    rendered_pages = await render_paginated_html(
-        template_path, template_vars, items, items_per_page=17
+    page = await browser_module.browser.new_page()
+    await page.set_content(rendered_html, wait_until="domcontentloaded")
+    pdf_bytes = await page.pdf(
+        format="A4",
+        print_background=True,
+        margin={"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"},
     )
 
-    # async with async_playwright() as p:
-    #     browser = await p.chromium.launch()
-    #     page = await browser.new_page()
-    #     await page.set_content(rendered_html, wait_until="networkidle")
-    #     pdf_bytes = await page.pdf(format="A4", print_background=True, path="out.pdf")
-    #     await browser.close()
-    # return HTMLResponse(content=rendered_download_html, status_code=status.HTTP_200_OK)
-
-    return {
-        "success": True,
-        "message": "Data Fetched Successfully...",
-        "data": {
-            "paginated_data": rendered_pages,
-            "complete_data": rendered_html,
-            "download_data": rendered_download_html,
-        },
-    }
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline; filename=invoice-vyapar-drishti.pdf"},
+    )
 
 
 @Vouchar.get(
@@ -1391,7 +1377,9 @@ async def print_invoice_tax(
     ).to_list(length=1)
 
     if not invoice_data:
-        raise http_exception.ResourceNotFoundException(detail="Vouchar not found.")
+        raise http_exception.ResourceNotFoundException(
+            detail="No Invoices found with the requested details."
+        )
 
     invoice = invoice_data[0]
     items = []
@@ -1421,12 +1409,13 @@ async def print_invoice_tax(
         current_user=current_user,
     )
 
+    formatted_date =  invoice.get("date", "")[:10] if invoice.get("date", "") else ""
     # Template variables
     template_vars = {
         "invoice": {
             "voucher_type": invoice.get("voucher_type", ""),
             "voucher_number": invoice.get("voucher_number", ""),
-            "date": invoice.get("date", ""),
+            "date": formatted_date,
             "vehicle_number": invoice.get("vehicle_number", ""),
             "mode_of_transport": invoice.get("mode_of_transport", ""),
             "payment_mode": invoice.get("payment_mode", ""),
@@ -1445,6 +1434,7 @@ async def print_invoice_tax(
             "totals": totals,
             "tax_headers": tax_headers,
             "taxes": invoice_taxes,
+            "items": items,
         },
         "party": {
             "name": invoice.get("party_details", {}).get("ledger_name", ""),
@@ -1492,43 +1482,30 @@ async def print_invoice_tax(
     }
 
     if invoice.get("voucher_type", "") == "Sales":
-        async with aiofiles.open(
-            "app/utils/templates/tax_sale_invoice_template.html", "r"
-        ) as f:
+        async with aiofiles.open("app/utils/templates/tax_sale_template.html", "r") as f:
             template_str = await f.read()
 
         template = Template(template_str)
-        vars_with_items = dict(template_vars)
-        vars_with_items["invoice"]["items"] = items
-        rendered_html = template.render(**vars_with_items)
-        # return HTMLResponse(
-        #     content=rendered_html
-        # )
+        rendered_html = template.render(**template_vars)
 
-        async with aiofiles.open(
-            "app/utils/templates/tax_sale_invoice_download_template.html", "r"
-        ) as g:
-            template_str_download = await g.read()
-
-        template = Template(template_str_download)
-        vars_with_items = dict(template_vars)
-        vars_with_items["invoice"]["items"] = items
-        rendered_download_html = template.render(**vars_with_items)
-
-        template_path = "app/utils/templates/tax_sale_invoice_template.html"
-        rendered_pages = await render_paginated_html(
-            template_path, template_vars, items, items_per_page=17
+        page = await browser_module.browser.new_page()
+        await page.set_content(rendered_html, wait_until="domcontentloaded")
+        pdf_bytes = await page.pdf(
+            format="A4",
+            print_background=True,
+            margin={"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"},
+            # display_header_footer=True,
+            # header_template="<span style='font-size:10px'>Header</span>",
+            # footer_template="<span style='font-size:10px'>Page <span class='pageNumber'></span> of <span class='totalPages'></span></span>",
         )
 
-        return {
-            "success": True,
-            "message": "Data Fetched Successfully...",
-            "data": {
-                "paginated_data": rendered_pages,
-                "complete_data": rendered_html,
-                "download_data": rendered_download_html,
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": "inline; filename=sale-invoice-vyapar-drishti.pdf"
             },
-        }
+        )
 
     else:
         async with aiofiles.open(
@@ -1537,37 +1514,23 @@ async def print_invoice_tax(
             template_str = await f.read()
 
         template = Template(template_str)
-        vars_with_items = dict(template_vars)
-        vars_with_items["invoice"]["items"] = items
-        rendered_html = template.render(**vars_with_items)
+        rendered_html = template.render(**template_vars)
 
-        async with aiofiles.open(
-            "app/utils/templates/tax_purchase_download_template.html", "r"
-        ) as g:
-            template_str_download = await g.read()
-
-        template = Template(template_str_download)
-        vars_with_items = dict(template_vars)
-        vars_with_items["invoice"]["items"] = items
-        rendered_download_html = template.render(**vars_with_items)
-
-        template_path = "app/utils/templates/tax_purchase_template.html"
-        rendered_pages = await render_paginated_html(
-            template_path, template_vars, items, items_per_page=17
+        page = await browser_module.browser.new_page()
+        await page.set_content(rendered_html, wait_until="domcontentloaded")
+        pdf_bytes = await page.pdf(
+            format="A4",
+            print_background=True,
+            margin={"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"},
         )
-        # return HTMLResponse(
-        #     content=rendered_download_html, status_code=status.HTTP_200_OK
-        # )
 
-        return {
-            "success": True,
-            "message": "Data Fetched Successfully...",
-            "data": {
-                "paginated_data": rendered_pages,
-                "complete_data": rendered_html,
-                "download_data": rendered_download_html,
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": "inline; filename=purchase-invoice-vyapar-drishti.pdf"
             },
-        }
+        )
 
 
 @Vouchar.get(
@@ -1596,8 +1559,7 @@ async def print_receipt(
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": current_user.current_company_id
-                    or userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id,
                     "user_id": current_user.user_id,
                 }
             },
@@ -1608,15 +1570,6 @@ async def print_receipt(
                     "localField": "_id",
                     "foreignField": "vouchar_id",
                     "as": "accounting_entries",
-                }
-            },
-            # Attach inventory
-            {
-                "$lookup": {
-                    "from": "Inventory",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
-                    "as": "inventory",
                 }
             },
             # Attach party ledger details
@@ -1661,7 +1614,9 @@ async def print_receipt(
     ).to_list(length=1)
 
     if not invoice_data:
-        raise http_exception.ResourceNotFoundException()
+        raise http_exception.ResourceNotFoundException(
+            detail="No Receipts found with the requested details."
+        )
 
     invoice = invoice_data[0]
 
@@ -1678,14 +1633,7 @@ async def print_receipt(
     else:
         total_words = num2words(total_int, lang="en_IN").title() + " Rupees Only"
 
-    # Template variables
-    date_val = invoice.get("date", "")
-    if hasattr(date_val, "strftime"):
-        formatted_date = date_val.strftime("%d %b, %Y")
-    elif isinstance(date_val, str) and date_val:
-        formatted_date = date_val  # Already a string, use as-is
-    else:
-        formatted_date = ""
+    formatted_date =  invoice.get("date", "")[:10] if invoice.get("date", "") else ""
 
     template_vars = {
         "invoice": {
@@ -1703,16 +1651,24 @@ async def print_receipt(
     }
 
     # Load HTML template (assuming you have it in a file)
-    async with aiofiles.open("app/utils/templates/reciept_template.html", "r") as f:
+    async with aiofiles.open("app/utils/templates/reciept.html", "r") as f:
         template_str = await f.read()
 
     template = Template(template_str)
     rendered_html = template.render(**template_vars)
-    return {
-        "success": True,
-        "message": "Data Fetched Successfully...",
-        "data": rendered_html,
-    }
+    page = await browser_module.browser.new_page()
+    await page.set_content(rendered_html, wait_until="domcontentloaded")
+    pdf_bytes = await page.pdf(
+        format="A4",
+        print_background=True,
+        margin={"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"},
+    )
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline; filename=receipt.pdf"},
+    )
 
 
 @Vouchar.get(
@@ -1732,7 +1688,7 @@ async def print_payment(
 
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     # Fetch invoice/voucher details
@@ -1741,7 +1697,7 @@ async def print_payment(
             {
                 "$match": {
                     "_id": vouchar_id,
-                    "company_id": userSettings["current_company_id"],
+                    "company_id": current_user.current_company_id,
                     "user_id": current_user.user_id,
                 }
             },
@@ -1760,15 +1716,6 @@ async def print_payment(
                     "localField": "company_id",
                     "foreignField": "_id",
                     "as": "company",
-                }
-            },
-            # Attach inventory
-            {
-                "$lookup": {
-                    "from": "Inventory",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
-                    "as": "inventory",
                 }
             },
             # Attach party ledger details
@@ -1814,7 +1761,9 @@ async def print_payment(
     ).to_list(length=1)
 
     if not invoice_data:
-        raise http_exception.ResourceNotFoundException()
+        raise http_exception.ResourceNotFoundException(
+            detail="No Payment found with the requested details."
+        )
 
     invoice = invoice_data[0]
 
@@ -1832,13 +1781,7 @@ async def print_payment(
         total_words = num2words(total_int, lang="en_IN").title() + " Rupees Only"
 
     # Template variables
-    date_val = invoice.get("date", "")
-    if hasattr(date_val, "strftime"):
-        formatted_date = date_val.strftime("%d %b, %Y")
-    elif isinstance(date_val, str) and date_val:
-        formatted_date = date_val  # Already a string, use as-is
-    else:
-        formatted_date = ""
+    formatted_date =  invoice.get("date", "")[:10] if invoice.get("date", "") else ""
 
     # Extract year from "2025-05-01" style date string
     year_val = ""
@@ -1850,7 +1793,7 @@ async def print_payment(
     template_vars = {
         "invoice": {
             "vouchar_type": invoice.get("voucher_type", ""),
-            "vouchar_number": invoice.get("voucher_number", ""),
+            "voucher_number": invoice.get("voucher_number", ""),
             "party_name": invoice.get("party_name", ""),
             "narration": invoice.get("narration", ""),
             "date": formatted_date,
@@ -1858,7 +1801,7 @@ async def print_payment(
             "amount_words": total_words,
             "email": invoice.get("party_details", {}).get("email", ""),
             "customer": invoice.get("customer", {}).get("ledger_name", ""),
-            "company_name": invoice.get("company", {}).get("name", ""),
+            "company_name": invoice.get("company", {}).get("company_name", ""),
             "year_start": year_val,
             "year_end": str(int(year_val) + 1),
             "mailling_state": invoice.get("company", {}).get("state", ""),
@@ -1867,21 +1810,25 @@ async def print_payment(
     }
 
     # Load HTML template (assuming you have it in a file)
-    async with aiofiles.open("app/utils/templates/payment_template.html", "r") as f:
+    async with aiofiles.open("app/utils/templates/payment.html", "r") as f:
         template_str = await f.read()
 
     template = Template(template_str)
     rendered_html = template.render(**template_vars)
-    # return HTMLResponse(
-    #     content=rendered_html,
-    #     media_type="text/html",
-    #     status_code=status.HTTP_200_OK,
-    # )
-    return {
-        "success": True,
-        "message": "Data Fetched Successfully...",
-        "data": rendered_html,
-    }
+
+    page = await browser_module.browser.new_page()
+    await page.set_content(rendered_html, wait_until="domcontentloaded")
+    pdf_bytes = await page.pdf(
+        format="A4",
+        print_background=True,
+        margin={"top": "1cm", "bottom": "1cm", "left": "1cm", "right": "1cm"},
+    )
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline; filename=payment.pdf"},
+    )
 
 
 @Vouchar.get(
@@ -2138,16 +2085,17 @@ async def get_analytics(
         financial_year = datetime.now().year
 
     response = await vouchar_repo.get_analytics_data(
-            current_user=current_user,
-            year=int(financial_year),
-            company_id=current_user.current_company_id or company_id,
-        )
+        current_user=current_user,
+        year=int(financial_year),
+        company_id=current_user.current_company_id or company_id,
+    )
 
     return {
         "success": True,
         "data": response,
         "message": "Data fetched successfully...",
     }
+
 
 @Vouchar.get("/get/analytics/monthly", response_class=ORJSONResponse)
 async def get_analytics_monthly(
@@ -2169,11 +2117,10 @@ async def get_analytics_monthly(
         financial_year = datetime.now().year
 
     response = await vouchar_repo.get_monthly_data(
-            current_user=current_user,
-            year=int(financial_year),
-            company_id=current_user.current_company_id or company_id,
-        )
-    
+        current_user=current_user,
+        year=int(financial_year),
+        company_id=current_user.current_company_id or company_id,
+    )
 
     return {
         "success": True,
@@ -2205,13 +2152,14 @@ async def get_analytics_daily(
     if financial_month is None:
         financial_month = datetime.now().month
 
-    response = await vouchar_repo.get_daily_data(
+    response = (
+        await vouchar_repo.get_daily_data(
             current_user=current_user,
             year=int(financial_year),
             month=int(financial_month),
             company_id=current_user.current_company_id or company_id,
         ),
-    
+    )
 
     return {
         "success": True,

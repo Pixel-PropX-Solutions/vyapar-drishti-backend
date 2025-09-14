@@ -156,9 +156,9 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                 filter_params["$or"] = [
                     {"voucher_number": {"$regex": safe_search, "$options": "i"}},
                     {"voucher_type": {"$regex": safe_search, "$options": "i"}},
-                    {"group": {"$regex": safe_search, "$options": "i"}},
-                    {"description": {"$regex": safe_search, "$options": "i"}},
                     {"party_name": {"$regex": safe_search, "$options": "i"}},
+                    {"ledger_name": {"$regex": safe_search, "$options": "i"}},
+                    {"narration": {"$regex": safe_search, "$options": "i"}},
                 ]
             except re.error:
                 pass
@@ -179,7 +179,9 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         # Always sort by the main field, then voucher_number as secondary
         if sort.sort_field:
             sort_stage = {
-                sort.sort_field: int(sort.sort_order),
+                sort.sort_field if sort.sort_field != "type" else "voucher_type": int(
+                    sort.sort_order
+                ),
                 "voucher_number": int(sort.sort_order),
             }
         else:
@@ -275,7 +277,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "party_name_id": 1,
                     "narration": 1,
                     "paid_amount": 1,
-                    "amount": {"$arrayElemAt": ["$ledger_entries.amount", 0]},
+                    "amount": '$grand_total',
                     "balance_type": 1,
                     "ledger_name": {"$arrayElemAt": ["$ledger_entries.ledgername", 0]},
                     "is_deemed_positive": {
@@ -1850,7 +1852,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                         "$cond": [
                             {"$gt": ["$inventory_info.total_qty", 0]},
                             {
-                                 "$cond": [
+                                "$cond": [
                                     {"$gt": ["$additional_charge", 0]},
                                     {
                                         "$divide": [
@@ -1896,8 +1898,12 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "_id": {"item_id": "$item_id", "date": "$date_only"},
                     "item": {"$first": "$item"},
                     "date": {"$first": "$date_only"},
-                    "stock_opening_qty": {"$first": {"$ifNull": ["$stock_item.opening_balance", 0]}},
-                    "stock_opening_val": {"$first": {"$ifNull": ["$stock_item.opening_value", 0]}},
+                    "stock_opening_qty": {
+                        "$first": {"$ifNull": ["$stock_item.opening_balance", 0]}
+                    },
+                    "stock_opening_val": {
+                        "$first": {"$ifNull": ["$stock_item.opening_value", 0]}
+                    },
                     # Opening balances adjusted by vouchers < start_date
                     "opening_qty_vouchers": {
                         "$sum": {
@@ -1956,14 +1962,17 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                 "$addFields": {
                     "opening_qty": {
                         "$round": [
-                            {"$ifNull": [
+                            {
+                                "$ifNull": [
                                     {
-                                        "$add": ["$stock_opening_qty", "$opening_qty_vouchers"]
+                                        "$add": [
+                                            "$stock_opening_qty",
+                                            "$opening_qty_vouchers",
+                                        ]
                                     },
                                     0,
                                 ]
-                                
-                                },
+                            },
                             2,
                         ]
                     },
@@ -1972,12 +1981,14 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                             {
                                 "$ifNull": [
                                     {
-                                       "$add": ["$stock_opening_val", "$opening_val_vouchers"]
+                                        "$add": [
+                                            "$stock_opening_val",
+                                            "$opening_val_vouchers",
+                                        ]
                                     },
                                     0,
                                 ]
-                                
-                                },
+                            },
                             2,
                         ]
                     },

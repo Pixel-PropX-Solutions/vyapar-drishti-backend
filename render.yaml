@@ -1,0 +1,98 @@
+# Exported from Render on 2025-09-07T09:34:03Z
+envVarGroups:
+  - name: common
+    envVars:
+      - key: DEBUG
+        sync: false
+      - key: ENV
+        sync: false
+      - key: APP_VERSION
+        sync: false
+      - key: APP_TITILE
+        sync: false
+      - key: APP_DESCRIPTION
+        sync: false
+      - key: BASE_API_V1
+        sync: false
+      - key: BASE_API_V2
+        sync: false
+      - key: FRONTEND_DOMAIN
+        sync: false
+
+  - name: admin
+    envVars:
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+  - name: mongo
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DATABASE
+        sync: false
+
+  - name: email
+    envVars:
+      - key: EMAIL_SERVER
+        sync: false
+      - key: EMAIL_ADDRESS
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false
+
+  - name: cloudinary
+    envVars:
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+
+  - name: token_secrets
+    envVars:
+      - key: SIGNUP_TOKEN_SECRET
+        sync: false
+      - key: FORGOT_PASSWORD_TOKEN_SECRET
+        sync: false
+      - key: ACCESS_TOKEN_SECRET
+        sync: false
+      - key: REFRESH_TOKEN_SECRET
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+
+  - name: token_expiry
+    envVars:
+      - key: RESET_PASSWORD_TOKEN_EXPIRE_MINUTES
+        sync: false
+      - key: EMAIL_CONFIRMATION_TOKEN_EXPIRE_MINUTES
+        sync: false
+      - key: LOGIN_ACCESS_TOKEN_EXPIRE_MINUTES
+        sync: false
+      - key: REFRESH_TOKEN_EXPIRE_MINUTES
+        sync: false
+
+services:
+- type: web
+  name: vd
+  runtime: docker
+  repo: https://github.com/vyapardrishti/vd
+  plan: free
+  region: oregon
+  dockerfilePath: ./Dockerfile
+  autoDeployTrigger: commit
+
+  envVars:
+  - key: GEMINI_API_KEY
+    sync: false
+  - fromGroup: common
+  - fromGroup: admin
+  - fromGroup: mongo
+  - fromGroup: email
+  - fromGroup: cloudinary
+  - fromGroup: token_secrets
+  - fromGroup: token_expiry
+version: "1"

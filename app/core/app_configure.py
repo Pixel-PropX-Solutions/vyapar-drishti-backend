@@ -46,7 +46,7 @@ def configure_middleware(app: FastAPI):
         try:
             start_time = time.time()
             response = await call_next(request)
-            process_time = round(round((time.time() - start_time) * 1000, 2))
+            process_time = round(round((time.time() - start_time) * 100, 2))
             response.headers["X-Process-Time"] = str(process_time) + " ms"
             logger.info("{0} took time {1} ms", request.url.path, process_time)
             return response

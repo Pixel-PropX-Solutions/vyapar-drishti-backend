@@ -1,0 +1,39 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor files
+.vscode/
+.idea/
+
+# Node / frontend builds (if any)
+node_modules/
+dist/
+build/
+
+# Temporary / Misc
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# Docker-related files (optional)
+docker-compose.override.yml

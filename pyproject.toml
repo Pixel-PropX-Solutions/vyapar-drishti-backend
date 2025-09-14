@@ -9,7 +9,6 @@ readme = "README.md"
 python = "^3.11"
 fastapi = "^0.110.0"
 pydantic = {extras = ["email"], version = "^2.6.3"}
-uvicorn = "^0.27.1"
 pydantic-settings = "^2.2.1"
 python-multipart = "^0.0.9"
 pymongo = "^4.6.2"
@@ -37,6 +36,8 @@ ua-parser = "^1.0.1"
 user-agents = "^2.2.0"
 apscheduler = "^3.11.0"
 device-detector = "^5.0.1"
+playwright = "^1.55.0"
+uvicorn = "^0.35.0"
 
 
 [tool.poetry.group.test.dependencies]

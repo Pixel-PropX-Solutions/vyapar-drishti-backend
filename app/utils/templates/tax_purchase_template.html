@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Vyapar Drishti Sales Invoice</title>
+    <title>Vyapar Drishti Purchase Invoice</title>
     <style>
         * {
             box-sizing: border-box !important;
@@ -13,6 +13,8 @@
             padding: 0 !important;
             margin: 0 !important;
             font-family: Arial, sans-serif !important;
+            font-size: 11px;
+            
         }
 
         @media print {
@@ -25,21 +27,43 @@
                 display: none !important;
             }
         }
+
+        table.items-table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 10px !important;
+            page-break-inside: auto;
+        }
+
+        .items-table tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+        }
+
+        .items-table th,
+        .items-table td {
+            border: 1px solid #000 !important;
+            padding: 4px !important;
+        }
+
+        /* Totals section should never split across pages */
+        .totals-section {
+            page-break-inside: avoid;
+            margin-top: 5mm;
+        }
     </style>
 </head>
 
 <body>
-    {% set items_per_page = 17 %}
-    {% for page_items in invoice["items"]|batch(items_per_page, '') %}
+    {# ---------------- HEADER SECTION ---------------- #}
+    {% macro invoice_header() %}
     <table style="width: 190mm !important;
-            align-self: flex-start !important;
+            max-height: 85mm !important;
             vertical-align: top !important;
-            max-height: 280mm !important;
-            padding: 0mm !important;
             margin: 0mm auto !important;
-            border: 1px solid #000 !important;
-            overflow: hidden !important;
-            page-break-after: always !important; 
+            border-left: 1px solid #000 !important;
+            border-right: 1px solid #000 !important;
+            border-top: 1px solid #000 !important;
             border-collapse: collapse !important;" cellpadding="0" cellspacing="0">
         <tr>
             <td>
@@ -62,10 +86,10 @@
         <tr>
             <td>
                 <table style="width: 100% !important; border-collapse: collapse;" cellpadding="0" cellspacing="0">
-                    <!-- Company Details -->
+                    <!-- Party Details -->
                     <tr style="border-bottom: 1px solid #000 !important;">
                         <td colspan="2" style=" padding: 2mm !important;">
-                            <!-- Company Details -->
+                            <!-- Party Details -->
                             <table
                                 style="text-align: center !important; width: 100% !important; border-collapse: collapse;"
                                 cellpadding="1" cellspacing="0">
@@ -147,17 +171,17 @@
                             </table>
                         </td>
                     </tr>
-                    <!-- Invoice and Party Details -->
+                    <!-- Invoice and Company Details -->
                     <tr style="border-bottom: 1px solid #000 !important;">
                         <td style="width: 50% !important; padding: 2mm !important;">
-                            <!-- Party Details  -->
+                            <!-- Company Details  -->
                             <table
                                 style="text-align: left !important; width: 100% !important; border-collapse: collapse; vertical-align: top !important;"
                                 cellpadding="1" cellspacing="0">
                                 <tr>
-                                    <td style="font-size: 18px !important; 
+                                    <td style="font-size: 14px !important; 
                                         font-weight: bold !important; 
-                                        margin-bottom: 2mm !important;">
+                                        margin-bottom: 1mm !important;">
                                         {{
                                         company.company_name
                                         }}
@@ -199,7 +223,7 @@
                         <!-- Invoice Details -->
                         <td
                             style="width: 50% !important; border-left: 1px solid #000 !important; padding: 2mm !important;">
-                            <!-- Company Details -->
+                            <!-- Invoice Details -->
                             <table
                                 style="text-align: left !important; width: 100% !important; border-collapse: collapse;"
                                 cellpadding="1" cellspacing="0">
@@ -282,11 +306,24 @@
                 </table>
             </td>
         </tr>
+    </table>
+    {% endmacro %}
 
+
+
+    {# ---------------- ITEMS TABLE ---------------- #}
+    {% macro items_table(items, offset=0) %}
+    <table style="width: 190mm !important;
+            vertical-align: top !important;
+            margin: 0mm auto !important;
+            border-bottom: 1px solid #000 !important;
+            border-left: 1px solid #000 !important;
+            border-right: 1px solid #000 !important;
+            border-collapse: collapse !important;" cellpadding="0" cellspacing="0">
         <!-- Product Details Table -->
         <tr>
-            <td style="padding-top: 2mm !important;">
-                <table style="width: 100% !important; text-wrap: nowrap;        white-space: nowrap; border-collapse: collapse
+            <td style="padding: 1mm !important; padding-top: 2mm !important;">
+                <table class="items-table" style="width: 100% !important; text-wrap: nowrap; white-space: nowrap; border-collapse: collapse
                     !important; border-top: 1px solid #000 !important; font-size: 10px !important; " cellpadding="4"
                     cellspacing="0">
                     <tr
@@ -328,80 +365,77 @@
                     <tr {% if loop.index0 % 2==1 %}style="background-color: #f9f9f9;" {% endif %}>
                         <td
                             style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important; text-align: center;">
-                            {{
-                            loop.index }}</td>
+                            {{ offset + loop.index }}
+                        </td>
                         <td
                             style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important; text-align: left; padding-left: 1mm !important;">
-                            {{
-                            item.name }}</td>
+                            {{ item.name }}
+                        </td>
                         <td
                             style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important; text-align: left; padding-left: 1mm !important;">
-                            {{
-                            item.hsn }}</td>
+                            {{ item.hsn }}
+                        </td>
                         <td
                             style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important; text-align: center;">
-                            {{
-                            item.qty }}</td>
+                            {{ item.qty }}
+                        </td>
                         <td
                             style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important; text-align: center;">
-                            {{
-                            item.pack }}</td>
+                            {{ item.pack }}
+                        </td>
                         <td
                             style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important; text-align: center;">
-                            {{
-                            item.rate|float|round(2) }}</td>
+                            {{ item.rate|float|round(2) }}
+                        </td>
                         <td
                             style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important;  text-align: center;">
-                            {{
-                            item.amount|float|round(2) }}</td>
+                            {{ item.amount|float|round(2) }}
+                        </td>
                         <td
                             style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important;  text-align: center;">
-                            {{
-                            item.discount_amount|float|round(2) }}</td>
+                            {{ item.discount_amount|float|round(2) }}
+                        </td>
                         <td
                             style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important;  text-align: center;">
-                            {{
-                            item.tax_rate }}&nbsp;&#37;</td>
+                            {{ item.tax_rate }}&nbsp;&#37;
+                        </td>
                         <td
                             style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important;  text-align: center;">
-                            {{
-                            item.tax_amount|float|round(2) }}</td>
+                            {{ item.tax_amount|float|round(2) }}
+                        </td>
 
                         <td style="border-bottom: 1px solid #000 !important; text-align: center; font-weight: bold;">
-                            {{
-                            item.total_amount|float|round(2) }}</td>
-                    </tr>
-                    {% endfor %}
-                    {% for i in range(invoice["items"]|length, 23) %}
-                    <tr {% if i % 2==0 %}style="background-color: #f9f9f9;" {% endif %}>
-                        <td
-                            style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important; text-align: center;">
-                            &nbsp;
-                        </td>
-                        {% for _ in range(9) %}
-                        <td
-                            style="border-bottom: 1px solid #000 !important; border-right: 1px solid #000 !important;  text-align: center;">
-                            &nbsp;
-                        </td>
-                        {% endfor %}
-                        <td style="border-bottom: 1px solid #000 !important; text-align: center; font-weight: bold;">
-                            &nbsp;
+                            {{ item.total_amount|float|round(2) }}
                         </td>
                     </tr>
                     {% endfor %}
+
                 </table>
             </td>
         </tr>
+    </table>
+    {% endmacro %}
 
+
+    {# ---------------- TOTALS SECTION ---------------- #}
+    {% macro totals_section(taxes, last_page=False) %}
+    <table style="width: 190mm !important;
+            min-height: 40mm !important;
+            vertical-align: top !important;
+            margin: 0mm auto !important;
+            padding-top: 2mm !important;
+            border-left: 1px solid #000 !important;
+            border-right: 1px solid #000 !important;
+            border-collapse: collapse !important;" cellpadding="0" cellspacing="0">
         <!-- Totals Section -->
         <tr>
-            <td>
-                <table style="width: 100% !important; border-bottom: 1px solid #000 !important ;" cellpadding="0"
+            <td class="totals-section" >
+                <table style="width: 100% !important; padding: 2mm !important;" cellpadding="0"
                     cellspacing="0">
                     <tr>
                         <td style="vertical-align: top !important; ">
                             <table
-                                style="margin: 2mm !important; width: 125mm !important; border-collapse: collapse !important; border: 1px solid #000 !important;"
+                                style="width: 120mm !important; border-collapse: collapse !important; border: 1px solid #000 !important;"
                                 cellpadding="0" cellspacing="0">
                                 {% if invoice.tax_code == 'GST' %}
                                 <tr style="background-color: #f2f2f2 !important;">
@@ -411,7 +445,7 @@
                                         {{header}}</th>
                                     {% endfor %}
                                 </tr>
-                                {% for tax in invoice.taxes %}
+                                {% for tax in taxes %}
                                 <tr>
                                     <td
                                         style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important;">
@@ -434,7 +468,7 @@
                                 </tr>
                                 {% endfor %}
 
-
+                                {% if last_page %}
                                 <tr style="background-color: #f2f2f2 !important;">
                                     <td
                                         style="border: 1px solid #000 !important; font-size: 10px !important; text-align: center !important; padding: 4px !important; font-weight: bold;">
@@ -456,10 +490,11 @@
                                         {{ invoice.totals.tax_amount|float|round(2) }}</td>
                                 </tr>
                                 {% endif %}
+                                {% endif %}
                             </table>
 
                             <table
-                                style="margin: 2mm !important; width: 125mm !important; border-collapse: collapse !important;"
+                                style="width: 120mm !important; height: 15mm !important; border-collapse: collapse !important;"
                                 cellpadding="0" cellspacing="0">
 
                                 <tr>
@@ -472,73 +507,87 @@
                             </table>
                         </td>
 
+                        {% if last_page %}
                         <td style="vertical-align: top !important; ">
-                            <table
-                                style="width: 60mm !important; font-size: 10px !important;  border-collapse: collapse; margin: 2mm !important; border: 1px solid #000;"
-                                cellpadding="0" cellspacing="0">
-                                <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
-                                    <td style="padding-left: 2mm !important; font-weight: bold;">
-                                        SUB TOTAL</td>
-                                    <td
-                                        style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
-                                        {{ invoice.total|float|round(2) }}</td>
-                                </tr>
-                                <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
-                                    <td style="padding-left: 2mm !important; font-weight: bold;">
-                                        DISCOUNT</td>
-                                    <td
-                                        style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
-                                        {{ invoice.discount|float|round(2) }}</td>
-                                </tr>
-                                <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
-                                    <td style="padding-left: 2mm !important; font-weight: bold;">
-                                        TOTAL</td>
-                                    <td
-                                        style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
-                                        {{ invoice.total|float|round(2) }}</td>
-                                </tr>
-                                <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
-                                    <td style="padding-left: 2mm !important; font-weight: bold;">
-                                        Total Tax</td>
-                                    <td
-                                        style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
-                                        {{ invoice.total_tax|float|round(2) }}</td>
-                                </tr>
-                                <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
-                                    <td style="padding-left: 2mm !important; font-weight: bold;">
-                                        Additional Charges</td>
-                                    <td
-                                        style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
-                                        {{ invoice.additional_charge|float|round(2)}}</td>
-                                </tr>
-                                <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
-                                    <td style="padding-left: 2mm !important; font-weight: bold;">
-                                        Round off</td>
-                                    <td
-                                        style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
-                                        {{ invoice.roundoff}}</td>
-                                </tr>
-                            </table>
-                            <table
-                                style="width: 60mm !important; border-collapse: collapse !important; border: 1px solid #000 !important; background-color: #f2f2f2 !important; margin: 2mm !important;"
-                                cellpadding="0" cellspacing="0">
-                                <tr style="height: 10mm !important;">
-                                    <td
-                                        style="border: 1px solid #000 !important; font-size: 12px !important; text-align: center !important; font-weight: bold !important;">
-                                        GRAND TOTAL: &#8377; {{ invoice.grand_total|float|round(2) }}</td>
-                                </tr>
-                            </table>
+                            <div style="page-break-inside: avoid;">
+                                <table
+                                    style="width: 60mm !important; font-size: 10px !important;  border-collapse: collapse;  border: 1px solid #000;"
+                                    cellpadding="0" cellspacing="0">
+                                    <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
+                                        <td style="padding-left: 2mm !important; font-weight: bold;">
+                                            SUB TOTAL</td>
+                                        <td
+                                            style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
+                                            {{ invoice.total|float|round(2) }}</td>
+                                    </tr>
+                                    <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
+                                        <td style="padding-left: 2mm !important; font-weight: bold;">
+                                            DISCOUNT</td>
+                                        <td
+                                            style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
+                                            {{ invoice.discount|float|round(2) }}</td>
+                                    </tr>
+                                    <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
+                                        <td style="padding-left: 2mm !important; font-weight: bold;">
+                                            TOTAL</td>
+                                        <td
+                                            style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
+                                            {{ invoice.total|float|round(2) }}</td>
+                                    </tr>
+                                    <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
+                                        <td style="padding-left: 2mm !important; font-weight: bold;">
+                                            Total Tax</td>
+                                        <td
+                                            style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
+                                            {{ invoice.total_tax|float|round(2) }}</td>
+                                    </tr>
+                                    <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
+                                        <td style="padding-left: 2mm !important; font-weight: bold;">
+                                            Additional Charges</td>
+                                        <td
+                                            style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
+                                            {{ invoice.additional_charge|float|round(2)}}</td>
+                                    </tr>
+                                    <tr style="height: 5mm !important; border-bottom: 1px solid #000 !important;">
+                                        <td style="padding-left: 2mm !important; font-weight: bold;">
+                                            Round off</td>
+                                        <td
+                                            style="padding-right: 2mm !important; text-align: right !important; border-left: 1px solid #000 !important;">
+                                            {{ invoice.roundoff}}</td>
+                                    </tr>
+                                </table>
+                                <table
+                                    style="width: 60mm !important; border-collapse: collapse !important; border: 1px solid #000 !important; background-color: #f2f2f2 !important; margin-top: 2mm !important;"
+                                    cellpadding="0" cellspacing="0">
+                                    <tr style="height: 10mm !important;">
+                                        <td
+                                            style="border: 1px solid #000 !important; font-size: 12px !important; text-align: center !important; font-weight: bold !important;">
+                                            GRAND TOTAL: &#8377; {{ invoice.grand_total|float|round(2) }}</td>
+                                    </tr>
+                                </table>
+                            </div>
                         </td>
+                        {% endif %}
                     </tr>
-
                 </table>
 
             </td>
         </tr>
+    </table>
+    {% endmacro %}
 
+
+    {# ---------------- FOOTERS SECTION ---------------- #}
+    {% macro invoice_footer() %}
+    <table style="width: 190mm !important;
+            max-height: 20mm !important;
+            vertical-align: bottom !important;
+            margin: 0mm auto !important;
+            border: 1px solid #000 !important;
+            border-collapse: collapse !important;" cellpadding="0" cellspacing="0">
         <!-- Signature's Section -->
         <tr>
-            <td style="padding-top: 4mm !important;">
+            <td style="margin-top: 2mm !important; padding-top: 4mm !important;">
                 <table style="width: 100% !important; border-collapse: collapse !important;" cellpadding="0"
                     cellspacing="0">
                     <tr>
@@ -579,9 +628,126 @@
                 This Purchase&nbsp;Invoice generated by Vyapar Drishti GST Billing App.
             </td>
         </tr>
-
     </table>
-    {% endfor %}
+    {% endmacro %}
+    
+    {# ---------------- EMPTY SPACE SECTION ---------------- #}
+    {% macro fill_space(height=0, text=' ') %}
+    <table style="width: 190mm !important;
+            vertical-align: top !important;
+            margin: 0mm auto !important;
+            border-left: 1px solid #000 !important;
+            border-right: 1px solid #000 !important;
+            text-align: center !important;
+            border-collapse: collapse !important;" cellpadding="0" cellspacing="0">
+        <tr>
+            <td style="height: {{ ([height, 0] | max) | int }}mm; border: none;">{{text}}</td>
+        </tr>
+    </table>
+    {% endmacro %}
+
+
+    {# ---------------- PAGE LOGIC ---------------- #}
+    {% set total_items = invoice["items"]|length %}
+    {% set total_hsn = invoice["taxes"]|length %}
+    {% set items_per_page = 26 %}
+    {% set hsn_per_page = 15 %}
+    {% set row_height = 5 %}   {# each row ≈ 5mm #}
+    {% set page_body_height = 170 %} {# space between header & footer in mm #}
+
+    {# ---------- CASE 1: Few items + few HSN ---------- #}
+    {% if total_items <= 20 and total_hsn <=4 %} 
+        {{ invoice_header() }} 
+        {{ items_table(invoice["items"]) }} 
+        {% set empty_space = page_body_height - ((invoice["items"]|length * row_height) + ([invoice["taxes"]|length * row_height, 30]|max)) %}
+        {{ fill_space(empty_space) }}
+        {{ totals_section(invoice["taxes"], last_page=True) }} 
+        {{ invoice_footer() }} 
+    
+    {# ---------- CASE 2: Few items + many HSN ---------- #} 
+    {% elif total_items <=20 and total_hsn> 4 %}
+        {# Page 1: items only #}
+        {{ invoice_header() }}
+        {{ items_table(invoice["items"]) }}
+        {% set empty_space = page_body_height - (invoice["items"]|length * row_height) %}
+        {% set taxes_height = ([invoice["taxes"]|length * row_height, 30]|max) %}
+        {% if empty_space > taxes_height %}
+            {{ fill_space(empty_space - taxes_height) }}
+            {{ totals_section(invoice["taxes"], last_page=True) }}
+            {{ invoice_footer() }}
+        {% else %}
+            {{ fill_space(empty_space, text='Continue...') }}
+            {{ invoice_footer() }}
+            <div style="page-break-after: always !important;"></div>
+
+            {# Page 2: totals only #}
+            {{ invoice_header() }}
+            {{ totals_section(invoice["taxes"], last_page=True) }}
+            {% set empty_space = page_body_height - ([invoice["taxes"]|length * row_height, 30]|max) %}
+            {{ fill_space(empty_space) }}
+            {{ invoice_footer() }}
+        {% endif %}
+
+    {# ---------- CASE 3: Items 20-29 ---------- #}
+    {% elif total_items > 20 and total_items <= 26 %} 
+        {# Page 1: items #} 
+        {{ invoice_header() }} 
+        {{ items_table(invoice["items"]) }} 
+        {% set empty_space = page_body_height - (invoice["items"]|length * row_height) %}
+        {{ fill_space(empty_space, text='Continue...') }}
+        {{ invoice_footer() }} 
+        <div style="page-break-after: always !important;"></div>
+
+        {# Page 2: totals #}
+        {{ invoice_header() }}
+        {{ totals_section(invoice["taxes"], last_page=True) }}
+        {% set empty_space = page_body_height - ([invoice["taxes"]|length * row_height, 30]|max) %}
+        {{ fill_space(empty_space) }}
+        {{ invoice_footer() }}
+        
+
+    {# ---------- CASE 4: Items > 26 ---------- #}
+    {% else %}
+        {% set page_count = (total_items // items_per_page) + (1 if total_items % items_per_page else 0) %}
+        {% for page in range(page_count) %}
+            {% set start = page * items_per_page %}
+            {% set end = start + items_per_page %}
+            {% set page_items = invoice["items"][start:end] %}
+
+            {{ invoice_header() }}
+            {{ items_table(page_items, offset=start) }}
+
+            {# If this is the last items page, start totals split #}
+            {% if page == page_count - 1 %}
+            {% set hsn_pages = (total_hsn // hsn_per_page) + (1 if total_hsn % hsn_per_page else 0) %}
+                {% for p in range(hsn_pages) %}
+                    {% set hstart = p * hsn_per_page %}
+                    {% set hend = hstart + hsn_per_page %}
+                    {% set hsn_chunk = invoice["taxes"][hstart:hend] %}
+
+                    {% if p > 0 %}
+                    <div style="page-break-after: always !important;"></div>
+                    {{ invoice_header() }}
+                    {% endif %}
+                    {{ totals_section(hsn_chunk, last_page=loop.last) }}
+                    {% set empty_space = page_body_height - ([hsn_chunk|length * row_height, 30]|max) %}
+                    {{ fill_space(empty_space) }}
+                    {{ invoice_footer() }}
+                {% endfor %}
+            {% else %}
+            {% set empty_space = page_body_height - (page_items|length * row_height) %}
+            {{ fill_space(empty_space, text='Continue...') }}
+            {{ invoice_footer() }}
+            {% endif %}
+
+            {% if not loop.last %}
+            <div style="page-break-after: always !important;"></div>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+
+
+
 </body>
 
 </html>
