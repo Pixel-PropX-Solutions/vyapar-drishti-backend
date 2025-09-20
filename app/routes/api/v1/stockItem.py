@@ -387,7 +387,17 @@ async def get_product_details(
                     },
                     "avg_purchase_rate": {
                         "$cond": [
-                            {"$gt": ["$purchase_qty", 0]},
+                            {
+                                "$gt": [
+                                    {
+                                        "$add": [
+                                            {"$ifNull": ["$purchase_value", 0]},
+                                            {"$ifNull": ["$opening_value", 0]},
+                                        ]
+                                    },
+                                    0,
+                                ]
+                            },
                             {
                                 "$round": [
                                     {
@@ -762,7 +772,7 @@ async def view_all_stock_items(
     group: str = None,
     # is_deleted: bool = False,
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=60),
+    limit: int = Query(10, le=sys.maxsize),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
 ):

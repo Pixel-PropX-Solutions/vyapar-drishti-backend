@@ -1844,7 +1844,22 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                             {
                                 "$cond": [
                                     {"$gt": ["$purchase_qty", 0]},
-                                    {"$divide": ["$purchase_value", "$purchase_qty"]},
+                                    {
+                                        "$divide": [
+                                            {
+                                                "$add": [
+                                                    {"$ifNull": ["$purchase_value", 0]},
+                                                    {"$ifNull": ["$opening_value", 0]},
+                                                ]
+                                            },
+                                            {
+                                                "$add": [
+                                                    {"$ifNull": ["$purchase_qty", 0]},
+                                                    {"$ifNull": ["$opening_balance", 0]},
+                                                ]
+                                            },
+                                        ]
+                                    },
                                     0,
                                 ]
                             },
