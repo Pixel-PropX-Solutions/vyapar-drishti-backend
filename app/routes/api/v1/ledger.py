@@ -792,7 +792,7 @@ async def view_ledger_invoices(
     start_date: str = None,
     end_date: str = None,
     page_no: int = Query(1, ge=1),
-    limit: int = Query(10, le=60),
+    limit: int = Query(10, le=sys.maxsize),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
     current_user: TokenData = Depends(get_current_user),
