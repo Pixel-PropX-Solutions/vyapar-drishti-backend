@@ -150,19 +150,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             "company_id": company_id,
         }
 
-        if search not in ["", None]:
-            try:
-                safe_search = re.escape(search)
-                filter_params["$or"] = [
-                    {"voucher_number": {"$regex": safe_search, "$options": "i"}},
-                    {"voucher_type": {"$regex": safe_search, "$options": "i"}},
-                    {"party_name": {"$regex": safe_search, "$options": "i"}},
-                    {"ledger_name": {"$regex": safe_search, "$options": "i"}},
-                    {"narration": {"$regex": safe_search, "$options": "i"}},
-                ]
-            except re.error:
-                pass
-
         if type in ["Invoices", "Transactions"]:
             if type == "Invoices":
                 filter_params["voucher_type"] = {"$in": ["Sales", "Purchase"]}
@@ -257,10 +244,42 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                             "in": {
                                 "ledgername": "$$entry.ledger",
                                 "amount": "$$entry.amount",
-                                "is_deemed_positive": {
-                                    "$cond": [{"$lt": ["$$entry.amount", 0]}, True, False]
-                                },
                                 "amount_absolute": {"$abs": "$$entry.amount"},
+                                "is_deemed_positive": {
+                                    "$switch": {
+                                        "branches": [
+                                            ## --- Payment ---
+                                            {
+                                                "case": {
+                                                    "$eq": ["$voucher_type", "Payment"]
+                                                },
+                                                "then": False,  ## Party is negative (outflow)
+                                            },
+                                            ## --- Receipt ---
+                                            {
+                                                "case": {
+                                                    "$eq": ["$voucher_type", "Receipt"]
+                                                },
+                                                "then": True,  ## Party is positive (inflow)
+                                            },
+                                            ## --- Sales ---
+                                            {
+                                                "case": {
+                                                    "$eq": ["$voucher_type", "Sales"]
+                                                },
+                                                "then": True,  ## Party is negative (debtor)
+                                            },
+                                            ## --- Purchase ---
+                                            {
+                                                "case": {
+                                                    "$eq": ["$voucher_type", "Purchase"]
+                                                },
+                                                "then": False,  ## Party is positive (creditor)
+                                            },
+                                        ],
+                                        "default": False,
+                                    }
+                                },
                             },
                         }
                     }
@@ -277,7 +296,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "party_name_id": 1,
                     "narration": 1,
                     "paid_amount": 1,
-                    "amount": '$grand_total',
+                    "amount": "$grand_total",
                     "balance_type": 1,
                     "ledger_name": {"$arrayElemAt": ["$ledger_entries.ledgername", 0]},
                     "is_deemed_positive": {
@@ -287,6 +306,48 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                 }
             },
             {"$sort": sort_stage},
+            {
+                "$match": {
+                    **(
+                        {
+                            "$or": [
+                                {
+                                    "voucher_number": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "voucher_type": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "party_name": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "ledger_name": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "narration": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                            ]
+                        }
+                        if search not in ["", None]
+                        else {}
+                    )
+                }
+            },
             {
                 "$facet": {
                     "docs": [
@@ -2081,6 +2142,669 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         daily_data = convert_to_daily_data(final_result)
         print("daily_data in voucher repo", daily_data)
         return daily_data
+
+    async def viewHSNSummary(
+        self,
+        search: str,
+        company_id: str,
+        pagination: PageRequest,
+        sort: Sort,
+        category: str = "",
+        current_user: TokenData = Depends(get_current_user),
+        start_date: datetime = None,
+        end_date: datetime = None,
+    ):
+        # Convert datetime to string (YYYY-MM-DD)
+        start_date = str(start_date)[:10] if start_date else ""
+        end_date = str(end_date)[:10] if end_date else ""
+
+        filter_params = {
+            "user_id": current_user.user_id,
+            "company_id": company_id,
+            "voucher_type": {"$in": ["Sales", "Purchase"]},
+        }
+
+        if start_date and end_date:
+            filter_params["date"] = {"$gte": start_date, "$lte": end_date}
+
+        pipeline = [
+            {"$match": filter_params},
+            # Join with Inventory
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                        {
+                            "$project": {
+                                "item_id": 1,
+                                "item": 1,
+                                "unit": 1,
+                                "hsn_code": 1,
+                                "quantity": 1,
+                                "total_amount": 1,
+                                "tax_rate": 1,
+                                "taxable_value": {
+                                    "$subtract": ["$total_amount", "$tax_amount"]
+                                },
+                                "tax_amount": 1,
+                            }
+                        },
+                    ],
+                    "as": "inventory_info",
+                }
+            },
+            {"$unwind": "$inventory_info"},
+            # 🔹 Join with Ledger to fetch TIN (using party_name or party_id depending on your schema)
+            {
+                "$lookup": {
+                    "from": "Ledger",
+                    "let": {"id": "$party_name_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$_id", "$$id"]}}},
+                        {"$project": {"tin": 1, "_id": 0}},
+                    ],
+                    "as": "ledger_info",
+                }
+            },
+            {"$unwind": {"path": "$ledger_info", "preserveNullAndEmptyArrays": True}},
+            # Group at item + voucher level first
+            {
+                "$group": {
+                    "_id": {
+                        "hsn_code": "$inventory_info.hsn_code",
+                        "item": "$inventory_info.item",
+                        "item_id": "$inventory_info.item_id",
+                        "unit": "$inventory_info.unit",
+                        "tax_rate": "$inventory_info.tax_rate",
+                        "voucher_id": "$_id",
+                        "date": "$date",
+                        "party_name": "$party_name",
+                        "party_tin": "$ledger_info.tin",  # ✅ pull from Ledger
+                        "voucher_type": "$voucher_type",
+                        "voucher_number": "$voucher_number",
+                    },
+                    "quantity": {"$sum": "$inventory_info.quantity"},
+                    "total_amount": {"$sum": "$inventory_info.total_amount"},
+                    "taxable_value": {"$sum": "$inventory_info.taxable_value"},
+                    "tax_amount": {"$sum": "$inventory_info.tax_amount"},
+                }
+            },
+            # Prepare invoice list
+            {
+                "$project": {
+                    "hsn_code": "$_id.hsn_code",
+                    "item_id": "$_id.item_id",
+                    "item": "$_id.item",
+                    "unit": "$_id.unit",
+                    "tax_rate": "$_id.tax_rate",
+                    "invoice_detail": {
+                        "date": "$_id.date",
+                        "party_name": "$_id.party_name",
+                        "party_tin": "$_id.party_tin",  # ✅ from Ledger now
+                        "voucher_id": "$_id.voucher_id",
+                        "voucher_type": "$_id.voucher_type",
+                        "voucher_number": "$_id.voucher_number",
+                        "quantity": "$quantity",
+                        "total_amount": {"$round": ["$total_amount", 2]},
+                        "taxable_value": {"$round": ["$taxable_value", 2]},
+                        "total_tax": {"$round": ["$tax_amount", 2]},
+                    },
+                    "quantity": 1,
+                    "total_amount": 1,
+                    "taxable_value": 1,
+                    "tax_amount": 1,
+                }
+            },
+            # Group again by item (hsn + item_id + unit)
+            {
+                "$group": {
+                    "_id": {
+                        "hsn_code": "$hsn_code",
+                        "item_id": "$item_id",
+                        "item": "$item",
+                        "unit": "$unit",
+                        "tax_rate": "$tax_rate",
+                    },
+                    "quantity": {"$sum": "$quantity"},
+                    "total_value": {"$sum": "$total_amount"},
+                    "taxable_value": {"$sum": "$taxable_value"},
+                    "tax_amount": {"$sum": "$tax_amount"},
+                    "invoices": {"$push": "$invoice_detail"},
+                }
+            },
+            # Final projection
+            {
+                "$project": {
+                    "hsn_code": "$_id.hsn_code",
+                    "item": "$_id.item",
+                    "item_id": "$_id.item_id",
+                    "unit": "$_id.unit",
+                    "tax_rate": "$_id.tax_rate",
+                    "quantity": {"$round": ["$quantity", 2]},
+                    "total_value": {"$round": ["$total_value", 2]},
+                    "taxable_value": {"$round": ["$taxable_value", 2]},
+                    "tax_amount": {"$round": ["$tax_amount", 2]},
+                    "invoices": 1,
+                    "_id": 0,
+                }
+            },
+            {"$sort": {"hsn_code": 1 if sort.sort_order == SortingOrder.ASC else -1}},
+            {
+                "$facet": {
+                    "docs": [
+                        {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
+                        {"$limit": pagination.paging.limit},
+                    ],
+                    "count": [{"$count": "count"}],
+                    "totals": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "total_value": {"$sum": "$total_value"},
+                                "taxable_value": {"$sum": "$taxable_value"},
+                                "tax_amount": {"$sum": "$tax_amount"},
+                            }
+                        }
+                    ],
+                }
+            },
+        ]
+
+        res = [doc async for doc in self.collection.aggregate(pipeline)]
+        docs = res[0]["docs"]
+        count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
+        totals = res[0]["totals"][0] if len(res[0]["totals"]) > 0 else {}
+
+        class Meta2(Page):
+            total: int
+            total_value: float = 0
+            taxable_value: float = 0
+            tax_amount: float = 0
+
+        class PaginatedResponse2(BaseModel):
+            docs: List[Any]
+            meta: Meta2
+
+        return PaginatedResponse2(
+            docs=docs,
+            meta=Meta2(
+                page=pagination.paging.page,
+                limit=pagination.paging.limit,
+                total=count,
+                total_value=round(totals.get("total_value", 0), 2),
+                taxable_value=round(totals.get("taxable_value", 0), 2),
+                tax_amount=round(totals.get("tax_amount", 0), 2),
+            ),
+        )
+
+    async def HSNSummaryStats(
+        self,
+        company_id: str,
+        current_user: TokenData = Depends(get_current_user),
+        start_date: datetime = None,
+        end_date: datetime = None,
+    ):
+        # Convert datetime to string (YYYY-MM-DD)
+        start_date = str(start_date)[:10] if start_date else ""
+        end_date = str(end_date)[:10] if end_date else ""
+
+        filter_params = {
+            "user_id": current_user.user_id,
+            "company_id": company_id,
+            "voucher_type": {"$in": ["Sales", "Purchase"]},
+        }
+
+        if start_date and end_date:
+            filter_params["date"] = {"$gte": start_date, "$lte": end_date}
+
+        meta_pipeline = [
+            {"$match": filter_params},
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                        {"$project": {"hsn_code": 1, "total_amount": 1, "tax_amount": 1}},
+                    ],
+                    "as": "inventory_info",
+                }
+            },
+            {"$unwind": "$inventory_info"},
+            # Meta Group
+            {
+                "$group": {
+                    "_id": None,
+                    "unique_hsn": {"$addToSet": "$inventory_info.hsn_code"},
+                    "unique_party": {"$addToSet": "$party_name"},
+                    "total_invoices": {"$addToSet": "$_id"},
+                    "total_revenue": {"$sum": "$inventory_info.total_amount"},
+                    "tax_amount": {"$sum": "$inventory_info.tax_amount"},
+                }
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "total_hsn": {"$size": "$unique_hsn"},
+                    "total_party": {"$size": "$unique_party"},
+                    "total_invoices": {"$size": "$total_invoices"},
+                    "total_revenue": {"$round": ["$total_revenue", 2]},
+                    "total_tax": {"$round": ["$tax_amount", 2]},
+                }
+            },
+        ]
+
+        meta_res = [doc async for doc in self.collection.aggregate(meta_pipeline)]
+        meta = (
+            meta_res[0]
+            if meta_res
+            else {
+                "total_hsn": 0,
+                "total_party": 0,
+                "total_invoices": 0,
+                "total_revenue": 0,
+                "total_tax": 0,
+            }
+        )
+
+        return meta
+
+    async def viewPartySummary(
+        self,
+        search: str,
+        company_id: str,
+        pagination: PageRequest,
+        sort: Sort,
+        current_user: TokenData = Depends(get_current_user),
+        start_date: datetime = None,
+        end_date: datetime = None,
+    ):
+        # Convert datetime to string (YYYY-MM-DD)
+        start_date = str(start_date)[:10] if start_date else ""
+        end_date = str(end_date)[:10] if end_date else ""
+
+        filter_params = {
+            "user_id": current_user.user_id,
+            "company_id": company_id,
+            "voucher_type": {"$in": ["Sales", "Purchase"]},
+        }
+
+        if start_date and end_date:
+            filter_params["date"] = {"$gte": start_date, "$lte": end_date}
+
+        pipeline = [
+            {"$match": filter_params},
+            # 🔹 Join with Inventory
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                        {
+                            "$project": {
+                                "item_id": 1,
+                                "item": 1,
+                                "unit": 1,
+                                "hsn_code": 1,
+                                "quantity": 1,
+                                "total_amount": 1,
+                                "taxable_value": {
+                                    "$subtract": ["$total_amount", "$tax_amount"]
+                                },
+                                "tax_amount": 1,
+                            }
+                        },
+                    ],
+                    "as": "inventory_info",
+                }
+            },
+            {"$unwind": "$inventory_info"},
+            # 🔹 Join with Ledger to fetch TIN
+            {
+                "$lookup": {
+                    "from": "Ledger",
+                    "let": {"id": "$party_name_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$_id", "$$id"]}}},
+                        {"$project": {"tin": 1, "_id": 0}},
+                    ],
+                    "as": "ledger_info",
+                }
+            },
+            {"$unwind": {"path": "$ledger_info", "preserveNullAndEmptyArrays": True}},
+            # 🔹 First group by voucher + item (line-level grouping)
+            {
+                "$group": {
+                    "_id": {
+                        "voucher_id": "$_id",
+                        "date": "$date",
+                        "party_name": "$party_name",
+                        "party_tin": "$ledger_info.tin",
+                        "voucher_type": "$voucher_type",
+                        "voucher_number": "$voucher_number",
+                        "item_id": "$inventory_info.item_id",
+                    },
+                    "quantity": {"$sum": "$inventory_info.quantity"},
+                    "total_amount": {"$sum": "$inventory_info.total_amount"},
+                    "taxable_value": {"$sum": "$inventory_info.taxable_value"},
+                    "tax_amount": {"$sum": "$inventory_info.tax_amount"},
+                }
+            },
+            # 🔹 Now group again voucher-wise (invoice summary)
+            {
+                "$group": {
+                    "_id": {
+                        "voucher_id": "$_id.voucher_id",
+                        "date": "$_id.date",
+                        "party_name": "$_id.party_name",
+                        "party_tin": "$_id.party_tin",
+                        "voucher_type": "$_id.voucher_type",
+                        "voucher_number": "$_id.voucher_number",
+                    },
+                    "items": {"$addToSet": "$_id.item_id"},  # count distinct items
+                    "quantity": {"$sum": "$quantity"},
+                    "total_amount": {"$sum": "$total_amount"},
+                    "taxable_value": {"$sum": "$taxable_value"},
+                    "tax_amount": {"$sum": "$tax_amount"},
+                }
+            },
+            # 🔹 Prepare invoice document
+            {
+                "$project": {
+                    "party_name": "$_id.party_name",
+                    "party_tin": "$_id.party_tin",
+                    "invoice_detail": {
+                        "date": "$_id.date",
+                        "voucher_id": "$_id.voucher_id",
+                        "voucher_type": "$_id.voucher_type",
+                        "voucher_number": "$_id.voucher_number",
+                        "items": {"$size": "$items"},  # distinct item count
+                        "quantity": {"$round": ["$quantity", 2]},
+                        "total_amount": {"$round": ["$total_amount", 2]},
+                        "taxable_value": {"$round": ["$taxable_value", 2]},
+                        "total_tax": {"$round": ["$tax_amount", 2]},
+                    },
+                    "quantity": 1,
+                    "total_amount": 1,
+                    "taxable_value": 1,
+                    "tax_amount": 1,
+                }
+            },
+            # 🔹 Finally group by party
+            {
+                "$group": {
+                    "_id": {
+                        "party_name": "$party_name",
+                        "party_tin": "$party_tin",
+                    },
+                    "quantity": {"$sum": "$quantity"},
+                    "total_value": {"$sum": "$total_amount"},
+                    "taxable_value": {"$sum": "$taxable_value"},
+                    "tax_amount": {"$sum": "$tax_amount"},
+                    "invoices": {"$push": "$invoice_detail"},
+                }
+            },
+            # 🔹 Final projection
+            {
+                "$project": {
+                    "party_name": "$_id.party_name",
+                    "party_tin": "$_id.party_tin",
+                    "quantity": {"$round": ["$quantity", 2]},
+                    "total_value": {"$round": ["$total_value", 2]},
+                    "taxable_value": {"$round": ["$taxable_value", 2]},
+                    "tax_amount": {"$round": ["$tax_amount", 2]},
+                    "invoices": 1,
+                    "_id": 0,
+                }
+            },
+            {"$sort": {"party_name": 1 if sort.sort_order == SortingOrder.ASC else -1}},
+            {
+                "$facet": {
+                    "docs": [
+                        {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
+                        {"$limit": pagination.paging.limit},
+                    ],
+                    "count": [{"$count": "count"}],
+                    "totals": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "total_value": {"$sum": "$total_value"},
+                                "taxable_value": {"$sum": "$taxable_value"},
+                                "tax_amount": {"$sum": "$tax_amount"},
+                            }
+                        }
+                    ],
+                }
+            },
+        ]
+
+        res = [doc async for doc in self.collection.aggregate(pipeline)]
+        docs = res[0]["docs"]
+        count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
+        totals = res[0]["totals"][0] if len(res[0]["totals"]) > 0 else {}
+
+        class Meta2(Page):
+            total: int
+            total_value: float = 0
+            taxable_value: float = 0
+            tax_amount: float = 0
+
+        class PaginatedResponse2(BaseModel):
+            docs: List[Any]
+            meta: Meta2
+
+        return PaginatedResponse2(
+            docs=docs,
+            meta=Meta2(
+                page=pagination.paging.page,
+                limit=pagination.paging.limit,
+                total=count,
+                total_value=round(totals.get("total_value", 0), 2),
+                taxable_value=round(totals.get("taxable_value", 0), 2),
+                tax_amount=round(totals.get("tax_amount", 0), 2),
+            ),
+        )
+
+    async def viewBillSummary(
+        self,
+        search: str,
+        company_id: str,
+        pagination: PageRequest,
+        sort: Sort,
+        current_user: TokenData = Depends(get_current_user),
+        start_date: datetime = None,
+        end_date: datetime = None,
+    ):
+        filter_params = {
+            "user_id": current_user.user_id,
+            "company_id": company_id,
+        }
+        # if type in ["Invoices", "Transactions"]:
+        #     if type == "Invoices":
+        filter_params["voucher_type"] = {"$in": ["Sales", "Purchase"]}
+        #     else:
+        #         filter_params["voucher_type"] = {"$in": ["Payment", "Receipt"]}
+        # elif type not in ["", None]:
+        #     filter_params["voucher_type"] = type
+
+        if start_date not in ["", None] and end_date not in ["", None]:
+            startDate = start_date[0:10]
+            endDate = end_date[0:10]
+            filter_params["date"] = {"$gte": startDate, "$lte": endDate}
+
+        # Always sort by the main field, then voucher_number as secondary
+        if sort.sort_field:
+            sort_stage = {
+                sort.sort_field if sort.sort_field != "type" else "voucher_type": int(
+                    sort.sort_order
+                ),
+                "voucher_number": int(sort.sort_order),
+            }
+        else:
+            sort_stage = {"date": -1, "voucher_number": -1}
+
+        pipeline = [
+            {"$match": filter_params},
+
+            # Join with Ledger (party details)
+            {
+                "$lookup": {
+                    "from": "Ledger",
+                    "localField": "party_name_id",
+                    "foreignField": "_id",
+                    "as": "party",
+                }
+            },
+            {"$unwind": {"path": "$party", "preserveNullAndEmptyArrays": True}},
+
+            # 🔹 Join with Inventory items
+            {
+                "$lookup": {
+                    "from": "Inventory",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                        {
+                            "$project": {
+                                "quantity": 1,
+                                "total_amount": 1,
+                                "tax_amount": 1,
+                                # taxable_value = total_amount - tax_amount
+                                "taxable_value": {"$subtract": ["$total_amount", "$tax_amount"]},
+                            }
+                        },
+                    ],
+                    "as": "inventory",
+                }
+            },
+
+            # 🔹 Aggregate totals from inventory
+            {
+                "$addFields": {
+                    "total_value": {"$sum": "$inventory.total_amount"},
+                    "taxable_value": {"$sum": "$inventory.taxable_value"},
+                    "tax_amount": {"$sum": "$inventory.tax_amount"},
+                }
+            },
+
+            # Project the required fields
+            {
+                "$project": {
+                    "_id": 1,
+                    "date": 1,
+                    "voucher_number": 1,
+                    "voucher_type": 1,
+                    "voucher_type_id": 1,
+                    "party_name": 1,
+                    "party_tin": "$party.tin",
+                    "party_name_id": 1,
+                    "total_value": 1,
+                    "taxable_value": 1,
+                    "tax_amount": 1,
+                    "created_at": 1,
+                }
+            },
+
+            {"$sort": sort_stage},
+
+            # Search filter
+            {
+                "$match": {
+                    **(
+                        {
+                            "$or": [
+                                {
+                                    "voucher_number": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "voucher_type": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "party_name": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "ledger_name": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                                {
+                                    "narration": {
+                                        "$regex": f"{search}",
+                                        "$options": "i",
+                                    }
+                                },
+                            ]
+                        }
+                        if search not in ["", None]
+                        else {}
+                    )
+                }
+            },
+
+            # Facet for pagination + totals
+            {
+                "$facet": {
+                    "docs": [
+                        {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
+                        {"$limit": pagination.paging.limit},
+                    ],
+                    "count": [{"$count": "count"}],
+                    "totals": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "total_value": {"$sum": "$total_value"},
+                                "taxable_value": {"$sum": "$taxable_value"},
+                                "tax_amount": {"$sum": "$tax_amount"},
+                            }
+                        }
+                    ],
+                }
+            },
+        ]
+
+
+        res = [doc async for doc in self.collection.aggregate(pipeline)]
+        docs = res[0]["docs"]
+        count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
+        totals = res[0]["totals"][0] if len(res[0]["totals"]) > 0 else {}
+
+        # pprint.pprint(docs, indent=2, width=120)
+        class Meta3(Page):
+            total: int
+            total_value: float = 0
+            taxable_value: float = 0
+            tax_amount: float = 0
+
+        class PaginatedResponse3(BaseModel):
+            docs: List[Any]
+            meta: Meta3
+
+        return PaginatedResponse3(
+            docs=docs,
+            meta=Meta3(
+                page=pagination.paging.page,
+                limit=pagination.paging.limit,
+                total=count,
+                total_value=round(totals.get("total_value", 0), 2),
+                taxable_value=round(totals.get("taxable_value", 0), 2),
+                tax_amount=round(totals.get("tax_amount", 0), 2),
+            ),
+        )
 
 
 vouchar_repo = VoucherRepo()

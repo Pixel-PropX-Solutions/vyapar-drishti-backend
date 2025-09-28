@@ -1107,7 +1107,7 @@ async def getTimeline(
 
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     page = Page(page=page_no, limit=limit)
@@ -1118,6 +1118,183 @@ async def getTimeline(
         search=search,
         company_id=current_user.current_company_id,
         category=category,
+        pagination=page_request,
+        start_date=start_date,
+        end_date=end_date,
+        sort=sort,
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": result,
+    }
+
+
+@Vouchar.get(
+    "/get/hsn/summary",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getHsnSummary(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(""),
+    search: str = "",
+    category: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(ge=10, le=sys.maxsize),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type not in ["user", "admin"]:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await vouchar_repo.viewHSNSummary(
+        search=search,
+        company_id=current_user.current_company_id,
+        category=category,
+        pagination=page_request,
+        start_date=start_date,
+        end_date=end_date,
+        sort=sort,
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": result,
+    }
+
+@Vouchar.get(
+    "/get/summary/stats",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getSummaryStats(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(""),
+    start_date: str = "",
+    end_date: str = "",
+):
+    if current_user.user_type not in ["user", "admin"]:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None: 
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    result = await vouchar_repo.HSNSummaryStats(
+        company_id=current_user.current_company_id,
+        start_date=start_date,
+        end_date=end_date,
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": result,
+    }
+
+
+@Vouchar.get(
+    "/get/party/summary",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getPartySummary(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(""),
+    search: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(ge=10, le=sys.maxsize),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type not in ["user", "admin"]:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await vouchar_repo.viewPartySummary(
+        search=search,
+        company_id=current_user.current_company_id,
+        pagination=page_request,
+        start_date=start_date,
+        end_date=end_date,
+        sort=sort,
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": result,
+    }
+
+
+@Vouchar.get(
+    "/get/invoice/summary",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getInvoiceSummary(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(""),
+    search: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(ge=10, le=sys.maxsize),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type not in ["user", "admin"]:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await vouchar_repo.viewBillSummary(
+        search=search,
+        company_id=current_user.current_company_id,
         pagination=page_request,
         start_date=start_date,
         end_date=end_date,
