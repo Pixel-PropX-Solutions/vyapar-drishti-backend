@@ -9,7 +9,6 @@ class AccountingGroup(BaseModel):
     user_id: Optional[str] = None
     company_id: Optional[str] = None
     description: Optional[str] = ""  # Description of the group
-    image: Optional[str] = None  # URL or path to the group image
     is_deleted: bool = False  # Soft delete flag
     parent: Optional[str] = "Primary Group"  # Default parent group name
     parent_id: Optional[str] = "Primary Group"  # Internal use, default parent group name
@@ -26,7 +25,6 @@ class AccountingGroupCreate(BaseModel):
     user_id: str
     company_id: str
     is_deleted: Optional[bool] = False
-    image: Optional[str] = ""
     description: Optional[str] = ""
     parent: Optional[str] = ""
     parent_id: Optional[str] = ""

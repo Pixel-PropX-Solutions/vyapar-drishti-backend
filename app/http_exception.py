@@ -158,3 +158,26 @@ class ValidationException(HTTPException):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=detail,
         )
+
+class DuplicateKeyException(HTTPException):
+    """
+    Exception raised when a duplicate key error occurs.
+    """
+
+    def __init__(self, detail: str = "Entry with given key/name already exists."):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail,
+        )
+
+
+class ServiceUnavailableException(HTTPException):
+    """
+    Exception raised when a service is unavailable.
+    """
+
+    def __init__(self, detail: str = "Service is unavailable."):
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=detail,
+        )

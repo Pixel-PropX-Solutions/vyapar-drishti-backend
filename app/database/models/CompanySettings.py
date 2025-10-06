@@ -35,6 +35,18 @@ class FeatureFlags(BaseModel):
     # enable_payroll: bool = False
     enable_inventory: bool = True
     # enable_multi_currency: bool = False
+    
+# class PrintDetails(BaseModel):
+#     # Print Declarations
+#     print_decl: list[str] = Field(
+#         default_factory=lambda: [
+#             "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct",
+#         ]
+#     )
+#     print_jurisdiction: Optional[str] = None
+#     print_bank_name: Optional[str] = None
+#     print_bank_account: Optional[str] = None
+#     qr_code_url: Optional[str] = None
 
 
 # class AuditLogEntry(BaseModel):
@@ -61,6 +73,7 @@ class CompanySettings(BaseModel):
     tax_details: Optional[TAXDetails] = Field(default_factory=TAXDetails)
     # tds_details: Optional[TDSDetails] = Field(default_factory=TDSDetails)
     bank_details: Optional[BankDetails] = Field(default_factory=BankDetails)
+    # print_details: Optional[PrintDetails] = Field(default_factory=PrintDetails)
 
     # Audit/versioning
     # version: int = 1

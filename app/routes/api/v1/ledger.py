@@ -21,7 +21,15 @@ from app.database.repositories.UserSettingsRepo import user_settings_repo
 from app.utils.cloudinary_client import cloudinary_client
 import sys
 from typing import Any, Dict, Optional
-
+from pymongo.errors import (
+    DuplicateKeyError,
+    WriteError,
+    WriteConcernError,
+    OperationFailure,
+    ConnectionFailure,
+    NetworkTimeout,
+    PyMongoError,
+)
 
 ledger = APIRouter()
 
@@ -428,21 +436,40 @@ async def update_ledger(
     if image:
         update_fields["image"] = image_url
 
-    await ledger_repo.update_one(
-        {
-            "_id": ledger_id,
-            "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id
-            or userSettings["current_company_id"],
-            "is_deleted": False,
-        },
-        {"$set": update_fields},
-    )
+    try:
+        await ledger_repo.update_one(
+            {
+                "_id": ledger_id,
+                "user_id": current_user.user_id,
+                "company_id": current_user.current_company_id
+                or userSettings["current_company_id"],
+                "is_deleted": False,
+            },
+            {"$set": update_fields},
+        )
 
-    return {
-        "success": True,
-        "message": "Ledger updated successfully",
-    }
+        return {
+            "success": True,
+            "message": "Customer updated successfully",
+        }
+
+    except DuplicateKeyError:
+        raise http_exception.DuplicateKeyException(
+            detail="A customer with this name and type already exists in the company."
+        )
+    except (WriteError, OperationFailure) as e:
+        raise http_exception.BadRequestException(
+            detail=f"Invalid update operation: {str(e)}"
+        )
+    except (ConnectionFailure, NetworkTimeout):
+        raise http_exception.ServiceUnavailableException(
+            detail="Database is unavailable. Please try again later."
+        )
+    except PyMongoError as e:
+        # Generic fallback for unexpected pymongo errors
+        raise http_exception.InternalServerErrorException(
+            detail=f"Database error: {str(e)}"
+        )
 
 
 @ledger.put(
@@ -510,31 +537,39 @@ async def update_ledger_details(
             detail="No valid fields provided for update."
         )
 
-    await ledger_repo.update_one(
-        {
-            "_id": ledger_id,
-            "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id
-            or userSettings["current_company_id"],
-            "is_deleted": False,
-        },
-        {"$set": updated_dict, "$currentDate": {"updated_at": True}},
-    )
+    try:
+        await ledger_repo.update_one(
+            {
+                "_id": ledger_id,
+                "user_id": current_user.user_id,
+                "company_id": current_user.current_company_id
+                or userSettings["current_company_id"],
+                "is_deleted": False,
+            },
+            {"$set": updated_dict, "$currentDate": {"updated_at": True}},
+        )
 
-    updated_ledger = await ledger_repo.findOne(
-        {
-            "_id": ledger_id,
-            "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id
-            or userSettings["current_company_id"],
-            "is_deleted": False,
+        return {
+            "success": True,
+            "message": "Customer Details updated successfully",
         }
-    )
-
-    return {
-        "success": True,
-        "message": "Customer Details updated successfully",
-    }
+    except DuplicateKeyError:
+        raise http_exception.DuplicateKeyException(
+            detail="A customer with this name and type already exists in the company."
+        )
+    except (WriteError, OperationFailure) as e:
+        raise http_exception.BadRequestException(
+            detail=f"Invalid update operation: {str(e)}"
+        )
+    except (ConnectionFailure, NetworkTimeout):
+        raise http_exception.ServiceUnavailableException(
+            detail="Database is unavailable. Please try again later."
+        )
+    except PyMongoError as e:
+        # Generic fallback for unexpected pymongo errors
+        raise http_exception.InternalServerErrorException(
+            detail=f"Database error: {str(e)}"
+        )
 
 
 @ledger.get(
@@ -544,9 +579,9 @@ async def update_ledger_details(
 )
 async def view_ledger(
     ledger_id: str,
+    start_date: str ,
+    end_date: str,
     company_id: str = Query(None),
-    start_date: str = None,
-    end_date: str = None,
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "admin" and current_user.user_type != "user":
@@ -558,31 +593,10 @@ async def view_ledger(
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
         )
-    if start_date not in (None, ""):
+    if start_date not in [None, ""]:
         start_date = start_date[:10]
-    if end_date not in (None, ""):
+    if end_date not in [None, ""]:
         end_date = end_date[:10]
-
-    match_date_filter = {}
-    if start_date and end_date:
-        match_date_filter = {
-            "date": {
-                "$gte": start_date,
-                "$lte": end_date,
-            }
-        }
-    # elif start_date:
-    #     match_date_filter = {
-    #         "date": {
-    #             "$gte": start_date,
-    #         }
-    #     }
-    # elif end_date:
-    #     match_date_filter = {
-    #         "date": {
-    #             "$lte": end_date,
-    #         }
-    #     }
 
     result = await ledger_repo.collection.aggregate(
         [
@@ -604,91 +618,149 @@ async def view_ledger(
                 }
             },
             {
-                "$addFields": {
-                    "total_amount": {"$round": [{"$sum": "$accounts.amount"}, 2]},
-                }
-            },
-            {
                 "$lookup": {
                     "from": "Voucher",
-                    "let": {"account_vouchar_ids": "$accounts.vouchar_id"},
-                    "pipeline": [
-                        {
-                            "$match": {
-                                "$expr": {"$in": ["$_id", "$$account_vouchar_ids"]},
-                                **match_date_filter,
-                            }
-                        },
-                        {
-                            "$project": {
-                                "_id": 1,
-                                "date": 1,
-                            }
-                        },
-                    ],
-                    "as": "filtered_vouchars",
+                    "localField": "accounts.vouchar_id",
+                    "foreignField": "_id",
+                    "as": "vouchars",
                 }
             },
             {
                 "$addFields": {
-                    "filtered_accounts": {
+                    "opening_accounts": {
                         "$filter": {
-                            "input": "$accounts",
-                            "as": "account",
-                            "cond": {
-                                "$in": [
-                                    "$$account.vouchar_id",
-                                    {
-                                        "$map": {
-                                            "input": "$filtered_vouchars",
-                                            "as": "fv",
-                                            "in": "$$fv._id",
-                                        }
+                            "input": {
+                                "$map": {
+                                    "input": "$accounts",
+                                    "as": "acc",
+                                    "in": {
+                                        "amount": "$$acc.amount",
+                                        "vouchar_id": "$$acc.vouchar_id",
+                                        "date": {
+                                            "$arrayElemAt": [
+                                                {
+                                                    "$map": {
+                                                        "input": {
+                                                            "$filter": {
+                                                                "input": "$vouchars",
+                                                                "as": "v",
+                                                                "cond": {
+                                                                    "$eq": [
+                                                                        "$$v._id",
+                                                                        "$$acc.vouchar_id",
+                                                                    ]
+                                                                },
+                                                            }
+                                                        },
+                                                        "as": "fv",
+                                                        "in": "$$fv.date",
+                                                    }
+                                                },
+                                                0,
+                                            ]
+                                        },
                                     },
+                                }
+                            },
+                            "as": "oa",
+                            "cond": {"$lt": ["$$oa.date", start_date]},
+                        }
+                    },
+                    "current_accounts": {
+                        "$filter": {
+                            "input": {
+                                "$map": {
+                                    "input": "$accounts",
+                                    "as": "acc",
+                                    "in": {
+                                        "amount": "$$acc.amount",
+                                        "vouchar_id": "$$acc.vouchar_id",
+                                        "date": {
+                                            "$arrayElemAt": [
+                                                {
+                                                    "$map": {
+                                                        "input": {
+                                                            "$filter": {
+                                                                "input": "$vouchars",
+                                                                "as": "v",
+                                                                "cond": {
+                                                                    "$eq": [
+                                                                        "$$v._id",
+                                                                        "$$acc.vouchar_id",
+                                                                    ]
+                                                                },
+                                                            }
+                                                        },
+                                                        "as": "fv",
+                                                        "in": "$$fv.date",
+                                                    }
+                                                },
+                                                0,
+                                            ]
+                                        },
+                                    },
+                                }
+                            },
+                            "as": "ca",
+                            "cond": {
+                                "$and": [
+                                    {"$gte": ["$$ca.date", start_date]},
+                                    {"$lte": ["$$ca.date", end_date]},
                                 ]
                             },
                         }
-                    }
+                    },
                 }
             },
             {
                 "$addFields": {
-                    "total_debit": {
-                        "$round": [
-                            {
-                                "$sum": {
-                                    "$map": {
-                                        "input": "$filtered_accounts",
-                                        "as": "fa",
-                                        "in": {
-                                            "$cond": [
-                                                {"$lt": ["$$fa.amount", 0]},
-                                                "$$fa.amount",
-                                                0,
-                                            ]
-                                        },
-                                    }
-                                }
-                            },
-                            2,
-                        ]
+                    "opening_txn": {"$sum": "$opening_accounts.amount"},
+                    "current_debit": {
+                        "$sum": {
+                            "$map": {
+                                "input": "$current_accounts",
+                                "as": "ca",
+                                "in": {
+                                    "$cond": [
+                                        {"$lt": ["$$ca.amount", 0]},
+                                        "$$ca.amount",
+                                        0,
+                                    ]
+                                },
+                            }
+                        }
                     },
-                    "total_credit": {
+                    "current_credit": {
+                        "$sum": {
+                            "$map": {
+                                "input": "$current_accounts",
+                                "as": "ca",
+                                "in": {
+                                    "$cond": [
+                                        {"$gt": ["$$ca.amount", 0]},
+                                        "$$ca.amount",
+                                        0,
+                                    ]
+                                },
+                            }
+                        }
+                    },
+                }
+            },
+            {
+                "$addFields": {
+                    "opening_balance": {
+                        "$round": [{"$add": ["$opening_balance", "$opening_txn"]}, 2]
+                    },
+                    "total_debit": {"$round": ["$current_debit", 2]},
+                    "total_credit": {"$round": ["$current_credit", 2]},
+                    "closing_balance": {
                         "$round": [
                             {
-                                "$sum": {
-                                    "$map": {
-                                        "input": "$filtered_accounts",
-                                        "as": "fa",
-                                        "in": {
-                                            "$cond": [
-                                                {"$gt": ["$$fa.amount", 0]},
-                                                "$$fa.amount",
-                                                0,
-                                            ]
-                                        },
-                                    }
-                                }
+                                "$add": [
+                                    {"$add": ["$opening_balance", "$opening_txn"]},
+                                    {"$add": ["$current_debit", "$current_credit"]},
+                                ]
                             },
                             2,
                         ]
@@ -697,21 +769,22 @@ async def view_ledger(
             },
             {
                 "$project": {
-                    "id_deleted": 0,
+                    "accounts": 0,
+                    "vouchars": 0,
+                    "opening_accounts": 0,
+                    "current_accounts": 0,
+                    "opening_txn": 0,
+                    "current_debit": 0,
+                    "current_credit": 0,
                     "tax_registration_type": 0,
-                    "tax_supply_type": 0,
                     "account_holder": 0,
                     "account_number": 0,
                     "bank_ifsc": 0,
                     "bank_name": 0,
                     "bank_branch": 0,
-                    "bank_account_holder": 0,
-                    "bank_account_number": 0,
                     "created_at": 0,
                     "updated_at": 0,
                     "is_revenue": 0,
-                    "filtered_accounts": 0,
-                    "filtered_vouchars": 0,
                     "is_deemed_positive": 0,
                     "alias": 0,
                     "image": 0,
@@ -719,14 +792,12 @@ async def view_ledger(
                     "parent_id": 0,
                     "company_id": 0,
                     "user_id": 0,
-                    "is_deleted": 0,
                     "mailing_name": 0,
                     "mailing_address": 0,
                     "mailing_state": 0,
                     "mailing_country": 0,
                     "mailing_pincode": 0,
-                    "accounts": 0,
-                },
+                }
             },
         ]
     ).to_list(length=1)

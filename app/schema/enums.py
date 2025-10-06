@@ -4,11 +4,8 @@ from enum import Enum
 class UserTypeEnum(str, Enum):
     ADMIN = "admin"
     USER = "user"
+    # SUBUSER = "sub-user"
 
-
-class UserRole(str, Enum):
-    STOCKIST = "Stockist"
-    CHEMIST = "Chemist"
 
 class Status(str, Enum):
     PENDING = "Pending"
@@ -29,8 +26,3 @@ class PaymentMode(str, Enum):
 class BalanceType(str, Enum):
     DEBIT = "Debit"
     CREDIT = "Credit"
-
-
-class StockMovementTypeEnum(str, Enum):
-    IN = "IN"
-    OUT = "OUT"

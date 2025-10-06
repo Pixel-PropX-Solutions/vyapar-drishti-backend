@@ -245,6 +245,7 @@ async def createVouchar(
                             else party_ledger["_id"]
                         ),
                         "amount": entry.amount,
+                        "order_index": entry.order_index,  # assign incremental order index
                     }
                     await accounting_repo.new(Accounting(**entry_data))
 
@@ -255,6 +256,7 @@ async def createVouchar(
                         "ledger": entry.ledger,
                         "ledger_id": entry.ledger_id,
                         "amount": entry.amount,
+                        "order_index": entry.order_index,  # assign incremental order index
                     }
                     await accounting_repo.new(Accounting(**entry_data))
 
@@ -277,6 +279,7 @@ async def createVouchar(
                     "tax_amount": 0,
                     "hsn_code": "",
                     "unit": item.unit if item.unit else "",
+                    "order_index": item.order_index,  # assign incremental order index
                 }
                 await inventory_repo.new(InventoryItem(**item_data))
 
@@ -420,6 +423,7 @@ async def updateVouchar(
                     "ledger": entry.ledger,
                     "ledger_id": entry.ledger_id,
                     "amount": entry.amount,
+                    "order_index": entry.order_index,
                 }
 
                 if existing_acc:
@@ -474,6 +478,7 @@ async def updateVouchar(
                     "total_amount": item.total_amount,
                     "godown": item.godown if item.godown else "",
                     "godown_id": item.godown_id if item.godown_id else "",
+                    "order_index": item.order_index,
                 }
                 if existing_item:
                     await inventory_repo.update_one(
@@ -524,7 +529,6 @@ async def createVoucharWithTAX(
     vouchar: VoucherWithTAXCreate,
     current_user: TokenData = Depends(get_current_user),
 ):
-    print("Creating vouchar with TAX:", vouchar)
     if current_user.user_type != "user" and current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 
@@ -632,6 +636,7 @@ async def createVoucharWithTAX(
                             else party_ledger["_id"]
                         ),
                         "amount": entry.amount,
+                        "order_index": entry.order_index,
                     }
                     await accounting_repo.new(Accounting(**entry_data))
 
@@ -642,6 +647,7 @@ async def createVoucharWithTAX(
                         "ledger": entry.ledger,
                         "ledger_id": entry.ledger_id,
                         "amount": entry.amount,
+                        "order_index": entry.order_index,
                     }
                     await accounting_repo.new(Accounting(**entry_data))
 
@@ -664,6 +670,7 @@ async def createVoucharWithTAX(
                     "tax_amount": item.tax_amount if item.tax_amount else None,
                     "hsn_code": item.hsn_code if item.hsn_code else None,
                     "unit": item.unit if item.unit else None,
+                    "order_index": item.order_index,
                 }
                 await inventory_repo.new(InventoryItem(**item_data))
 
@@ -832,6 +839,7 @@ async def updateVoucharWithTAX(
                     "ledger": entry.ledger,
                     "ledger_id": entry.ledger_id,
                     "amount": entry.amount,
+                    "order_index": entry.order_index,
                 }
 
                 if existing_acc:
@@ -894,6 +902,7 @@ async def updateVoucharWithTAX(
                     "total_amount": item.total_amount,
                     "godown": item.godown if item.godown else "",
                     "godown_id": item.godown_id if item.godown_id else "",
+                    "order_index": item.order_index,
                 }
 
                 if existing_item:
@@ -1030,7 +1039,8 @@ async def getVouchar(
                     "from": "Inventory",
                     "let": {"vouchar_id": "$_id"},
                     "pipeline": [
-                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}}
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                        {"$sort": {"order_index": 1}},
                     ],
                     "as": "inventory",
                 }
@@ -1050,7 +1060,8 @@ async def getVouchar(
                     "from": "Accounting",
                     "let": {"vouchar_id": "$_id"},
                     "pipeline": [
-                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}}
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                         {"$sort": {"order_index": 1}},
                     ],
                     "as": "accounting_entries",
                 }
@@ -1107,7 +1118,7 @@ async def getTimeline(
 
     if userSettings is None:
         raise http_exception.ResourceNotFoundException(
-            detail="User Settings Not Found. Please create user settings first."
+            detail="User Settings Not Found. Please contact support."
         )
 
     page = Page(page=page_no, limit=limit)
@@ -1118,6 +1129,184 @@ async def getTimeline(
         search=search,
         company_id=current_user.current_company_id,
         category=category,
+        pagination=page_request,
+        start_date=start_date,
+        end_date=end_date,
+        sort=sort,
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": result,
+    }
+
+
+@Vouchar.get(
+    "/get/hsn/summary",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getHsnSummary(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(""),
+    search: str = "",
+    category: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(ge=10, le=sys.maxsize),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type not in ["user", "admin"]:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await vouchar_repo.viewHSNSummary(
+        search=search,
+        company_id=current_user.current_company_id,
+        category=category,
+        pagination=page_request,
+        start_date=start_date,
+        end_date=end_date,
+        sort=sort,
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": result,
+    }
+
+
+@Vouchar.get(
+    "/get/summary/stats",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getSummaryStats(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(""),
+    start_date: str = "",
+    end_date: str = "",
+):
+    if current_user.user_type not in ["user", "admin"]:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    result = await vouchar_repo.HSNSummaryStats(
+        company_id=current_user.current_company_id,
+        start_date=start_date,
+        end_date=end_date,
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": result,
+    }
+
+
+@Vouchar.get(
+    "/get/party/summary",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getPartySummary(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(""),
+    search: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(ge=10, le=sys.maxsize),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type not in ["user", "admin"]:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await vouchar_repo.viewPartySummary(
+        search=search,
+        company_id=current_user.current_company_id,
+        pagination=page_request,
+        start_date=start_date,
+        end_date=end_date,
+        sort=sort,
+        current_user=current_user,
+    )
+
+    return {
+        "success": True,
+        "message": "Data Fetched Successfully...",
+        "data": result,
+    }
+
+
+@Vouchar.get(
+    "/get/invoice/summary",
+    response_class=ORJSONResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def getInvoiceSummary(
+    current_user: TokenData = Depends(get_current_user),
+    company_id: str = Query(""),
+    search: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(ge=10, le=sys.maxsize),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type not in ["user", "admin"]:
+        raise http_exception.CredentialsInvalidException()
+
+    userSettings = await user_settings_repo.findOne({"user_id": current_user.user_id})
+
+    if userSettings is None:
+        raise http_exception.ResourceNotFoundException(
+            detail="User Settings Not Found. Please contact support."
+        )
+
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
+
+    result = await vouchar_repo.viewBillSummary(
+        search=search,
+        company_id=current_user.current_company_id,
         pagination=page_request,
         start_date=start_date,
         end_date=end_date,
@@ -1170,20 +1359,15 @@ async def print_invoice(
                     "as": "company",
                 }
             },
-            {
-                "$lookup": {
-                    "from": "Accounting",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
-                    "as": "accounting_entries",
-                }
-            },
             # Attach inventory
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                        {"$sort": {"order_index": 1}},
+                    ],
                     "as": "inventory",
                 }
             },
@@ -1197,7 +1381,6 @@ async def print_invoice(
             },
             {"$unwind": {"path": "$company", "preserveNullAndEmptyArrays": True}},
             {"$unwind": {"path": "$party_details", "preserveNullAndEmptyArrays": True}},
-            {"$project": {"accounting_entries": 0}},
         ]
     ).to_list(length=1)
 
@@ -1226,7 +1409,7 @@ async def print_invoice(
 
     grand_total = invoice.get("grand_total", 0)
     total_words = num2words(grand_total, lang="en_IN").title() + " Rupees Only"
-    formatted_date =  invoice.get("date", "")[:10] if invoice.get("date", "") else ""
+    formatted_date = invoice.get("date", "")[:10] if invoice.get("date", "") else ""
 
     # Template variables
     template_vars = {
@@ -1345,7 +1528,7 @@ async def print_invoice_tax(
             {
                 "$addFields": {
                     "inventory": {
-                        "$sortArray": {"input": "$inventory", "sortBy": {"created_at": 1}}
+                        "$sortArray": {"input": "$inventory", "sortBy": {"order_index": 1}}
                     }
                 }
             },
@@ -1409,7 +1592,7 @@ async def print_invoice_tax(
         current_user=current_user,
     )
 
-    formatted_date =  invoice.get("date", "")[:10] if invoice.get("date", "") else ""
+    formatted_date = invoice.get("date", "")[:10] if invoice.get("date", "") else ""
     # Template variables
     template_vars = {
         "invoice": {
@@ -1567,8 +1750,11 @@ async def print_receipt(
             {
                 "$lookup": {
                     "from": "Accounting",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                         {"$sort": {"order_index": 1}},
+                    ],
                     "as": "accounting_entries",
                 }
             },
@@ -1633,7 +1819,7 @@ async def print_receipt(
     else:
         total_words = num2words(total_int, lang="en_IN").title() + " Rupees Only"
 
-    formatted_date =  invoice.get("date", "")[:10] if invoice.get("date", "") else ""
+    formatted_date = invoice.get("date", "")[:10] if invoice.get("date", "") else ""
 
     template_vars = {
         "invoice": {
@@ -1705,8 +1891,11 @@ async def print_payment(
             {
                 "$lookup": {
                     "from": "Accounting",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                         {"$sort": {"order_index": 1}},
+                    ],
                     "as": "accounting_entries",
                 }
             },
@@ -1781,7 +1970,7 @@ async def print_payment(
         total_words = num2words(total_int, lang="en_IN").title() + " Rupees Only"
 
     # Template variables
-    formatted_date =  invoice.get("date", "")[:10] if invoice.get("date", "") else ""
+    formatted_date = invoice.get("date", "")[:10] if invoice.get("date", "") else ""
 
     # Extract year from "2025-05-01" style date string
     year_val = ""
@@ -1874,16 +2063,22 @@ async def get_vouchar(
             {
                 "$lookup": {
                     "from": "Accounting",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                         {"$sort": {"order_index": 1}},
+                    ],
                     "as": "accounting",
                 }
             },
             {
                 "$lookup": {
                     "from": "Inventory",
-                    "localField": "_id",
-                    "foreignField": "vouchar_id",
+                    "let": {"vouchar_id": "$_id"},
+                    "pipeline": [
+                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
+                        {"$sort": {"order_index": 1}},
+                    ],
                     "as": "inventory",
                 }
             },
@@ -1922,10 +2117,7 @@ async def get_vouchar(
                     "party_name": 1,
                     "party_name_id": 1,
                     "narration": 1,
-                    # "amount": "$ledger_entries.amount",
                     "balance_type": 1,
-                    # "ledger_name": "$ledger_entries.ledgername',",
-                    # "is_deemed_positive": "$ledger_entries.is_deemed_positive",
                     "ledger_entries": 1,
                     "created_at": 1,
                 }
