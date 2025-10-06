@@ -35,8 +35,8 @@ async def createGroup(
     accounting_group_name: str = Form(...),  # Name of the group
     company_id: str = Form(...),  # Company ID to which the group belongs
     description: Optional[str] = Form(None),  # Description of the group
-    image: UploadFile = File(None),  # Optional image for the group
     parent: str = Form(None),
+    parent_id: str = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -51,33 +51,14 @@ async def createGroup(
             detail="User Settings Not Found. Please contact support."
         )
 
-    image_url = None
-    if image:
-        if image.content_type not in [
-            "image/jpeg",
-            "image/jpg",
-            "image/png",
-            "image/gif",
-        ]:
-            raise http_exception.BadRequestException(
-                detail="Invalid image type. Only JPEG, JPG, PNG, and GIF are allowed."
-            )
-        if hasattr(image, "size") and image.size > 5 * 1024 * 1024:
-            raise http_exception.BadRequestException(
-                detail="File size exceeds the 5 MB limit."
-            )
-        upload_result = await cloudinary_client.upload_file(image)
-        image_url = upload_result["url"]
-
     group_data = {
         "accounting_group_name": accounting_group_name,
         "user_id": current_user.user_id,
         "company_id": current_user.current_company_id or userSettings["current_company_id"],
         "description": description,
-        "image": image_url,
         "is_deleted": False,
         "parent": parent,
-        "parent_id": parent,  # Assuming parent_id is the same as parent for now
+        "parent_id": parent_id,
     }
 
     response = await accounting_group_repo.new(AccountingGroup(**group_data))
@@ -194,7 +175,8 @@ async def view_group(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         }
     )
 
@@ -233,7 +215,8 @@ async def view_all_groups(
                 "$match": {
                     "$or": [
                         {
-                            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+                            "company_id": current_user.current_company_id
+                            or userSettings["current_company_id"],
                             "user_id": current_user.user_id,
                         },
                         {
@@ -269,7 +252,6 @@ async def updateGroup(
     accounting_group_name: str = Form(...),  # Name of the group
     company_id: str = Form(...),  # Company ID to which the group belongs
     description: Optional[str] = Form(None),  # Description of the group
-    image: UploadFile = File(None),  # Optional image for the group
     parent: str = Form(None),
     current_user: TokenData = Depends(get_current_user),
 ):
@@ -289,7 +271,8 @@ async def updateGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
             "is_deleted": False,
         },
     )
@@ -298,24 +281,6 @@ async def updateGroup(
             detail="Group Not Found. Please check the group ID."
         )
 
-    image_url = None
-    if image:
-        if image.content_type not in [
-            "image/jpeg",
-            "image/jpg",
-            "image/png",
-            "image/gif",
-        ]:
-            raise http_exception.BadRequestException(
-                detail="Invalid image type. Only JPEG, JPG, PNG, and GIF are allowed."
-            )
-        if hasattr(image, "size") and image.size > 5 * 1024 * 1024:
-            raise http_exception.BadRequestException(
-                detail="File size exceeds the 5 MB limit."
-            )
-        upload_result = await cloudinary_client.upload_file(image)
-        image_url = upload_result["url"]
-
     update_fields = {
         "is_deleted": False,
         "description": description,
@@ -323,14 +288,13 @@ async def updateGroup(
         "parent": parent,
         "parent_id": parent,  # Assuming parent_id is the same as parent for now
     }
-    if image:
-        update_fields["image"] = image_url
 
     await accounting_group_repo.update_one(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         },
         {"$set": update_fields},
     )
@@ -380,7 +344,8 @@ async def deleteGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         },
     )
     if groupExists is None:
@@ -393,7 +358,8 @@ async def deleteGroup(
         {
             "parent_id": group_id,
             "user_id": current_user.user_id,
-            "company_id": current_user.current_company_id or userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         },
     )
 
@@ -406,7 +372,8 @@ async def deleteGroup(
         {
             "_id": group_id,
             "user_id": current_user.user_id,
-            "company_id":current_user.current_company_id or  userSettings["current_company_id"],
+            "company_id": current_user.current_company_id
+            or userSettings["current_company_id"],
         },
     )
 

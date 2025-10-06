@@ -3,7 +3,6 @@
 # from fastapi import APIRouter
 # from app.schema.token import TokenData
 # from app.oauth2 import get_current_user
-# from app.schema.enums import UserRole
 
 # # from app.database.models.common import Username
 # import app.http_exception as http_exception

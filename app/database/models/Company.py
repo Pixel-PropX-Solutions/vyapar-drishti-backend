@@ -30,7 +30,6 @@ class Company(BaseModel):
     tin: Optional[str] = ""
     website: Optional[str] = None
     is_deleted: bool = False
-    # is_selected: bool = False
 
 
 class CompanyDB(Company):
@@ -64,4 +63,3 @@ class CompanyCreate(BaseModel):
     tin: Optional[str] = ""
     website: Optional[str] = None
     is_deleted: bool = False
-    # is_selected: bool = False

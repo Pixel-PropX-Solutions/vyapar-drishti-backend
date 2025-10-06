@@ -7,15 +7,21 @@ from pydantic import BaseModel, Field
 
 class UserPermissions(BaseModel):
     create_vouchers: bool = True
-    # delete_ledgers: bool = False
+    # update_vouchers: bool = True
+    # delete_vouchers: bool = True
+    # create_ledgers: bool = True
+    # update_ledgers: bool = True
+    # delete_ledgers: bool = True
+    # create_stock_items: bool = True
+    # update_stock_items: bool = True
+    # delete_stock_items: bool = True
     # view_reports: bool = True
-    # export_data: bool = False
-    # approve_vouchers: bool = False
+    # export_data: bool = True
+    # print_data: bool = True
 
 
 class UIPreferences(BaseModel):
     theme: str = "light"  # or 'dark'
-    # default_voucher_type: Optional[str] = "Sales"
     # autosave_interval: int = 5  # in minutes
     # language: str = "en"
 
@@ -23,6 +29,7 @@ class UIPreferences(BaseModel):
 class UserSettings(BaseModel):
     user_id: str
     current_company_id: str
+    # company_id_list: Optional[list[str]] = []
     current_company_name: str
     role: str = "User"
 

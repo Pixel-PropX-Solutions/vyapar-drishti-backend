@@ -1,20 +1,16 @@
-from fastapi import FastAPI, status, Depends, File, UploadFile, Form
+from fastapi import FastAPI, status, Depends
 from fastapi.responses import ORJSONResponse
 from fastapi import APIRouter
 from app.schema.token import TokenData
 from app.oauth2 import get_current_user
-from app.schema.enums import UserRole
 
 import app.http_exception as http_exception
 from app.database.repositories.taxModelRepo import tax_model_repo
 from app.database.repositories.user import user_repo
 from app.database.models.TaxModel import TaxModel
 import re
-import asyncio
 from collections import defaultdict
 
-from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
-from fastapi import Query
 
 admin = APIRouter()
 
@@ -72,9 +68,7 @@ async def get_current_user_tax_model(
 
 
 def generate_gst_summary(items: list, party_details: dict, company: dict):
-    print("Mailing State", party_details.get("mailing_state", ""))
-    print(" State", company.get("state", ""))
-    print("")
+
     is_same_state = party_details.get("mailing_state", "") == company.get("state", "")
 
     tax_summary = defaultdict(
@@ -227,7 +221,7 @@ async def generate_tax_summary(
 ):
     tax_model = await get_current_user_tax_model(current_user)
     if tax_model["tax_code"] == "GST":
-        totals, invoice_taxes, tax_headers = generate_hsn_gst_summary(
+        totals, invoice_taxes, tax_headers = generate_gst_summary(
             items=items, party_details=party_details, company=company
         )
         return totals, invoice_taxes, tax_headers, tax_model["tax_code"]
