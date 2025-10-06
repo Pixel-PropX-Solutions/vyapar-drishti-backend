@@ -77,14 +77,16 @@ envVarGroups:
 
 services:
 - type: web
-  name: Vyapar Drishti Previews
+  name: Vyapar Drishti
   runtime: docker
   repo: https://github.com/tohidkhan2464/vyapar-drishti-backend
-  branch: dev
-  plan: free
+  plan: starter
   region: oregon
   dockerfilePath: ./Dockerfile
   autoDeployTrigger: "off"
+  healthCheckPath: /health
+  previews:
+    generation: automatic
 
   envVars:
   - key: GEMINI_API_KEY
