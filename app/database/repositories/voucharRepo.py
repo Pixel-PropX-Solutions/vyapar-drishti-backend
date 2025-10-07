@@ -195,40 +195,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             },
             {
                 "$addFields": {
-                    "debit": {
-                        "$sum": {
-                            "$map": {
-                                "input": "$accounting",
-                                "as": "entry",
-                                "in": {
-                                    "$cond": [
-                                        {"$gt": ["$$entry.amount", 0]},
-                                        "$$entry.amount",
-                                        0,
-                                    ]
-                                },
-                            }
-                        }
-                    },
-                    "credit": {
-                        "$sum": {
-                            "$map": {
-                                "input": "$accounting",
-                                "as": "entry",
-                                "in": {
-                                    "$cond": [
-                                        {"$lt": ["$$entry.amount", 0]},
-                                        {"$abs": "$$entry.amount"},
-                                        0,
-                                    ]
-                                },
-                            }
-                        }
-                    },
-                }
-            },
-            {
-                "$addFields": {
                     "ledger_entries": {
                         "$map": {
                             "input": {
@@ -355,6 +321,38 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                         {"$limit": pagination.paging.limit},
                     ],
                     "count": [{"$count": "count"}],
+                    "totals": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "total_debit": {
+                                    "$sum": {
+                                        "$cond": [
+                                            {"$eq": ["$is_deemed_positive", True]},
+                                            "$amount",
+                                            0,
+                                        ]
+                                    },
+                                },
+                                "total_credit": {
+                                    "$sum": {
+                                        "$cond": [
+                                            {"$eq": ["$is_deemed_positive", False]},
+                                            "$amount",
+                                            0,
+                                        ]
+                                    },
+                                },
+                            }
+                        },
+                        {
+                            "$project": {
+                                "_id": 0,
+                                "total_debit": {"$round": ["$total_debit", 2]},
+                                "total_credit": {"$round": ["$total_credit", 2]},
+                            }
+                        },
+                    ],
                 }
             },
         ]
@@ -362,15 +360,26 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         res = [doc async for doc in self.collection.aggregate(pipeline)]
         docs = res[0]["docs"]
         count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
-        # pprint.pprint(docs, indent=2, width=120)
+        totals = res[0]["totals"][0] if len(res[0]["totals"]) > 0 else {}
+        # pprint.pprint(docs, indent=2, width=120)        
+        
+        class Meta4(Page):
+            total: int
+            total_debit: float = 0
+            total_credit: float = 0
 
-        return PaginatedResponse(
+        class PaginatedResponse4(BaseModel):
+            docs: List[Any]
+            meta: Meta4
+
+        return PaginatedResponse4(
             docs=docs,
-            meta=Meta(
+            meta=Meta4(
                 page=pagination.paging.page,
                 limit=pagination.paging.limit,
                 total=count,
-                unique=[],
+                total_debit=round(totals.get("total_debit", 0), 2),
+                total_credit=round(totals.get("total_credit", 0), 2),
             ),
         )
 
