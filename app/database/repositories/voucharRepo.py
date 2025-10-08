@@ -374,827 +374,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
             ),
         )
 
-    async def viewTimeline(
-        self,
-        search: str,
-        company_id: str,
-        pagination: PageRequest,
-        sort: Sort,
-        category: str = "",
-        current_user: TokenData = Depends(get_current_user),
-        start_date: datetime = None,
-        end_date: datetime = None,
-    ):
-        start_date = start_date[:10]
-        end_date = end_date[:10]
-        filter_params = {
-            "user_id": current_user.user_id,
-            "company_id": company_id,
-        }
-
-        if start_date not in ["", None] and end_date not in ["", None]:
-            filter_params["date"] = {"$gte": start_date, "$lte": end_date}
-
-        pipeline = [
-            {"$match": filter_params},
-            # Join with Inventory and calculate total_qty for distributing additional_charge
-            {
-                "$lookup": {
-                    "from": "Inventory",
-                    "let": {"vouchar_id": "$_id"},
-                    "pipeline": [
-                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
-                        {
-                            "$group": {
-                                "_id": None,
-                                "items": {"$push": "$$ROOT"},
-                                "total_qty": {"$sum": "$quantity"},
-                            }
-                        },
-                    ],
-                    "as": "inventory_info",
-                }
-            },
-            {"$unwind": {"path": "$inventory_info"}},
-            {"$unwind": {"path": "$inventory_info.items"}},
-            # Flatten inventory + voucher fields
-            {
-                "$addFields": {
-                    "item": "$inventory_info.items.item",
-                    "item_id": "$inventory_info.items.item_id",
-                    "unit": "$inventory_info.items.unit",
-                    "quantity": "$inventory_info.items.quantity",
-                    "is_purchase": {
-                        "$cond": [{"$eq": ["$voucher_type", "Purchase"]}, 1, 0]
-                    },
-                    "is_sale": {"$cond": [{"$eq": ["$voucher_type", "Sales"]}, 1, 0]},
-                    "date": "$date",
-                    "total_qty": "$inventory_info.total_qty",
-                    # per-unit additional charge
-                    "per_unit_additional": {
-                        "$cond": [
-                            {"$gt": ["$inventory_info.total_qty", 0]},
-                            {
-                                "$cond": [
-                                    {"$gt": ["$additional_charge", 0]},
-                                    {
-                                        "$divide": [
-                                            "$additional_charge",
-                                            "$inventory_info.total_qty",
-                                        ]
-                                    },
-                                    0,
-                                ]
-                            },
-                            0,
-                        ]
-                    },
-                }
-            },
-            # Adjusted total amount (item.total_amount + distributed additional charge)
-            {
-                "$addFields": {
-                    "per_item_additional": {
-                        "$multiply": ["$per_unit_additional", "$quantity"]
-                    },
-                    "adj_total_amount": {
-                        "$add": [
-                            "$inventory_info.items.total_amount",
-                            {"$multiply": ["$per_unit_additional", "$quantity"]},
-                        ]
-                    },
-                }
-            },
-            # 🔹 Join with StockItem to fetch master opening balances
-            {
-                "$lookup": {
-                    "from": "StockItem",
-                    "let": {"item_id": "$item_id"},
-                    "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$item_id"]}}}],
-                    "as": "stock_item",
-                }
-            },
-            {"$unwind": {"path": "$stock_item", "preserveNullAndEmptyArrays": True}},
-            # Group per item
-            {
-                "$group": {
-                    "_id": "$item_id",
-                    "item_id": {"$first": "$item_id"},
-                    "item": {"$first": "$item"},
-                    "unit": {"$first": "$unit"},
-                    "stock_opening_qty": {
-                        "$first": {"$ifNull": ["$stock_item.opening_balance", 0]}
-                    },
-                    "stock_opening_val": {
-                        "$first": {"$ifNull": ["$stock_item.opening_value", 0]}
-                    },
-                    "stock_opening_rate": {
-                        "$first": {"$ifNull": ["$stock_item.opening_rate", 0]}
-                    },
-                    # Opening balances (before start_date, from vouchers)
-                    "opening_qty_vouchers": {
-                        "$sum": {
-                            "$cond": [
-                                {"$lt": ["$date", start_date]},
-                                {
-                                    "$cond": [
-                                        {"$eq": ["$is_purchase", 1]},
-                                        "$quantity",
-                                        {"$multiply": [-1, "$quantity"]},
-                                    ]
-                                },
-                                0,
-                            ]
-                        }
-                    },
-                    "opening_val_vouchers": {
-                        "$sum": {
-                            "$cond": [
-                                {"$lt": ["$date", start_date]},
-                                {
-                                    "$cond": [
-                                        {"$eq": ["$is_purchase", 1]},
-                                        "$adj_total_amount",
-                                        {"$multiply": [-1, "$adj_total_amount"]},
-                                    ]
-                                },
-                                0,
-                            ]
-                        }
-                    },
-                    # Inwards (Purchases in date range)
-                    "inwards_qty": {
-                        "$sum": {
-                            "$cond": [
-                                {
-                                    "$and": [
-                                        {"$gte": ["$date", start_date]},
-                                        {"$lte": ["$date", end_date]},
-                                        {"$eq": ["$is_purchase", 1]},
-                                    ]
-                                },
-                                "$quantity",
-                                0,
-                            ]
-                        }
-                    },
-                    "inwards_val": {
-                        "$sum": {
-                            "$cond": [
-                                {
-                                    "$and": [
-                                        {"$gte": ["$date", start_date]},
-                                        {"$lte": ["$date", end_date]},
-                                        {"$eq": ["$is_purchase", 1]},
-                                    ]
-                                },
-                                "$adj_total_amount",
-                                0,
-                            ]
-                        }
-                    },
-                    # Outwards (Sales in date range)
-                    "outwards_qty": {
-                        "$sum": {
-                            "$cond": [
-                                {
-                                    "$and": [
-                                        {"$gte": ["$date", start_date]},
-                                        {"$lte": ["$date", end_date]},
-                                        {"$eq": ["$is_sale", 1]},
-                                    ]
-                                },
-                                "$quantity",
-                                0,
-                            ]
-                        }
-                    },
-                    "outwards_val": {
-                        "$sum": {
-                            "$cond": [
-                                {
-                                    "$and": [
-                                        {"$gte": ["$date", start_date]},
-                                        {"$lte": ["$date", end_date]},
-                                        {"$eq": ["$is_sale", 1]},
-                                    ]
-                                },
-                                "$adj_total_amount",
-                                0,
-                            ]
-                        }
-                    },
-                }
-            },
-            # 🔹 Add StockItem opening + voucher opening together
-            {
-                "$addFields": {
-                    "opening_qty": {
-                        "$round": [
-                            {
-                                "$ifNull": [
-                                    {
-                                        "$add": [
-                                            "$stock_opening_qty",
-                                            "$opening_qty_vouchers",
-                                        ]
-                                    },
-                                    0,
-                                ]
-                            },
-                            2,
-                        ]
-                    },
-                    "opening_val": {
-                        "$round": [
-                            {
-                                "$ifNull": [
-                                    {
-                                        "$add": [
-                                            "$stock_opening_val",
-                                            "$opening_val_vouchers",
-                                        ]
-                                    },
-                                    0,
-                                ]
-                            },
-                            2,
-                        ]
-                    },
-                }
-            },
-            # Recalculate opening_rate with new qty/val
-            {
-                "$addFields": {
-                    "closing_qty": {
-                        "$round": [
-                            {
-                                "$ifNull": [
-                                    {
-                                        "$subtract": [
-                                            {
-                                                "$add": [
-                                                    "$opening_qty",
-                                                    "$inwards_qty",
-                                                ]
-                                            },
-                                            "$outwards_qty",
-                                        ]
-                                    },
-                                    0,
-                                ]
-                            },
-                            2,
-                        ]
-                    },
-                    "opening_rate": {
-                        "$cond": [
-                            {"$eq": ["$opening_qty", 0]},
-                            {"$ifNull": ["$stock_opening_rate", 0]},
-                            {
-                                "$round": [
-                                    {
-                                        "$ifNull": [
-                                            {"$divide": ["$opening_val", "$opening_qty"]},
-                                            0,
-                                        ]
-                                    },
-                                    2,
-                                ]
-                            },
-                        ]
-                    },
-                    "inwards_rate": {
-                        "$cond": [
-                            {"$eq": ["$inwards_qty", 0]},
-                            0,
-                            {
-                                "$round": [
-                                    {"$divide": ["$inwards_val", "$inwards_qty"]},
-                                    2,
-                                ]
-                            },
-                        ]
-                    },
-                    "outwards_rate": {
-                        "$cond": [
-                            {"$eq": ["$outwards_qty", 0]},
-                            0,
-                            {
-                                "$round": [
-                                    {"$divide": ["$outwards_val", "$outwards_qty"]},
-                                    2,
-                                ]
-                            },
-                        ]
-                    },
-                }
-            },
-            {
-                "$addFields": {
-                    # Gross Profit = OutwardsVal – (OutwardsQty × AvgCostRate)
-                    "avg_cost_rate": {
-                        "$cond": [
-                            {"$gt": [{"$add": ["$opening_qty", "$inwards_qty"]}, 0]},
-                            {
-                                "$round": [
-                                    {
-                                        "$divide": [
-                                            {"$add": ["$opening_val", "$inwards_val"]},
-                                            {"$add": ["$opening_qty", "$inwards_qty"]},
-                                        ]
-                                    },
-                                    2,
-                                ]
-                            },
-                            0,
-                        ]
-                    },
-                }
-            },
-            {
-                "$addFields": {
-                    "gross_profit": {
-                        "$round": [
-                            {
-                                "$multiply": [
-                                    "$outwards_qty",
-                                    {"$subtract": ["$outwards_rate", "$avg_cost_rate"]},
-                                ]
-                            },
-                            2,
-                        ]
-                    },
-                    "profit_percent": {
-                        "$cond": [
-                            {"$gt": ["$outwards_val", 0]},
-                            {
-                                "$round": [
-                                    {
-                                        "$multiply": [
-                                            {
-                                                "$divide": [
-                                                    {
-                                                        "$multiply": [
-                                                            "$outwards_qty",
-                                                            {
-                                                                "$subtract": [
-                                                                    "$outwards_rate",
-                                                                    "$avg_cost_rate",
-                                                                ]
-                                                            },
-                                                        ]
-                                                    },
-                                                    "$outwards_val",
-                                                ]
-                                            },
-                                            100,
-                                        ]
-                                    },
-                                    2,
-                                ]
-                            },
-                            0,
-                        ]
-                    },
-                    "closing_val": {"$multiply": ["$closing_qty", "$avg_cost_rate"]},
-                }
-            },
-            {
-                "$project": {
-                    "item_id": 1,
-                    "item": 1,
-                    "unit": 1,
-                    "opening_qty": 1,
-                    "opening_rate": 1,
-                    "opening_val": 1,
-                    "inwards_qty": 1,
-                    "inwards_rate": 1,
-                    "inwards_val": 1,
-                    "outwards_qty": 1,
-                    "outwards_rate": 1,
-                    "outwards_val": 1,
-                    "closing_qty": 1,
-                    "closing_rate": "$avg_cost_rate",
-                    "closing_val": 1,
-                    "gross_profit": 1,
-                    "profit_percent": 1,
-                }
-            },
-            {"$sort": {"item": -1 if sort.sort_order == SortingOrder.ASC else 1}},
-            {
-                "$match": {
-                    **(
-                        {
-                            "$or": [
-                                {
-                                    "item": {
-                                        "$regex": f"{search}",
-                                        "$options": "i",
-                                    }
-                                },
-                            ]
-                        }
-                        if search not in ["", None]
-                        else {}
-                    ),
-                }
-            },
-            {
-                "$facet": {
-                    "docs": [
-                        {"$skip": (pagination.paging.page - 1) * pagination.paging.limit},
-                        {"$limit": pagination.paging.limit},
-                    ],
-                    "count": [{"$count": "count"}],
-                }
-            },
-        ]
-
-        meta_pipeline = [
-            {"$match": filter_params},
-            # Join with Inventory and calculate total_qty for distributing additional_charge
-            {
-                "$lookup": {
-                    "from": "Inventory",
-                    "let": {"vouchar_id": "$_id"},
-                    "pipeline": [
-                        {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
-                        {
-                            "$group": {
-                                "_id": None,
-                                "items": {"$push": "$$ROOT"},
-                                "total_qty": {"$sum": "$quantity"},
-                            }
-                        },
-                    ],
-                    "as": "inventory_info",
-                }
-            },
-            {"$unwind": {"path": "$inventory_info"}},
-            {"$unwind": {"path": "$inventory_info.items"}},
-            # Flatten inventory + voucher fields
-            {
-                "$addFields": {
-                    "item": "$inventory_info.items.item",
-                    "item_id": "$inventory_info.items.item_id",
-                    "unit": "$inventory_info.items.unit",
-                    "quantity": "$inventory_info.items.quantity",
-                    "rate": "$inventory_info.items.rate",
-                    "amount": "$inventory_info.items.amount",
-                    "is_purchase": {
-                        "$cond": [{"$eq": ["$voucher_type", "Purchase"]}, 1, 0]
-                    },
-                    "is_sale": {"$cond": [{"$eq": ["$voucher_type", "Sales"]}, 1, 0]},
-                    "date": "$date",
-                    "total_qty": "$inventory_info.total_qty",
-                    # per-unit additional charge
-                    "per_unit_additional": {
-                        "$cond": [
-                            {"$gt": ["$inventory_info.total_qty", 0]},
-                            {
-                                "$cond": [
-                                    {"$gt": ["$additional_charge", 0]},
-                                    {
-                                        "$divide": [
-                                            "$additional_charge",
-                                            "$inventory_info.total_qty",
-                                        ]
-                                    },
-                                    0,
-                                ]
-                            },
-                            0,
-                        ]
-                    },
-                }
-            },
-            # Adjusted total amount (item.total_amount + distributed additional charge)
-            {
-                "$addFields": {
-                    "per_item_additional": {
-                        "$multiply": ["$per_unit_additional", "$quantity"]
-                    },
-                    "adj_total_amount": {
-                        "$add": [
-                            "$inventory_info.items.total_amount",
-                            {"$multiply": ["$per_unit_additional", "$quantity"]},
-                        ]
-                    },
-                }
-            },
-            # 🔹 Join with StockItem to fetch master opening balances
-            {
-                "$lookup": {
-                    "from": "StockItem",
-                    "let": {"item_id": "$item_id"},
-                    "pipeline": [{"$match": {"$expr": {"$eq": ["$_id", "$$item_id"]}}}],
-                    "as": "stock_item",
-                }
-            },
-            {"$unwind": {"path": "$stock_item", "preserveNullAndEmptyArrays": True}},
-            # Group per item
-            {
-                "$group": {
-                    "_id": "$item_id",
-                    "item_id": {"$first": "$item_id"},
-                    "item": {"$first": "$item"},
-                    "unit": {"$first": "$unit"},
-                    "stock_opening_qty": {
-                        "$first": {"$ifNull": ["$stock_item.opening_balance", 0]}
-                    },
-                    "stock_opening_val": {
-                        "$first": {"$ifNull": ["$stock_item.opening_value", 0]}
-                    },
-                    "stock_opening_rate": {
-                        "$first": {"$ifNull": ["$stock_item.opening_rate", 0]}
-                    },
-                    # Opening balances (before start_date, from vouchers)
-                    "opening_qty_vouchers": {
-                        "$sum": {
-                            "$cond": [
-                                {"$lt": ["$date", start_date]},
-                                {
-                                    "$cond": [
-                                        {"$eq": ["$is_purchase", 1]},
-                                        "$quantity",
-                                        {"$multiply": [-1, "$quantity"]},
-                                    ]
-                                },
-                                0,
-                            ]
-                        }
-                    },
-                    "opening_val_vouchers": {
-                        "$sum": {
-                            "$cond": [
-                                {"$lt": ["$date", start_date]},
-                                {
-                                    "$cond": [
-                                        {"$eq": ["$is_purchase", 1]},
-                                        "$adj_total_amount",
-                                        {"$multiply": [-1, "$adj_total_amount"]},
-                                    ]
-                                },
-                                0,
-                            ]
-                        }
-                    },
-                    # Inwards (Purchases in date range)
-                    "inwards_qty": {
-                        "$sum": {
-                            "$cond": [
-                                {
-                                    "$and": [
-                                        {"$gte": ["$date", start_date]},
-                                        {"$lte": ["$date", end_date]},
-                                        {"$eq": ["$is_purchase", 1]},
-                                    ]
-                                },
-                                "$quantity",
-                                0,
-                            ]
-                        }
-                    },
-                    "inwards_val": {
-                        "$sum": {
-                            "$cond": [
-                                {
-                                    "$and": [
-                                        {"$gte": ["$date", start_date]},
-                                        {"$lte": ["$date", end_date]},
-                                        {"$eq": ["$is_purchase", 1]},
-                                    ]
-                                },
-                                "$adj_total_amount",
-                                0,
-                            ]
-                        }
-                    },
-                    # Outwards (Sales in date range)
-                    "outwards_qty": {
-                        "$sum": {
-                            "$cond": [
-                                {
-                                    "$and": [
-                                        {"$gte": ["$date", start_date]},
-                                        {"$lte": ["$date", end_date]},
-                                        {"$eq": ["$is_sale", 1]},
-                                    ]
-                                },
-                                "$quantity",
-                                0,
-                            ]
-                        }
-                    },
-                    "outwards_val": {
-                        "$sum": {
-                            "$cond": [
-                                {
-                                    "$and": [
-                                        {"$gte": ["$date", start_date]},
-                                        {"$lte": ["$date", end_date]},
-                                        {"$eq": ["$is_sale", 1]},
-                                    ]
-                                },
-                                "$adj_total_amount",
-                                0,
-                            ]
-                        }
-                    },
-                }
-            },
-            # 🔹 Add StockItem opening + voucher opening together
-            {
-                "$addFields": {
-                    "opening_qty": {
-                        "$round": [
-                            {
-                                "$ifNull": [
-                                    {
-                                        "$add": [
-                                            "$stock_opening_qty",
-                                            "$opening_qty_vouchers",
-                                        ]
-                                    },
-                                    0,
-                                ]
-                            },
-                            2,
-                        ]
-                    },
-                    "opening_val": {
-                        "$round": [
-                            {
-                                "$ifNull": [
-                                    {
-                                        "$add": [
-                                            "$stock_opening_val",
-                                            "$opening_val_vouchers",
-                                        ]
-                                    },
-                                    0,
-                                ]
-                            },
-                            2,
-                        ]
-                    },
-                }
-            },
-            # Recalculate opening_rate with new qty/val
-            {
-                "$addFields": {
-                    "closing_qty": {
-                        "$round": [
-                            {
-                                "$ifNull": [
-                                    {
-                                        "$subtract": [
-                                            {
-                                                "$add": [
-                                                    "$opening_qty",
-                                                    "$inwards_qty",
-                                                ]
-                                            },
-                                            "$outwards_qty",
-                                        ]
-                                    },
-                                    0,
-                                ]
-                            },
-                            2,
-                        ]
-                    },
-                    "inwards_rate": {
-                        "$cond": [
-                            {"$eq": ["$inwards_qty", 0]},
-                            0,
-                            {
-                                "$round": [
-                                    {
-                                        "$ifNull": [
-                                            {"$divide": ["$inwards_val", "$inwards_qty"]},
-                                            0,
-                                        ]
-                                    },
-                                    2,
-                                ]
-                            },
-                        ]
-                    },
-                    "outwards_rate": {
-                        "$cond": [
-                            {"$eq": ["$outwards_qty", 0]},
-                            0,
-                            {
-                                "$round": [
-                                    {"$divide": ["$outwards_val", "$outwards_qty"]},
-                                    2,
-                                ]
-                            },
-                        ]
-                    },
-                }
-            },
-            {
-                "$addFields": {
-                    # Gross Profit = OutwardsVal – (OutwardsQty × AvgCostRate)
-                    "avg_cost_rate": {
-                        "$cond": [
-                            {"$gt": [{"$add": ["$opening_qty", "$inwards_qty"]}, 0]},
-                            {
-                                "$round": [
-                                    {
-                                        "$divide": [
-                                            {"$add": ["$opening_val", "$inwards_val"]},
-                                            {"$add": ["$opening_qty", "$inwards_qty"]},
-                                        ]
-                                    },
-                                    2,
-                                ]
-                            },
-                            0,
-                        ]
-                    },
-                }
-            },
-            {
-                "$addFields": {
-                    "gross_profit": {
-                        "$round": [
-                            {
-                                "$multiply": [
-                                    "$outwards_qty",
-                                    {"$subtract": ["$outwards_rate", "$avg_cost_rate"]},
-                                ]
-                            },
-                            2,
-                        ]
-                    },
-                    "closing_val": {"$multiply": ["$closing_qty", "$avg_cost_rate"]},
-                }
-            },
-            {
-                "$project": {
-                    "item_id": 1,
-                    "opening_qty": 1,
-                    "opening_rate": 1,
-                    "opening_val": 1,
-                    "inwards_qty": 1,
-                    "inwards_rate": 1,
-                    "inwards_val": 1,
-                    "outwards_qty": 1,
-                    "outwards_rate": 1,
-                    "outwards_val": 1,
-                    "closing_qty": 1,
-                    "closing_rate": "$avg_cost_rate",
-                    "closing_val": 1,
-                    "gross_profit": 1,
-                }
-            },
-        ]
-
-        res = [doc async for doc in self.collection.aggregate(pipeline)]
-        totals_res = [doc async for doc in self.collection.aggregate(meta_pipeline)]
-        # print("totals_res", totals_res)
-        docs = res[0]["docs"]
-        opening_val = sum((doc.get("opening_val") or 0) for doc in totals_res)
-        inwards_val = sum((doc.get("inwards_val") or 0) for doc in totals_res)
-        outwards_val = sum((doc.get("outwards_val") or 0) for doc in totals_res)
-        closing_val = sum((doc.get("closing_val") or 0) for doc in totals_res)
-        gross_profit = sum((doc.get("gross_profit") or 0) for doc in totals_res)
-        profit_percent = gross_profit / outwards_val * 100 if outwards_val != 0 else 0
-
-        count = res[0]["count"][0]["count"] if len(res[0]["count"]) > 0 else 0
-
-        class Meta2(Page):
-            total: int
-            opening_val: float
-            inwards_val: float
-            outwards_val: float
-            closing_val: float
-            gross_profit: float
-            profit_percent: float
-
-        class PaginatedResponse2(BaseModel):
-            docs: List[Any]
-            meta: Meta2
-
-        return PaginatedResponse2(
-            docs=docs,
-            meta=Meta2(
-                page=pagination.paging.page,
-                limit=pagination.paging.limit,
-                total=count,
-                opening_val=opening_val,
-                inwards_val=inwards_val,
-                outwards_val=outwards_val,
-                closing_val=closing_val,
-                gross_profit=gross_profit,
-                profit_percent=profit_percent,
-            ),
-        )
-
     async def get_analytics_data(
         self,
         year: int,
@@ -1213,7 +392,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         match_stage = {
             "user_id": current_user.user_id,
             "company_id": company_id,
-            "date": {"$gte": start_date, "$lte": end_date},
         }
 
         # Compute total sales/purchase for the year
@@ -1571,10 +749,8 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         match_stage = {
             "user_id": current_user.user_id,
             "company_id": company_id,
-            "date": {"$gte": start_date, "$lte": end_date},
         }
 
-        # Compute total sales/purchase for the year
         pipeline_total = [
             {"$match": match_stage},
             {
@@ -1869,7 +1045,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
         match_stage = {
             "user_id": current_user.user_id,
             "company_id": company_id,
-            "date": {"$gte": start_date, "$lte": end_date},
         }
 
         # Compute total sales/purchase for the year
@@ -2140,7 +1315,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     }
                 )
         daily_data = convert_to_daily_data(final_result)
-        print("daily_data in voucher repo", daily_data)
         return daily_data
 
     async def viewHSNSummary(
@@ -2649,7 +1823,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
 
         pipeline = [
             {"$match": filter_params},
-
             # Join with Ledger (party details)
             {
                 "$lookup": {
@@ -2660,7 +1833,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                 }
             },
             {"$unwind": {"path": "$party", "preserveNullAndEmptyArrays": True}},
-
             # 🔹 Join with Inventory items
             {
                 "$lookup": {
@@ -2674,14 +1846,15 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                                 "total_amount": 1,
                                 "tax_amount": 1,
                                 # taxable_value = total_amount - tax_amount
-                                "taxable_value": {"$subtract": ["$total_amount", "$tax_amount"]},
+                                "taxable_value": {
+                                    "$subtract": ["$total_amount", "$tax_amount"]
+                                },
                             }
                         },
                     ],
                     "as": "inventory",
                 }
             },
-
             # 🔹 Aggregate totals from inventory
             {
                 "$addFields": {
@@ -2690,7 +1863,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "tax_amount": {"$sum": "$inventory.tax_amount"},
                 }
             },
-
             # Project the required fields
             {
                 "$project": {
@@ -2708,9 +1880,7 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     "created_at": 1,
                 }
             },
-
             {"$sort": sort_stage},
-
             # Search filter
             {
                 "$match": {
@@ -2754,7 +1924,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                     )
                 }
             },
-
             # Facet for pagination + totals
             {
                 "$facet": {
@@ -2776,7 +1945,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                 }
             },
         ]
-
 
         res = [doc async for doc in self.collection.aggregate(pipeline)]
         docs = res[0]["docs"]
