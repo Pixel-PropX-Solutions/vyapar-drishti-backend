@@ -1125,7 +1125,7 @@ async def getTimeline(
     sort = Sort(sort_field=sortField, sort_order=sortOrder)
     page_request = PageRequest(paging=page, sorting=sort)
 
-    result = await vouchar_repo.viewTimeline(
+    result = await stock_item_repo.viewTimeline(
         search=search,
         company_id=current_user.current_company_id,
         category=category,
