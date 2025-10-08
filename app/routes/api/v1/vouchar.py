@@ -245,7 +245,7 @@ async def createVouchar(
                             else party_ledger["_id"]
                         ),
                         "amount": entry.amount,
-                        "order_index": entry.order_index,  # assign incremental order index
+                        # "order_index": entry.order_index,  # assign incremental order index
                     }
                     await accounting_repo.new(Accounting(**entry_data))
 
@@ -256,7 +256,7 @@ async def createVouchar(
                         "ledger": entry.ledger,
                         "ledger_id": entry.ledger_id,
                         "amount": entry.amount,
-                        "order_index": entry.order_index,  # assign incremental order index
+                        # "order_index": entry.order_index,  # assign incremental order index
                     }
                     await accounting_repo.new(Accounting(**entry_data))
 
@@ -279,7 +279,7 @@ async def createVouchar(
                     "tax_amount": 0,
                     "hsn_code": "",
                     "unit": item.unit if item.unit else "",
-                    "order_index": item.order_index,  # assign incremental order index
+                    # "order_index": item.order_index,  # assign incremental order index
                 }
                 await inventory_repo.new(InventoryItem(**item_data))
 
@@ -423,7 +423,7 @@ async def updateVouchar(
                     "ledger": entry.ledger,
                     "ledger_id": entry.ledger_id,
                     "amount": entry.amount,
-                    "order_index": entry.order_index,
+                    # "order_index": entry.order_index,
                 }
 
                 if existing_acc:
@@ -478,7 +478,7 @@ async def updateVouchar(
                     "total_amount": item.total_amount,
                     "godown": item.godown if item.godown else "",
                     "godown_id": item.godown_id if item.godown_id else "",
-                    "order_index": item.order_index,
+                    # "order_index": item.order_index,
                 }
                 if existing_item:
                     await inventory_repo.update_one(
@@ -636,7 +636,7 @@ async def createVoucharWithTAX(
                             else party_ledger["_id"]
                         ),
                         "amount": entry.amount,
-                        "order_index": entry.order_index,
+                        # "order_index": entry.order_index,
                     }
                     await accounting_repo.new(Accounting(**entry_data))
 
@@ -647,7 +647,7 @@ async def createVoucharWithTAX(
                         "ledger": entry.ledger,
                         "ledger_id": entry.ledger_id,
                         "amount": entry.amount,
-                        "order_index": entry.order_index,
+                        # "order_index": entry.order_index,
                     }
                     await accounting_repo.new(Accounting(**entry_data))
 
@@ -670,7 +670,7 @@ async def createVoucharWithTAX(
                     "tax_amount": item.tax_amount if item.tax_amount else None,
                     "hsn_code": item.hsn_code if item.hsn_code else None,
                     "unit": item.unit if item.unit else None,
-                    "order_index": item.order_index,
+                    # "order_index": item.order_index,
                 }
                 await inventory_repo.new(InventoryItem(**item_data))
 
@@ -839,7 +839,7 @@ async def updateVoucharWithTAX(
                     "ledger": entry.ledger,
                     "ledger_id": entry.ledger_id,
                     "amount": entry.amount,
-                    "order_index": entry.order_index,
+                    # "order_index": entry.order_index,
                 }
 
                 if existing_acc:
@@ -902,7 +902,7 @@ async def updateVoucharWithTAX(
                     "total_amount": item.total_amount,
                     "godown": item.godown if item.godown else "",
                     "godown_id": item.godown_id if item.godown_id else "",
-                    "order_index": item.order_index,
+                    # "order_index": item.order_index,
                 }
 
                 if existing_item:
@@ -1040,7 +1040,7 @@ async def getVouchar(
                     "let": {"vouchar_id": "$_id"},
                     "pipeline": [
                         {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
-                        {"$sort": {"order_index": 1}},
+                        # {"$sort": {"order_index": 1}},
                     ],
                     "as": "inventory",
                 }
@@ -1061,7 +1061,7 @@ async def getVouchar(
                     "let": {"vouchar_id": "$_id"},
                     "pipeline": [
                         {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
-                         {"$sort": {"order_index": 1}},
+                        #  {"$sort": {"order_index": 1}},
                     ],
                     "as": "accounting_entries",
                 }
@@ -1366,7 +1366,7 @@ async def print_invoice(
                     "let": {"vouchar_id": "$_id"},
                     "pipeline": [
                         {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
-                        {"$sort": {"order_index": 1}},
+                        # {"$sort": {"order_index": 1}},
                     ],
                     "as": "inventory",
                 }
@@ -1528,7 +1528,9 @@ async def print_invoice_tax(
             {
                 "$addFields": {
                     "inventory": {
-                        "$sortArray": {"input": "$inventory", "sortBy": {"order_index": 1}}
+                        "$sortArray": {"input": "$inventory", 
+                                       "sortBy": {"created_at": 1}
+                                       }
                     }
                 }
             },
@@ -1753,7 +1755,7 @@ async def print_receipt(
                     "let": {"vouchar_id": "$_id"},
                     "pipeline": [
                         {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
-                         {"$sort": {"order_index": 1}},
+                        #  {"$sort": {"order_index": 1}},
                     ],
                     "as": "accounting_entries",
                 }
@@ -1894,7 +1896,7 @@ async def print_payment(
                     "let": {"vouchar_id": "$_id"},
                     "pipeline": [
                         {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
-                         {"$sort": {"order_index": 1}},
+                        #  {"$sort": {"order_index": 1}},
                     ],
                     "as": "accounting_entries",
                 }
@@ -2066,7 +2068,7 @@ async def get_vouchar(
                     "let": {"vouchar_id": "$_id"},
                     "pipeline": [
                         {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
-                         {"$sort": {"order_index": 1}},
+                        #  {"$sort": {"order_index": 1}},
                     ],
                     "as": "accounting",
                 }
@@ -2077,7 +2079,7 @@ async def get_vouchar(
                     "let": {"vouchar_id": "$_id"},
                     "pipeline": [
                         {"$match": {"$expr": {"$eq": ["$vouchar_id", "$$vouchar_id"]}}},
-                        {"$sort": {"order_index": 1}},
+                        # {"$sort": {"order_index": 1}},
                     ],
                     "as": "inventory",
                 }
