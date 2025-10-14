@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml"
+    xmlns:o="urn:schemas-microsoft-com:office:office">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Low Stock Alert | Vyapar Drishti</title>
+    <style>
+        * {
+            box-sizing: border-box !important;
+        }
+
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            font-family: Arial, sans-serif !important;
+        }
+
+        .instruction {
+            font-size: 1.2rem !important;
+            color: #555555 !important;
+        }
+
+        .info {
+            font-size: 1rem !important;
+            margin-bottom: 15px !important;
+            color: #555555 !important;
+        }
+
+        .alert-box {
+            background-color: #fff3cd !important;
+            border: 2px solid #ffc107 !important;
+            border-radius: 8px !important;
+            padding: 15px !important;
+            margin: 20px 0 !important;
+        }
+
+        .item-name {
+            font-size: 1.3rem !important;
+            font-weight: bold !important;
+            color: #d63384 !important;
+            margin: 10px 0 !important;
+        }
+
+        .stock-info {
+            font-size: 1.1rem !important;
+            color: #333333 !important;
+            margin: 8px 0 !important;
+        }
+
+        .stock-info strong {
+            color: #dc3545 !important;
+        }
+
+        .cta-button {
+            background-color: #006e89 !important;
+            color: #ffffff !important;
+            padding: 12px 30px !important;
+            font-size: 1.2rem !important;
+            text-decoration: none !important;
+            border-radius: 5px !important;
+            display: inline-block !important;
+            margin-top: 20px !important;
+        }
+
+        .cta-button:hover {
+            background-color: #00a1c9 !important;
+        }
+
+        @media screen and (max-width: 600px) {
+            .cta-button {
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            .info,
+            .instruction {
+                font-size: 1rem !important;
+            }
+
+            .cta-button {
+                font-size: 1rem !important;
+            }
+
+            .item-name {
+                font-size: 1.1rem !important;
+            }
+
+            .stock-info {
+                font-size: 1rem !important;
+            }
+        }
+
+        @media screen and (max-width: 400px) {
+            .cta-button {
+                padding: 10px 20px !important;
+            }
+
+            .info,
+            .instruction {
+                font-size: 0.9rem !important;
+            }
+
+            .cta-button {
+                font-size: 1rem !important;
+            }
+
+            .item-name {
+                font-size: 1rem !important;
+            }
+
+            .stock-info {
+                font-size: 0.9rem !important;
+            }
+        }
+
+        @media screen and (max-width: 320px) {
+            .cta-button {
+                padding: 8px 15px !important;
+            }
+
+            .info,
+            .instruction {
+                font-size: 0.8rem !important;
+            }
+
+            .cta-button {
+                font-size: 0.9rem !important;
+            }
+
+            .item-name {
+                font-size: 0.9rem !important;
+            }
+
+            .stock-info {
+                font-size: 0.8rem !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <table width="100%"
+        style="max-width: 610px; margin: 0 auto !important; padding: 0 !important; text-align: center !important;"
+        cellpadding="0" cellspacing="0" border="0">
+        <tr>
+            <td style="padding: 10px !important; 
+                text-align: center !important;
+                background-color: #f4f4f9 !important;">
+                <a href="{domain}">
+                    <img style="max-width: 120px !important;"
+                        src="https://res.cloudinary.com/dnkp2gm1d/image/upload/v1753596124/Vyapar_Drishti/Logo1_rhecjo.png"
+                        alt="Vyapar Drishti Logo" />
+                </a>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 10px !important;
+             font-size: 1.8rem !important; 
+             font-weight: bold !important;
+                text-align: center !important;
+                background-color: #f4f4f9 !important;
+                color: #dc3545 !important;">
+                ⚠️ Low Stock Alert
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 20px !important; 
+                text-align: center !important; 
+                background-color: #ffffff !important;">
+                <p class="instruction" style="margin: 0px !important;">
+                    The following item has reached its low stock threshold and requires immediate attention:
+                </p>
+
+                <div class="alert-box">
+                    <p class="item-name">{item_name}</p>
+                    <p class="stock-info">
+                        Current Stock: <strong>{current_quantity} {unit}</strong>
+                    </p>
+                    <p class="stock-info">
+                        Alert Threshold: <strong>{threshold_quantity} {unit}</strong>
+                    </p>
+                </div>
+
+                <p class="info" style="margin-top: 20px !important;">
+                    Please consider in your next purchase to restock this item soon to avoid running out of inventory.
+                </p>
+
+                <p class="info">
+                    <a class="cta-button" style="margin: 10px 0 !important;" href="{inventory_link}">View Inventory</a>
+                </p>
+
+                <p class="info" style="margin-top: 30px !important;">
+                    This is an automated alert based on your low stock threshold settings.
+                </p>
+
+                <p>
+                    To manage your inventory or update alert settings, click below:
+                </p>
+                <p class="info">
+                    <a class="cta-button" style="margin-top: 0 !important;" href="{domain_login}">Login to Vyapar
+                        Drishti</a>
+                </p>
+                <p style="font-size: 0.9rem !important; color: #888888 !important; margin-top: 20px !important;">
+                    You're receiving this alert because you set up low stock notifications for your inventory items.
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 15px !important;
+                text-align: center !important; 
+                background-color: #f4f4f9 !important; 
+                color: #888888 !important; 
+                font-size: 0.9rem !important;">
+                &copy; 2025 Team Vyapar Drishti, All Rights Reserved.<br />
+                Visit us at <a href="{domain}">Vyapar Drishti</a>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>

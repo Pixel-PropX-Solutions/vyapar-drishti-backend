@@ -1,16 +1,16 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Literal, Optional
 from uuid import uuid4
 import datetime
 
 
 class VoucherType(BaseModel):
     vouchar_type_name: str
-    user_id: str
-    company_id: str
+    user_id: Optional[str] = None
+    company_id: Optional[str] = None
     parent: Optional[str] = ""
     parent_id: Optional[str] = ""
-    numbering_method: Optional[str] = ""  # e.g., "Automatic", "Manual"
+    numbering_method: Literal["Automatic", "Manual"] = "Automatic"
     is_deemedpositive: Optional[bool] = False  # Credit/Debit direction
     affects_stock: Optional[bool] = False  # If stock is involved
     is_deleted: Optional[bool] = False  # Soft delete flag
@@ -24,11 +24,11 @@ class VoucherTypeDB(VoucherType):
 
 class VoucherTypeCreate(BaseModel):
     vouchar_type_name: str
-    user_id: str
-    company_id: str
+    user_id: Optional[str] = None
+    company_id: Optional[str] = None
     parent: Optional[str] = ""
     parent_id: Optional[str] = ""
-    numbering_method: Optional[str] = ""  # e.g., "Automatic", "Manual"
+    numbering_method: Literal["Automatic", "Manual"] = "Automatic"
     is_deemedpositive: Optional[bool] = False  # Credit/Debit direction
     affects_stock: Optional[bool] = False  # If stock is involved
     is_deleted: Optional[bool] = False  # Soft delete flag

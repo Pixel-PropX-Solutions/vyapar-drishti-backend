@@ -3,13 +3,13 @@ from fastapi import APIRouter
 from app.Config import ENV_PROJECT
 from app.routes.api.v1.auth import auth as auth_endpoints
 from app.routes.api.v1.user import user as user_endpoints
-# from app.routes.api.v1.admin import admin as admin_endponits
+from app.routes.api.v1.admin import admin as admin_endponits
 from app.routes.api.v1.stockItem import Product as stock_items_endpoints
 from app.routes.api.v1.voucharType import VoucharType as vouchar_type_endpoints
 from app.routes.api.v1.vouchar import Vouchar as vouchar_endpoints
 from app.routes.api.v1.voucharCounter import counter_router as vouchar_counter_endpoints
 from app.routes.api.v1.userSettings import user_settings_router as user_settings_endpoints
-from app.routes.api.v1.taxModel import admin as admin_endponits
+from app.routes.api.v1.taxModel import admin as admin_tax_endponits
 from app.routes.api.v1.companySettings import (
     company_settings_router as company_settings_endpoints,
 )
@@ -32,7 +32,11 @@ routers.include_router(
 )
 
 routers.include_router(
-    admin_endponits, prefix=ENV_PROJECT.BASE_API_V2 + "/admin", tags=["Admin"]
+    admin_endponits, prefix=ENV_PROJECT.BASE_API_V1 + "/admin", tags=["Admin"]
+)
+
+routers.include_router(
+    admin_tax_endponits, prefix=ENV_PROJECT.BASE_API_V2 + "/admin/tax", tags=["Admin"]
 )
 
 routers.include_router(

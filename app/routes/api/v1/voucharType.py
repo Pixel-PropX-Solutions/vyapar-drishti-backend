@@ -13,11 +13,20 @@ from app.schema.token import TokenData
 from app.oauth2 import get_current_user
 from app.database.repositories.VoucharTypeRepo import vouchar_type_repo
 from app.database.models.VoucharType import VoucherType
-from typing import Optional
+from typing import Literal, Optional
 from app.database.repositories.UserSettingsRepo import user_settings_repo
 from fastapi import Query
 from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
 import sys
+from pymongo.errors import (
+    DuplicateKeyError,
+    WriteError,
+    WriteConcernError,
+    OperationFailure,
+    ConnectionFailure,
+    NetworkTimeout,
+    PyMongoError,
+)
 
 
 VoucharType = APIRouter()
@@ -30,7 +39,8 @@ async def createVoucharType(
     name: str,
     company_id: str = None,
     parent: Optional[str] = "",
-    numbering_method: Optional[str] = "",  # e.g., "Automatic", "Manual"
+    parent_id: Optional[str] = "",
+    numbering_method: Literal["Automatic", "Manual"] = "Automatic",
     is_deemedpositive: Optional[bool] = False,  # Credit/Debit direction
     affects_stock: Optional[bool] = False,  # If stock is involved
     current_user: TokenData = Depends(get_current_user),
@@ -53,18 +63,35 @@ async def createVoucharType(
         "numbering_method": numbering_method,
         "is_deemedpositive": is_deemedpositive,
         "affects_stock": affects_stock,
-        "parent_id": parent,  # Assuming parent_id is the same as parent for now
+        "parent_id": parent_id,
         "is_deleted": False,
     }
 
-    response = await vouchar_type_repo.new(VoucherType(**vouchar_type_data))
+    try:
+        await vouchar_type_repo.new(VoucherType(**vouchar_type_data))
 
-    if not response:
-        raise http_exception.ResourceAlreadyExistsException(
-            detail="Vouchar type Already Exists. Please try with different vouchar name."
+        return {
+            "success": True,
+            "message": "Vouchar type created successfully",
+        }
+
+    except DuplicateKeyError:
+        raise http_exception.DuplicateKeyException(
+            detail="A vouchar type with this name already exists in the company."
         )
-
-    return {"success": True, "message": "Vouchar type Created Successfully"}
+    except (WriteError, OperationFailure) as e:
+        raise http_exception.BadRequestException(
+            detail=f"Invalid create operation: {str(e)}"
+        )
+    except (ConnectionFailure, NetworkTimeout):
+        raise http_exception.ServiceUnavailableException(
+            detail="Database is unavailable. Please try again later."
+        )
+    except PyMongoError as e:
+        # Generic fallback for unexpected pymongo errors
+        raise http_exception.InternalServerErrorException(
+            detail=f"Database error: {str(e)}"
+        )
 
 
 @VoucharType.get(
@@ -97,7 +124,7 @@ async def view_all_vouchar_type(
 
     result = await vouchar_type_repo.viewAllVoucharType(
         search=search,
-        company_id= current_user.current_company_id or userSettings["current_company_id"],
+        company_id=current_user.current_company_id or userSettings["current_company_id"],
         pagination=page_request,
         sort=sort,
         current_user=current_user,
@@ -122,7 +149,7 @@ async def get_all_vouchar_type(
         raise http_exception.ResourceNotFoundException(
             detail="User Settings Not Found. Please create user settings first."
         )
-        
+
     result = await vouchar_type_repo.collection.aggregate(
         [
             {
@@ -130,7 +157,8 @@ async def get_all_vouchar_type(
                     "is_deleted": False,
                     "$or": [
                         {
-                            "company_id":  current_user.current_company_id or userSettings["current_company_id"],
+                            "company_id": current_user.current_company_id
+                            or userSettings["current_company_id"],
                             "user_id": current_user.user_id,
                         },
                         {

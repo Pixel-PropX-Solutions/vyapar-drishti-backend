@@ -164,7 +164,6 @@ async def view_all_ledger(
     company_id: str = Query(None),
     is_deleted: bool = False,
     limit: int = Query(10, le=sys.maxsize),
-    # limit: int = Query(10, le=INT_MAX_VALUE),
     page_no: int = Query(1, ge=1),
     sortField: str = "created_at",
     sortOrder: SortingOrder = SortingOrder.DESC,
@@ -278,12 +277,39 @@ async def view_ledgers_with_type(
                 "$match": match_query,
             },
             {
+                "$lookup": {
+                    "from": "Accounting",
+                    "localField": "_id",
+                    "foreignField": "ledger_id",
+                    "as": "accounts",
+                }
+            },
+            {
+                "$addFields": {"total": {"$round": [{"$sum": "$accounts.amount"}, 2]}},
+            },
+            {
+                "$addFields": {
+                    "total_amount": {
+                        "$round": [
+                            {
+                                "$sum": [
+                                    "$total",
+                                    {"$ifNull": ["$opening_balance", 0]},
+                                ]
+                            },
+                            2,
+                        ]
+                    }
+                },
+            },
+            {
                 "$project": {
                     "_id": 1,
                     "ledger_name": 1,
                     "parent": 1,
                     "alias": 1,
                     "phone": 1,
+                    "total_amount": 1,
                 },
             },
         ]
@@ -579,7 +605,7 @@ async def update_ledger_details(
 )
 async def view_ledger(
     ledger_id: str,
-    start_date: str ,
+    start_date: str,
     end_date: str,
     company_id: str = Query(None),
     current_user: TokenData = Depends(get_current_user),
@@ -722,7 +748,7 @@ async def view_ledger(
                                 "as": "ca",
                                 "in": {
                                     "$cond": [
-                                        {"$lt": ["$$ca.amount", 0]},
+                                        {"$gt": ["$$ca.amount", 0]},
                                         "$$ca.amount",
                                         0,
                                     ]
@@ -737,7 +763,7 @@ async def view_ledger(
                                 "as": "ca",
                                 "in": {
                                     "$cond": [
-                                        {"$gt": ["$$ca.amount", 0]},
+                                        {"$lt": ["$$ca.amount", 0]},
                                         "$$ca.amount",
                                         0,
                                     ]
@@ -758,8 +784,10 @@ async def view_ledger(
                         "$round": [
                             {
                                 "$add": [
-                                    {"$add": ["$opening_balance", "$opening_txn"]},
-                                    {"$add": ["$current_debit", "$current_credit"]},
+                                    "$opening_balance",
+                                    "$opening_txn",
+                                    "$current_debit",
+                                    "$current_credit",
                                 ]
                             },
                             2,

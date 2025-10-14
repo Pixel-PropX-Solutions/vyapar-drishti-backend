@@ -1,104 +1,51 @@
-# from fastapi import FastAPI, status, Depends, File, UploadFile, Form
-# from fastapi.responses import ORJSONResponse
-# from fastapi import APIRouter
-# from app.schema.token import TokenData
-# from app.oauth2 import get_current_user
+from fastapi import FastAPI, status, Depends, File, UploadFile, Form
+from fastapi.responses import ORJSONResponse
+from fastapi import APIRouter
+from app.schema.token import TokenData
+from app.oauth2 import get_current_user
 
-# # from app.database.models.common import Username
-# import app.http_exception as http_exception
-# from app.utils.mailer_module import mail
-# from app.database.models.user import User
-# from app.database.repositories.user import user_repo
-# from app.utils.generatePassword import generatePassword
-# from app.utils.hashing import hash_password
-# import re
-# # from app.database.repositories.Product_Stock import product_stock_repo
-# # from app.database.repositories.Stock_Movement import stock_movement_repo
-# import asyncio
+import app.http_exception as http_exception
+from app.database.repositories.user import user_repo
+import asyncio
 
-# # from app.utils.cloudinary_client import cloudinary_client
-# from app.utils.mailer_module import template
-# from app.database.models.user import UserCreate
-# from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
-# from fastapi import Query
-# from app.database.repositories.user import user_repo
-# from app.database.models.Company import CompanyCreate
+from app.database.repositories.crud.base import SortingOrder, Sort, Page, PageRequest
+from fastapi import Query
+from app.database.repositories.user import user_repo
 
-# from app.database.models.Product import ProductCreate
-# from app.database.models.Company import Company
-
-# from app.database.models.Product import product
-# from app.database.repositories.Stockist import stockist_repo
-# from app.database.repositories.stockItemRepo import product_repo
-# from app.database.repositories.Chemist import chemist_repo
-# from app.database.models.Chemist import Chemist, ChemistCreate
-# from app.database.repositories.companyRepo import company_repo, Company
+admin = APIRouter()
 
 
-# admin = APIRouter()
+@admin.get(
+    "/view/all/users", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
+)
+async def view_users(
+    current_user: TokenData = Depends(get_current_user),
+    search: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    page_no: int = Query(1, ge=1),
+    limit: int = Query(10, le=2000),
+    sortField: str = "created_at",
+    sortOrder: SortingOrder = SortingOrder.DESC,
+):
+    if current_user.user_type != "admin":
+        raise http_exception.CredentialsInvalidException(
+            detail="Only admin can access this data."
+        )
 
+    page = Page(page=page_no, limit=limit)
+    sort = Sort(sort_field=sortField, sort_order=sortOrder)
+    page_request = PageRequest(paging=page, sorting=sort)
 
-# @admin.post("/create/user", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
-# async def create_user(
-#     user: UserCreate,
-#     company_name: str = None,
-#     brand_name: str = None,
-#     current_user: TokenData = Depends(get_current_user),
-# ):
-#     if current_user.user_type != "admin":
-#         raise http_exception.CredentialsInvalidException()
+    result = await user_repo.viewAllUsers(
+        search=search,
+        pagination=page_request,
+        sort=sort,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
-#     userExists = await user_repo.findOne({"email": user.email})
-#     if userExists is not None:
-#         raise http_exception.ResourceNotFoundException()
-
-#     password = await generatePassword.createPassword()
-
-#     mail.send(
-#         "Welcome to Vyapar Drishti",
-#         user.email,
-#         template.Onboard(
-#             role=current_user.user_type, email=user.email, password=password
-#         ),
-#     )
-
-#     inserted_dict = {}
-
-#     keys = ["password", "email", "phone", "user_type", "name"]
-#     values = [hash_password(password=password), user.email, user.phone, "user", user.name]
-
-#     for k, v in zip(keys, values):
-#         inserted_dict[k] = v
-
-#     response = await user_repo.new(User(**inserted_dict))
-    
-#     return {"success": True, "message": "User Inserted Successfully", "id": response.id}
-
-
-# @admin.get(
-#     "/view/all/stockist", response_class=ORJSONResponse, status_code=status.HTTP_200_OK
-# )
-# async def view_stockist_user(
-#     # current_user: TokenData = Depends(get_current_user),
-#     search: str = None,
-#     state: str = None,
-#     page_no: int = Query(1, ge=1),
-#     limit: int = Query(10, le=20),
-#     sortField: str = "created_at",
-#     sortOrder: SortingOrder = SortingOrder.DESC,
-# ):
-#     # if current_user.user_type != "admin" and current_user.user_type != "user":
-#     #     raise http_exception.CredentialsInvalidException()
-
-#     page = Page(page=page_no, limit=limit)
-#     sort = Sort(sort_field=sortField, sort_order=sortOrder)
-#     page_request = PageRequest(paging=page, sorting=sort)
-
-#     result = await user_repo.viewAllStockist(
-#         search=search, state=state, pagination=page_request, sort=sort
-#     )
-
-#     return {"success": True, "message": "Data Fetched Successfully...", "data": result}
+    return {"success": True, "message": "Data Fetched Successfully...", "data": result}
 
 
 # @admin.post(
