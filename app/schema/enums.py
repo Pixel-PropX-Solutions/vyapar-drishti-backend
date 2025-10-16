@@ -21,8 +21,13 @@ class PaymentMode(str, Enum):
     NETBANKING  = "NetBanking"
     EMI  = "Emi"
 
-
-
 class BalanceType(str, Enum):
     DEBIT = "Debit"
     CREDIT = "Credit"
+
+class PlanNameEnum(str, Enum):
+    basic = "Basic"
+    plus = "Plus"
+    pro = "Pro"
+    premium = "Premium"
+    elite = "Elite"

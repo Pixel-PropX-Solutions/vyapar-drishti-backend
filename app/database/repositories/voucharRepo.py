@@ -1012,7 +1012,6 @@ class VoucherRepo(BaseMongoDbCrud[VoucherDB]):
                 )
 
         formatted = transform_monthly_to_yearly(final_result, 2025)
-        print("formatted Result ", formatted)
 
         return formatted
 
