@@ -909,7 +909,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             },
             {
                 "$unwind": {
-                    "path": "$inventory_entries",
+                    "path": "$inventory_entries", "preserveNullAndEmptyArrays": True
                 }
             },
             {
@@ -924,7 +924,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             },
             {
                 "$unwind": {
-                    "path": "$voucher",
+                    "path": "$voucher", "preserveNullAndEmptyArrays": True
                 }
             },
             {
@@ -943,6 +943,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
                     "updated_at": {"$first": "$updated_at"},
                     "group": {"$first": "$group"},
                     "opening_balance": {"$first": "$opening_balance"},
+                    "opening_value": {"$first": "$opening_value"},
                     "purchase_qty": {
                         "$sum": {
                             "$cond": [
@@ -1364,7 +1365,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             },
             {
                 "$unwind": {
-                    "path": "$inventory_entries",
+                    "path": "$inventory_entries",  "preserveNullAndEmptyArrays": True
                 }
             },
             {
@@ -1379,7 +1380,7 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
             },
             {
                 "$unwind": {
-                    "path": "$voucher",
+                    "path": "$voucher",  "preserveNullAndEmptyArrays": True
                 }
             },
             {
@@ -2032,9 +2033,9 @@ class StockItemRepo(BaseMongoDbCrud[StockItemDB]):
         ]
 
         res = [doc async for doc in self.collection.aggregate(pipeline)]
-        print("Product Timeline Result:", res)
+
         if not res:
-            return {"message": "No product found with the given ID."}
+            return {"message": "The product has no timeline data."}
         return res
 
     async def viewTimeline(
