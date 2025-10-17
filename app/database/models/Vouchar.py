@@ -11,17 +11,16 @@ class Voucher(BaseModel):
     user_id: str
     date: str
     voucher_number: str = ""
-    # voucher_type: Literal[
-    #     "Sales",
-    #     "Purchase",
-    #     "Payment",
-    #     "Receipt",
-    #     "Contra",
-    #     "Journal",
-    #     "Credit Note",
-    #     "Debit Note",
-    # ] = "Sales"
-    voucher_type: str = ""
+    voucher_type: Literal[
+        "Sales",
+        "Purchase",
+        "Payment",
+        "Receipt",
+        "Contra",
+        "Journal",
+        "Credit Note",
+        "Debit Note",
+    ] = "Sales"
     voucher_type_id: str = ""
     narration: str = ""
     party_name: str = ""
@@ -58,17 +57,17 @@ class VoucherDB(Voucher):
 class VoucherCreate(BaseModel):
     company_id: str
     date: str
-    # voucher_type: Literal[
-    #     "Sales",
-    #     "Purchase",
-    #     "Payment",
-    #     "Receipt",
-    #     "Contra",
-    #     "Journal",
-    #     "Credit Note",
-    #     "Debit Note",
-    # ] = "Sales"
-    voucher_type: str = ""
+    voucher_type: Literal[
+        "Sales",
+        "Purchase",
+        "Payment",
+        "Receipt",
+        "Contra",
+        "Journal",
+        "Credit Note",
+        "Debit Note",
+    ] = "Sales"
+    # voucher_type: str = ""
     voucher_type_id: str
     voucher_number: str
     party_name: str
@@ -100,17 +99,16 @@ class VoucherUpdate(BaseModel):
     user_id: str
     company_id: str
     date: str
-    # voucher_type: Literal[
-    #     "Sales",
-    #     "Purchase",
-    #     "Payment",
-    #     "Receipt",
-    #     "Contra",
-    #     "Journal",
-    #     "Credit Note",
-    #     "Debit Note",
-    # ] = "Sales"
-    voucher_type: str = ""
+    voucher_type: Literal[
+        "Sales",
+        "Purchase",
+        "Payment",
+        "Receipt",
+        "Contra",
+        "Journal",
+        "Credit Note",
+        "Debit Note",
+    ] = "Sales"
     voucher_type_id: str
     voucher_number: str
     party_name: str
