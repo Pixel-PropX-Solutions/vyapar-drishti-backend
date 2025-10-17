@@ -304,39 +304,40 @@ async def createVouchar(
                         "user_id": current_user.user_id,
                     }
                 )
-
-                if vouchar.voucher_type in ["Sales", "Purchase"]:
-                    mail.send(
-                        "Vyapar Drishti - Invoice Created",
-                        customer_ledger["email"],
-                        template.InvoiceCreated(
-                            invoice_number=vouchar.voucher_number,
-                            invoice_date=vouchar.date,
-                            customer_name=vouchar.party_name,
-                            total_amount=vouchar.total_amount,
-                            due_date=vouchar.due_date,
-                            payment_status=(
-                                "Paid"
-                                if vouchar.paid_amount >= vouchar.grand_total
-                                else "Unpaid"
+                
+                if customer_ledger and customer_ledger["email"]:
+                    if vouchar.voucher_type in ["Sales", "Purchase"]:
+                        mail.send(
+                            "Vyapar Drishti - Invoice Created",
+                            customer_ledger["email"],
+                            template.InvoiceCreated(
+                                invoice_number=vouchar.voucher_number,
+                                invoice_date=vouchar.date,
+                                customer_name=vouchar.party_name,
+                                total_amount=vouchar.total_amount,
+                                due_date=vouchar.due_date,
+                                payment_status=(
+                                    "Paid"
+                                    if vouchar.paid_amount >= vouchar.grand_total
+                                    else "Unpaid"
+                                ),
                             ),
-                        ),
-                    )
-                elif vouchar.voucher_type in ["Payment", "Receipt"]:
-                    mail.send(
-                        "Vyapar Drishti - Transaction Created",
-                        customer_ledger["email"],
-                        template.TransactionCreated(
-                            user_name=companyExists["company_name"],
-                            transaction_type=vouchar.voucher_type,
-                            customer_name=customer_ledger["ledger_name"],
-                            currency_symbol='INR',
-                            reference_note=vouchar.narration,
-                            transaction_date=vouchar.date,
-                            amount=vouchar.grand_total,
-                            support_link=f"{ENV_PROJECT.FRONTEND_DOMAIN}/contact",
-                        ),
-                    )
+                        )
+                    elif vouchar.voucher_type in ["Payment", "Receipt"]:
+                        mail.send(
+                            "Vyapar Drishti - Transaction Created",
+                            customer_ledger["email"],
+                            template.TransactionCreated(
+                                user_name=companyExists["company_name"],
+                                transaction_type=vouchar.voucher_type,
+                                customer_name=customer_ledger["ledger_name"],
+                                currency_symbol='INR',
+                                reference_note=vouchar.narration,
+                                transaction_date=vouchar.date,
+                                amount=vouchar.grand_total,
+                                support_link=f"{ENV_PROJECT.FRONTEND_DOMAIN}/contact",
+                            ),
+                        )
 
                 shouldDecreaseCounter = True
 
@@ -736,38 +737,39 @@ async def createVoucharWithTAX(
                     }
                 )
 
-                if vouchar.voucher_type in ["Sales", "Purchase"]:
-                    mail.send(
-                        "Vyapar Drishti - Invoice Created",
-                        customer_ledger["email"],
-                        template.InvoiceCreated(
-                            invoice_number=vouchar.voucher_number,
-                            invoice_date=vouchar.date,
-                            customer_name=vouchar.party_name,
-                            total_amount=vouchar.total_amount,
-                            due_date=vouchar.due_date,
-                            payment_status=(
-                                "Paid"
-                                if vouchar.paid_amount >= vouchar.grand_total
-                                else "Unpaid"
+                if customer_ledger and customer_ledger["email"]:
+                    if vouchar.voucher_type in ["Sales", "Purchase"]:
+                        mail.send(
+                            "Vyapar Drishti - Invoice Created",
+                            customer_ledger["email"],
+                            template.InvoiceCreated(
+                                invoice_number=vouchar.voucher_number,
+                                invoice_date=vouchar.date,
+                                customer_name=vouchar.party_name,
+                                total_amount=vouchar.total_amount,
+                                due_date=vouchar.due_date,
+                                payment_status=(
+                                    "Paid"
+                                    if vouchar.paid_amount >= vouchar.grand_total
+                                    else "Unpaid"
+                                ),
                             ),
-                        ),
-                    )
-                elif vouchar.voucher_type in ["Payment", "Receipt"]:
-                    mail.send(
-                        "Vyapar Drishti - Transaction Created",
-                        customer_ledger["email"],
-                        template.TransactionCreated(
-                            user_name=companyExists["company_name"],
-                            transaction_type=vouchar.voucher_type,
-                            customer_name=customer_ledger["ledger_name"],
-                            currency_symbol='INR',
-                            reference_note=vouchar.narration,
-                            transaction_date=vouchar.date,
-                            amount=vouchar.grand_total,
-                            support_link=f"{ENV_PROJECT.FRONTEND_DOMAIN}/contact",
-                        ),
-                    )
+                        )
+                    elif vouchar.voucher_type in ["Payment", "Receipt"]:
+                        mail.send(
+                            "Vyapar Drishti - Transaction Created",
+                            customer_ledger["email"],
+                            template.TransactionCreated(
+                                user_name=companyExists["company_name"],
+                                transaction_type=vouchar.voucher_type,
+                                customer_name=customer_ledger["ledger_name"],
+                                currency_symbol='INR',
+                                reference_note=vouchar.narration,
+                                transaction_date=vouchar.date,
+                                amount=vouchar.grand_total,
+                                support_link=f"{ENV_PROJECT.FRONTEND_DOMAIN}/contact",
+                            ),
+                        )
                 shouldDecreaseCounter = True
 
         except Exception as e:
