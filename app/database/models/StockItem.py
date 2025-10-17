@@ -74,7 +74,7 @@ class StockItemCreate(BaseModel):
     tax_rate: Optional[float] = 0.0
 
     # Additonal Optional fields
-    low_stock_alert: Optional[float] = 10.0
+    low_stock_alert: Optional[float] = 5.0
 
 
 class StockItemVouchar(BaseModel):
