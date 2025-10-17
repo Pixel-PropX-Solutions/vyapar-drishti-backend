@@ -160,7 +160,22 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
                 },
                 {
                     "$addFields": {
-                        "total_amount": {"$round": [{"$sum": "$accounts.amount"}, 2]}
+                        "total": {"$round": [{"$sum": "$accounts.amount"}, 2]}
+                    },
+                },
+                {
+                    "$addFields": {
+                        "total_amount": {
+                            "$round": [
+                                {
+                                    "$sum": [
+                                        "$total",
+                                        {"$ifNull": ["$opening_balance", 0]},
+                                    ]
+                                },
+                                2,
+                            ]
+                        }
                     },
                 },
                 {"$sort": sort_criteria},
@@ -283,7 +298,6 @@ class ledgerRepo(BaseMongoDbCrud[LedgerDB]):
             sort_stage = dict(primary_sort + [("accounts.voucher_number", -1)])
         else:
             sort_stage = dict(primary_sort)
-        
 
         pipeline = [
             {"$match": filter_params},

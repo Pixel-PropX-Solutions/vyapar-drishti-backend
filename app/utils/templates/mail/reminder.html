@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml"
+    xmlns:o="urn:schemas-microsoft-com:office:office">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Reminder | Vyapar Drishti</title>
+    <style>
+        * {
+            box-sizing: border-box !important;
+        }
+
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            font-family: Arial, sans-serif !important;
+        }
+
+        .instruction {
+            font-size: 1.2rem !important;
+            color: #555555 !important;
+        }
+
+        .info {
+            font-size: 1rem !important;
+            margin-bottom: 15px !important;
+            color: #555555 !important;
+        }
+
+        .cta-button {
+            background-color: #006e89 !important;
+            color: #ffffff !important;
+            padding: 12px 30px !important;
+            font-size: 1.2rem !important;
+            text-decoration: none !important;
+            border-radius: 5px !important;
+            display: inline-block !important;
+            margin-top: 20px !important;
+        }
+
+        .cta-button:hover {
+            background-color: #00a1c9 !important;
+        }
+
+        .payment-details {
+            background-color: #f9f9f9 !important;
+            border: 1px solid #e0e0e0 !important;
+            border-radius: 5px !important;
+            padding: 15px !important;
+            margin: 20px 0 !important;
+            text-align: left !important;
+        }
+
+        .payment-details table {
+            width: 100% !important;
+        }
+
+        .payment-details td {
+            padding: 8px 0 !important;
+            font-size: 1rem !important;
+        }
+
+        .payment-details .label {
+            font-weight: bold !important;
+            color: #333333 !important;
+        }
+
+        .payment-details .value {
+            color: #555555 !important;
+            text-align: right !important;
+        }
+
+        .amount-due {
+            font-size: 1.5rem !important;
+            color: #d32f2f !important;
+            font-weight: bold !important;
+        }
+
+        @media screen and (max-width: 600px) {
+            .cta-button {
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            .info,
+            .instruction {
+                font-size: 1rem !important;
+            }
+
+            .cta-button {
+                font-size: 1rem !important;
+            }
+
+            .payment-details td {
+                font-size: 0.9rem !important;
+            }
+
+            .amount-due {
+                font-size: 1.3rem !important;
+            }
+        }
+
+        @media screen and (max-width: 400px) {
+            .cta-button {
+                padding: 10px 20px !important;
+            }
+
+            .info,
+            .instruction {
+                font-size: 0.9rem !important;
+            }
+
+            .cta-button {
+                font-size: 1rem !important;
+            }
+
+            .payment-details td {
+                font-size: 0.85rem !important;
+            }
+
+            .amount-due {
+                font-size: 1.2rem !important;
+            }
+        }
+
+        @media screen and (max-width: 320px) {
+            .cta-button {
+                padding: 8px 15px !important;
+            }
+
+            .info,
+            .instruction {
+                font-size: 0.8rem !important;
+            }
+
+            .cta-button {
+                font-size: 0.9rem !important;
+            }
+
+            .payment-details td {
+                font-size: 0.8rem !important;
+            }
+
+            .amount-due {
+                font-size: 1.1rem !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <table width="100%"
+        style="max-width: 610px; margin: 0 auto !important; padding: 0 !important; text-align: center !important;"
+        cellpadding="0" cellspacing="0" border="0">
+        <tr>
+            <td style="padding: 10px !important; 
+                text-align: center !important;
+                background-color: #f4f4f9 !important;">
+                <a href="{domain}">
+                    <img style="max-width: 120px !important;"
+                        src="https://res.cloudinary.com/dnkp2gm1d/image/upload/v1753596124/Vyapar_Drishti/Logo1_rhecjo.png"
+                        alt="Vyapar Drishti Logo" />
+                </a>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 10px !important;
+             font-size: 1.8rem !important; 
+             font-weight: bold !important;
+                text-align: center !important;
+                background-color: #f4f4f9 !important;">
+                Payment Reminder
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 20px !important; 
+                text-align: center !important; 
+                background-color: #ffffff !important;">
+                <p class="instruction" style="margin: 0px !important;">
+                    Dear <strong>{customer_name}</strong>,
+                </p>
+                <p class="info" style="margin: 15px 0 !important;">
+                    This is a friendly reminder that you have an outstanding payment due to <strong>{vendor_name}</strong>.
+                </p>
+                
+                <div class="payment-details">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                            <td class="label">Invoice Number:</td>
+                            <td class="value">{invoice_number}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Invoice Date:</td>
+                            <td class="value">{invoice_date}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Due Date:</td>
+                            <td class="value">{due_date}</td>
+                        </tr>
+                        <tr>
+                            <td class="label">Amount Due:</td>
+                            <td class="value amount-due">₹{amount_due}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <p class="info" style="margin: 20px 0 10px 0 !important;">
+                    Please process the payment at your earliest convenience to avoid any late fees or service interruptions.
+                </p>
+
+                <p class="info">
+                    <a class="cta-button" style="margin: 10px 0 !important;" href="{payment_link}">Pay Now</a>
+                </p>
+
+                <p class="info" style="margin: 20px 0 5px 0 !important;">
+                    or copy and paste the following payment link into your browser:
+                </p>
+                <p class="info"
+                    style="text-decoration: underline !important; margin: 5px 0 0 0 !important; color: #0000EE !important; word-break: break-all !important;">
+                    {payment_link}
+                </p>
+
+                <p class="info" style="margin: 25px 0 10px 0 !important;">
+                    If you have already made the payment, please disregard this email. If you have any questions or concerns regarding this invoice, please contact us.
+                </p>
+
+                <p class="info" style="margin: 10px 0 !important;">
+                    <strong>Contact Information:</strong><br/>
+                    {vendor_contact}
+                </p>
+
+                <p style="margin: 20px 0 10px 0 !important;">
+                    Thank you for your prompt attention to this matter.
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 15px !important;
+                text-align: center !important; 
+                background-color: #f4f4f9 !important; 
+                color: #888888 !important; 
+                font-size: 0.9rem !important;">
+                &copy; 2025 Team Vyapar Drishti, All Rights Reserved.<br />
+                Visit us at <a href="{domain}">Vyapar Drishti</a>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>

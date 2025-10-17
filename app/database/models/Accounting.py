@@ -13,7 +13,7 @@ class Accounting(BaseModel):
     ledger: str = Field(..., description="Name of the ledger account used")
     ledger_id: str = Field(..., description="Internal reference or GUID for the ledger")
     amount: float = Field(..., description="Amount debited or credited")
-    order_index: int = Field(..., description="Preserves the original order of user entry")
+    # order_index: int = Field(..., description="Preserves the original order of user entry")
 
 
 # Database Schema
@@ -28,7 +28,7 @@ class AccountingCreate(BaseModel):
     ledger: str = Field(..., description="Name of the ledger account used")
     ledger_id: str = Field(..., description="Internal reference or GUID for the ledger")
     amount: float = Field(..., description="Amount debited or credited")
-    order_index: int = Field(..., description="Preserves the original order of user entry")
+    # order_index: int = Field(..., description="Preserves the original order of user entry")
 
 
 class AccountingUpdate(BaseModel):
@@ -37,4 +37,4 @@ class AccountingUpdate(BaseModel):
     ledger: str = Field(..., description="Name of the ledger account used")
     ledger_id: str = Field(..., description="Internal reference or GUID for the ledger")
     amount: float = Field(..., description="Amount debited or credited")
-    order_index: int = Field(..., description="Preserves the original order of user entry")
+    # order_index: int = Field(..., description="Preserves the original order of user entry")

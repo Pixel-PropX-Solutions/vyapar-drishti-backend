@@ -23,7 +23,7 @@ class InventoryItem(BaseModel):
     # Additional fields for the item
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    order_index: int = Field(..., description="Preserves the original order of user entry")
+    # order_index: int = Field(..., description="Preserves the original order of user entry")
 
 
 class InventoryItemDB(InventoryItem):
@@ -51,7 +51,7 @@ class InventoryItemCreate(BaseModel):
     total_amount: Optional[float] = 0.0
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    order_index: int = Field(..., description="Preserves the original order of user entry")
+    # order_index: int = Field(..., description="Preserves the original order of user entry")
 
 
 class InventoryItemUpdate(BaseModel):
@@ -73,7 +73,7 @@ class InventoryItemUpdate(BaseModel):
     
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    order_index: int = Field(..., description="Preserves the original order of user entry")
+    # order_index: int = Field(..., description="Preserves the original order of user entry")
 
 class CreateInventoryItemWithTAX(BaseModel):
     vouchar_id: str
@@ -93,7 +93,7 @@ class CreateInventoryItemWithTAX(BaseModel):
     
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    order_index: int = Field(..., description="Preserves the original order of user entry")
+    # order_index: int = Field(..., description="Preserves the original order of user entry")
 
 
 class UpdateInventoryItemWithTAX(BaseModel):
@@ -114,4 +114,4 @@ class UpdateInventoryItemWithTAX(BaseModel):
     total_amount: Optional[float] = 0.0
     godown: Optional[str] = ""
     godown_id: Optional[str] = ""
-    order_index: int = Field(..., description="Preserves the original order of user entry")
+    # order_index: int = Field(..., description="Preserves the original order of user entry")
