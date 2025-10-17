@@ -40,7 +40,10 @@ import aiofiles
 from num2words import num2words
 from math import ceil
 import sys
+from app.Config import ENV_PROJECT
 from datetime import datetime
+from app.utils.mailer_module import template
+from app.utils.mailer_module import mail
 
 # from playwright.async_api import async_playwright
 # from app.core.services import browser as shared_browser
@@ -293,6 +296,48 @@ async def createVouchar(
                     },
                     {"$inc": {"current_number": 1}},
                 )
+
+                customer_ledger = await ledger_repo.findOne(
+                    {
+                        "company_id": current_user.current_company_id,
+                        "ledger_name": vouchar.party_name,
+                        "user_id": current_user.user_id,
+                    }
+                )
+
+                if vouchar.voucher_type in ["Sales", "Purchase"]:
+                    mail.send(
+                        "Vyapar Drishti - Invoice Created",
+                        customer_ledger["email"],
+                        template.InvoiceCreated(
+                            invoice_number=vouchar.voucher_number,
+                            invoice_date=vouchar.date,
+                            customer_name=vouchar.party_name,
+                            total_amount=vouchar.total_amount,
+                            due_date=vouchar.due_date,
+                            payment_status=(
+                                "Paid"
+                                if vouchar.paid_amount >= vouchar.grand_total
+                                else "Unpaid"
+                            ),
+                        ),
+                    )
+                elif vouchar.voucher_type in ["Payment", "Receipt"]:
+                    mail.send(
+                        "Vyapar Drishti - Transaction Created",
+                        customer_ledger["email"],
+                        template.TransactionCreated(
+                            user_name=companyExists["company_name"],
+                            transaction_type=vouchar.voucher_type,
+                            customer_name=customer_ledger["ledger_name"],
+                            currency_symbol='INR',
+                            reference_note=vouchar.narration,
+                            transaction_date=vouchar.date,
+                            amount=vouchar.grand_total,
+                            support_link=f"{ENV_PROJECT.FRONTEND_DOMAIN}/contact",
+                        ),
+                    )
+
                 shouldDecreaseCounter = True
 
         except Exception as e:
@@ -641,7 +686,6 @@ async def createVoucharWithTAX(
                     await accounting_repo.new(Accounting(**entry_data))
 
                 else:
-
                     entry_data = {
                         "vouchar_id": response.vouchar_id,
                         "ledger": entry.ledger,
@@ -683,6 +727,47 @@ async def createVoucharWithTAX(
                     },
                     {"$inc": {"current_number": 1}},
                 )
+                
+                customer_ledger = await ledger_repo.findOne(
+                    {
+                        "company_id": current_user.current_company_id,
+                        "ledger_name": vouchar.party_name,
+                        "user_id": current_user.user_id,
+                    }
+                )
+
+                if vouchar.voucher_type in ["Sales", "Purchase"]:
+                    mail.send(
+                        "Vyapar Drishti - Invoice Created",
+                        customer_ledger["email"],
+                        template.InvoiceCreated(
+                            invoice_number=vouchar.voucher_number,
+                            invoice_date=vouchar.date,
+                            customer_name=vouchar.party_name,
+                            total_amount=vouchar.total_amount,
+                            due_date=vouchar.due_date,
+                            payment_status=(
+                                "Paid"
+                                if vouchar.paid_amount >= vouchar.grand_total
+                                else "Unpaid"
+                            ),
+                        ),
+                    )
+                elif vouchar.voucher_type in ["Payment", "Receipt"]:
+                    mail.send(
+                        "Vyapar Drishti - Transaction Created",
+                        customer_ledger["email"],
+                        template.TransactionCreated(
+                            user_name=companyExists["company_name"],
+                            transaction_type=vouchar.voucher_type,
+                            customer_name=customer_ledger["ledger_name"],
+                            currency_symbol='INR',
+                            reference_note=vouchar.narration,
+                            transaction_date=vouchar.date,
+                            amount=vouchar.grand_total,
+                            support_link=f"{ENV_PROJECT.FRONTEND_DOMAIN}/contact",
+                        ),
+                    )
                 shouldDecreaseCounter = True
 
         except Exception as e:
@@ -1528,9 +1613,7 @@ async def print_invoice_tax(
             {
                 "$addFields": {
                     "inventory": {
-                        "$sortArray": {"input": "$inventory", 
-                                       "sortBy": {"created_at": 1}
-                                       }
+                        "$sortArray": {"input": "$inventory", "sortBy": {"created_at": 1}}
                     }
                 }
             },
@@ -1593,6 +1676,7 @@ async def print_invoice_tax(
         company=invoice.get("company", {}),
         current_user=current_user,
     )
+    print("Tax Code", tax_code)
 
     formatted_date = invoice.get("date", "")[:10] if invoice.get("date", "") else ""
     # Template variables

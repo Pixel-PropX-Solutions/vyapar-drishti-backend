@@ -54,7 +54,7 @@ async def get_current_user_tax_model(
     if userExists is None:
         raise http_exception.ResourceNotFoundException(detail="User not found.")
 
-    if userExists["phone"]["code"] == "+91":
+    if '91' in userExists["phone"]["code"]:
         return GSTModel
     else:
         return VATModel
@@ -226,7 +226,7 @@ async def generate_tax_summary(
         )
         return totals, invoice_taxes, tax_headers, tax_model["tax_code"]
     else:
-        return
+        return '', '', '', "VAT"
 
 
 @admin.post("/create/tax", response_class=ORJSONResponse, status_code=status.HTTP_200_OK)
@@ -234,7 +234,6 @@ async def create_tax(
     tax: TaxModel,
     current_user: TokenData = Depends(get_current_user),
 ):
-    print("Creating tax:", tax)
     if current_user.user_type != "admin":
         raise http_exception.CredentialsInvalidException()
 

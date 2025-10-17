@@ -6,7 +6,8 @@ from starlette.requests import Request
 
 async def http_error_handler(request: Request, exc: HTTPException) -> ORJSONResponse:
     logger.error(exc.detail)
-    print(f"HTTP Exception: {exc.detail} - Status Code: {exc.status_code}")
+    print(f"HTTP Exception Occur: {exc}")
+    print(f"HTTP Exception Details: {exc.detail} - Status Code: {exc.status_code}")
     return ORJSONResponse({"message": exc.detail}, status_code=exc.status_code)
 
 

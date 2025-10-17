@@ -10,14 +10,6 @@ class TAXDetails(BaseModel):
     place_of_supply: Optional[str] = None
 
 
-# class TDSDetails(BaseModel):
-#     tan: Optional[str] = None
-#     tds_enabled: bool = False
-#     deductor_type: Optional[str] = None  # e.g., Company, Individual
-#     default_nature_of_payment: Optional[str] = None
-#     tds_threshold_limit: Optional[float] = None
-
-
 class BankDetails(BaseModel):
     account_holder: Optional[str] = None
     account_number: Optional[str] = None
@@ -30,11 +22,7 @@ class BankDetails(BaseModel):
 class FeatureFlags(BaseModel):
     enable_tax: bool = False
     item_wise_tax: bool = False
-    # enable_tds: bool = False
-    # enable_vat: bool = False
-    # enable_payroll: bool = False
     enable_inventory: bool = True
-    # enable_multi_currency: bool = False
     
 # class PrintDetails(BaseModel):
 #     # Print Declarations
@@ -47,12 +35,6 @@ class FeatureFlags(BaseModel):
 #     print_bank_name: Optional[str] = None
 #     print_bank_account: Optional[str] = None
 #     qr_code_url: Optional[str] = None
-
-
-# class AuditLogEntry(BaseModel):
-#     modified_by: str  # user_id or email
-#     modified_at: datetime
-#     action: str  # e.g., "Updated TAX Settings", "Changed Book Start Date"
 
 
 class CompanySettings(BaseModel):
@@ -71,16 +53,9 @@ class CompanySettings(BaseModel):
 
     # Tax configuration
     tax_details: Optional[TAXDetails] = Field(default_factory=TAXDetails)
-    # tds_details: Optional[TDSDetails] = Field(default_factory=TDSDetails)
     bank_details: Optional[BankDetails] = Field(default_factory=BankDetails)
     # print_details: Optional[PrintDetails] = Field(default_factory=PrintDetails)
 
-    # Audit/versioning
-    # version: int = 1
-    # last_modified_by: Optional[str] = None  # user_id or email
-    # audit_log: List[AuditLogEntry] = Field(default_factory=list)
-
-    # System flags
     is_deleted: bool = False
 
 

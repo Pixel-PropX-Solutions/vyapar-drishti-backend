@@ -14,7 +14,6 @@ class randomPassword:
             row = random.randint(0, len(chars[col]) - 1)
             letter = chars[col][row]
             password += letter
-        print("password", password)
         return password
 
 

@@ -42,6 +42,8 @@ class Template:
         self.onboard_html = self.directory + "onboard.html"
         self.password_request_html = self.directory + "password_request.html"
         self.query_email_html = self.directory + "query_email.html"
+        self.invoice_created = self.directory + "invoice_created.html"
+        self.transaction_created = self.directory + "transaction_created.html"
         self.forgot_password = self.directory + "forgot_password.html"
         self.subdomain = "dev" if env == "dev" else ""
 
@@ -170,6 +172,85 @@ class Template:
             "timestamp": time,
         }
         return self.render_template(self.query_email_html, parser)
+
+    def InvoiceCreated(
+        self,
+        invoice_number,
+        invoice_date,
+        customer_name,
+        total_amount,
+        due_date,
+        payment_status,
+        # invoice_link,
+    ):
+        """INVOICE_CREATED
+        --------------------
+        Generates an invoice created email template with the provided details.
+        Parameters:
+        - invoice_number: Invoice number.
+        - invoice_date: Invoice date.
+        - customer_name: Name of the customer.
+        - total_amount: Total amount of the invoice.
+        - due_date: Due date of the invoice.
+        - payment_status: Payment status of the invoice.
+        Returns:
+        - Rendered HTML string for the invoice created email.
+        """
+
+        parser = {
+            "domain": self.domain,
+            "invoice_number": invoice_number,
+            "invoice_date": invoice_date,
+            "customer_name": customer_name,
+            "total_amount": total_amount,
+            "due_date": due_date,
+            "payment_status": payment_status,
+            # "invoice_link": invoice_link,
+            "domain_login": self.domain_login,
+        }
+        return self.render_template(self.invoice_created, parser)
+
+    def TransactionCreated(
+        self,
+        user_name,
+        transaction_type,
+        customer_name,
+        currency_symbol,
+        reference_note,
+        transaction_date,
+        amount,
+        support_link,
+    ):
+        """TRANSACTION_CREATED
+        --------------------
+        Generates a transaction created email template with the provided details.
+        Parameters:
+        - user_name: Name of the user.
+        - transaction_type: Type of the transaction.
+        - customer_name: Name of the customer.
+        - currency_symbol: Currency symbol.
+        - reference_note: Reference note for the transaction.
+        - transaction_date: Date of the transaction.
+        - amount: Amount of the transaction.
+        - support_link: Support link.
+        Returns:
+        - Rendered HTML string for the transaction created email.
+        """
+
+        parser = {
+            "domain": self.domain,
+            "customer_name": customer_name,
+            "user_name": user_name,
+            "transaction_type": transaction_type,
+            "currency_symbol": currency_symbol,
+            "reference_note": reference_note,
+            "transaction_date": transaction_date,
+            "amount": amount,
+            "support_link": support_link,
+            "domain_login": self.domain_login,
+        }
+        return self.render_template(self.transaction_created, parser)
+
 
 
 """------------------------------------------------------------------------------------------------------------------------

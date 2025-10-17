@@ -175,7 +175,7 @@
                     Dear <strong>{customer_name}</strong>,
                 </p>
                 <p class="info" style="margin: 10px 0 !important;">
-                    A payment transaction has been recorded in your Vyapar Drishti account by
+                    A transaction entry has been recorded in your name on Vyapar Drishti by
                     <strong>{user_name}</strong>.
                 </p>
 
@@ -201,20 +201,23 @@
                         <span class="payment-label">Reference/Note:</span>
                         <span class="payment-value">{reference_note}</span>
                     </div>
-                    <div class="payment-row">
+                    <!-- <div class="payment-row">
                         <span class="payment-label">Updated Balance:</span>
                         <span class="payment-value">{currency_symbol}{updated_balance}</span>
-                    </div>
+                    </div> -->
                 </div>
 
                 <p class="info" style="margin: 20px 0 10px 0 !important;">
-                    To view complete transaction details and your account statement, please log in to your account.
+                    Please review the transaction details and ensure everything is accurate. 
+                    <!-- If this transaction
+                    was not authorized by you, please contact <strong>{user_name}</strong> or our support team
+                    immediately. -->
                 </p>
 
-                <p class="info">
+                <!-- <p class="info">
                     <a class="cta-button" style="margin: 10px 0 !important;" href="{domain_login}">View Transaction
                         Details</a>
-                </p>
+                </p> -->
 
                 <p class="info"
                     style="margin: 20px 0 10px 0 !important; font-size: 0.9rem !important; color: #888888 !important;">

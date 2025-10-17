@@ -32,6 +32,7 @@ class UserSettings(BaseModel):
     # company_id_list: Optional[list[str]] = []
     current_company_name: str
     role: str = "User"
+    # subscription_id: Optional[str] = None  # ← Reference active UserSubscription
 
     permissions: UserPermissions = Field(default_factory=UserPermissions)
     ui_preferences: UIPreferences = Field(default_factory=UIPreferences)

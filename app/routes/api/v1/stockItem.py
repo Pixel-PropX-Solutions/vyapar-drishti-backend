@@ -52,7 +52,7 @@ async def create_product(
     hsn_code: str = Form(None),
     taxability: str = Form(None),
     tax_rate: float = Form(0.0),
-    low_stock_alert: float = Form(10.0),
+    low_stock_alert: float = Form(5.0),
     current_user: TokenData = Depends(get_current_user),
 ):
     if current_user.user_type != "user" and current_user.user_type != "admin":
@@ -109,7 +109,7 @@ async def create_product(
         "hsn_code": hsn_code,
         "taxability": taxability,
         "tax_rate": tax_rate,
-        "low_stock_alert": low_stock_alert,
+        "low_stock_alert": low_stock_alert or 5.0,
     }
 
     try:

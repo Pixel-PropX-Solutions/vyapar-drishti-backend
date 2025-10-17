@@ -1028,7 +1028,7 @@ async def forgot_password(request: Request, email: str):
     forgot_password_link = f"{ENV_PROJECT.FRONTEND_DOMAIN}/reset-password?token={token_generated}&email={userExists['email']}"
 
     mail.send(
-        "Password Reset Request",
+        "Vyapar Drishti - Password Reset",
         userExists["email"],
         template.ForgotPassword(link=forgot_password_link, agenda="forgot_password"),
     )

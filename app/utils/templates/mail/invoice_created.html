@@ -40,6 +40,9 @@
 
         .invoice-row {
             display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            width: 100% !important;
             justify-content: space-between !important;
             padding: 8px 0 !important;
             border-bottom: 1px solid #e0e0e0 !important;
@@ -175,37 +178,37 @@
 
                 <div class="invoice-details">
                     <div class="invoice-row">
-                        <span class="invoice-label">Invoice Number:</span>
-                        <span class="invoice-value">{invoice_number}</span>
+                        <span class="invoice-label" style="width: 45% !important;">Invoice Number:</span>
+                        <span class="invoice-value" style="width: 45% !important;">{invoice_number}</span>
                     </div>
                     <div class="invoice-row">
-                        <span class="invoice-label">Invoice Date:</span>
-                        <span class="invoice-value">{invoice_date}</span>
+                        <span class="invoice-label" style="width: 45% !important;">Invoice Date:</span>
+                        <span class="invoice-value" style="width: 45% !important;">{invoice_date}</span>
                     </div>
                     <div class="invoice-row">
-                        <span class="invoice-label">Customer Name:</span>
-                        <span class="invoice-value">{customer_name}</span>
+                        <span class="invoice-label" style="width: 45% !important;">Customer Name:</span>
+                        <span class="invoice-value" style="width: 45% !important;">{customer_name}</span>
                     </div>
                     <div class="invoice-row">
-                        <span class="invoice-label">Total Amount:</span>
-                        <span class="invoice-value">{total_amount}</span>
+                        <span class="invoice-label" style="width: 45% !important;">Total Amount:</span>
+                        <span class="invoice-value" style="width: 45% !important;">{total_amount}</span>
                     </div>
                     <div class="invoice-row">
-                        <span class="invoice-label">Due Date:</span>
-                        <span class="invoice-value">{due_date}</span>
+                        <span class="invoice-label" style="width: 45% !important;">Due Date:</span>
+                        <span class="invoice-value" style="width: 45% !important;">{due_date}</span>
                     </div>
                     <div class="invoice-row">
-                        <span class="invoice-label">Payment Status:</span>
-                        <span class="invoice-value">{payment_status}</span>
+                        <span class="invoice-label" style="width: 45% !important;">Payment Status:</span>
+                        <span class="invoice-value" style="width: 45% !important;">{payment_status}</span>
                     </div>
                 </div>
 
                 <p class="info" style="margin: 20px 0 10px 0 !important;">
                     To view the complete invoice details, click the button below:
                 </p>
-                <p class="info">
+                <!-- <p class="info">
                     <a class="cta-button" style="margin: 10px 0 !important;" href="{invoice_link}">View Invoice</a>
-                </p>
+                </p> -->
 
                 <p class="info" style="margin: 30px 0 10px 0 !important;">
                     You can also access your account to manage all your invoices:
